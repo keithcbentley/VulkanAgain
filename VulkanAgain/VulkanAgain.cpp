@@ -16,8 +16,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+//#define STB_IMAGE_IMPLEMENTATION
+//#include <stb_image.h>
 
 
 struct Vertex {
@@ -233,7 +233,7 @@ public:
 		return m_drawingFrames.at(index);
 	}
 
-	int	frameCount() { return m_drawingFrames.size(); }
+	int	frameCount() { return static_cast<int>(m_drawingFrames.size()); }
 
 };
 
@@ -482,6 +482,237 @@ void createDescriptorSets(
 }
 
 
+class  PipelineInputAssemblyStateCreateInfo : public VkPipelineInputAssemblyStateCreateInfo {
+
+public:
+	PipelineInputAssemblyStateCreateInfo()
+		: VkPipelineInputAssemblyStateCreateInfo{} {
+		sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	}
+
+	PipelineInputAssemblyStateCreateInfo& setTopology(VkPrimitiveTopology vkPrimitiveTopology) {
+		topology = vkPrimitiveTopology;
+		return *this;
+	}
+
+};
+
+class PipelineRasterizationStateCreateInfo : public VkPipelineRasterizationStateCreateInfo {
+
+public:
+	PipelineRasterizationStateCreateInfo()
+		: VkPipelineRasterizationStateCreateInfo{} {
+		sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+		polygonMode = VK_POLYGON_MODE_FILL;
+		lineWidth = 1.0f;
+		cullMode = VK_CULL_MODE_BACK_BIT;
+		frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	}
+};
+
+class PipelineMultisampleStateCreateInfo : public VkPipelineMultisampleStateCreateInfo {
+
+public:
+	PipelineMultisampleStateCreateInfo()
+		: VkPipelineMultisampleStateCreateInfo{} {
+		sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+		rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+		minSampleShading = 1.0f; // Optional
+	}
+
+};
+
+
+class PipelineColorBlendAttachmentState : public VkPipelineColorBlendAttachmentState {
+
+public:
+
+	PipelineColorBlendAttachmentState()
+		: VkPipelineColorBlendAttachmentState{} {
+		colorWriteMask
+			= VK_COLOR_COMPONENT_R_BIT
+			| VK_COLOR_COMPONENT_G_BIT
+			| VK_COLOR_COMPONENT_B_BIT
+			| VK_COLOR_COMPONENT_A_BIT;
+		blendEnable = VK_FALSE;
+		srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+		dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+		colorBlendOp = VK_BLEND_OP_ADD; // Optional
+		srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+		dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+		alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+
+	}
+};
+
+class PipelineColorBlendStateCreateInfo : public VkPipelineColorBlendStateCreateInfo {
+
+public:
+	PipelineColorBlendStateCreateInfo()
+		: VkPipelineColorBlendStateCreateInfo{} {
+		sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+		logicOpEnable = VK_FALSE;
+		logicOp = VK_LOGIC_OP_COPY; // Optional
+	}
+
+};
+
+
+class GraphicsPipelineConfig {
+
+
+	VkPipelineShaderStageCreateInfo m_vertShaderStageCreateInfo{};
+
+	VkPipelineShaderStageCreateInfo m_fragShaderStageCreateInfo{};
+
+	std::vector<VkPipelineShaderStageCreateInfo> m_shaderStageCreateInfos;
+
+	std::vector<VkDynamicState> m_dynamicStates = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR
+	};
+
+	VkPipelineDynamicStateCreateInfo m_dynamicState{};
+
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+
+	PipelineInputAssemblyStateCreateInfo m_inputAssemblyStateCreateInfo{};
+
+	VkViewport m_viewport{};
+	VkRect2D m_scissor{};
+
+	VkPipelineViewportStateCreateInfo m_viewportState{};
+
+	PipelineRasterizationStateCreateInfo m_pipelineRasterizationStateCreateInfo{};
+
+	PipelineMultisampleStateCreateInfo m_pipelineMultisampleStateCreateInfo{};
+
+	PipelineColorBlendAttachmentState m_pipelineColorBlendAttachmentState{};
+
+	PipelineColorBlendStateCreateInfo m_pipelineColorBlendStateCreateInfo{};
+
+
+public:
+
+	VkGraphicsPipelineCreateInfo m_vkGraphicsPipelineCreateInfo{};
+
+	vulcpp::PipelineLayout	m_pipelineLayout;
+	vulcpp::RenderPass		m_renderPass;
+	vulcpp::ShaderModule	m_vertexShaderModule;
+	vulcpp::ShaderModule	m_fragmentShaderModule;
+
+	// TODO needs to be smarter
+	VkVertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
+	std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions = Vertex::getAttributeDescriptions();
+
+
+	PipelineInputAssemblyStateCreateInfo& setInputAssemblyTopology(VkPrimitiveTopology topology) {
+		return m_inputAssemblyStateCreateInfo.setTopology(topology);
+	}
+
+	void setVertexShaderModule(vulcpp::ShaderModule vertexShaderModule) {
+		m_vertexShaderModule = vertexShaderModule;
+	}
+
+	void setFragmentShaderModule(vulcpp::ShaderModule fragmentShaderModule) {
+		m_fragmentShaderModule = fragmentShaderModule;
+	}
+
+	void setViewportExtent(VkExtent2D extent) {
+		m_viewport.width = (float)extent.width;
+		m_viewport.height = (float)extent.height;
+	}
+
+	void setScissorExtent(VkExtent2D extent) {
+		m_scissor.extent = extent;
+	}
+
+	void setPipelineLayout(vulcpp::PipelineLayout pipelineLayout) {
+		m_pipelineLayout = pipelineLayout;
+	}
+
+	void setRenderPass(vulcpp::RenderPass renderPass) {
+		m_renderPass = renderPass;
+	}
+
+
+	VkGraphicsPipelineCreateInfo& assemble() {
+
+		//	Assemble pipeline create info
+		m_vkGraphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+
+		// TODO make shader module setup smarter
+		m_vertShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		m_vertShaderStageCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+		m_vertShaderStageCreateInfo.module = m_vertexShaderModule;
+		m_vertShaderStageCreateInfo.pName = "main";
+
+		m_fragShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		m_fragShaderStageCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+		m_fragShaderStageCreateInfo.module = m_fragmentShaderModule;
+		m_fragShaderStageCreateInfo.pName = "main";
+
+		m_shaderStageCreateInfos.push_back(m_vertShaderStageCreateInfo);
+		m_shaderStageCreateInfos.push_back(m_fragShaderStageCreateInfo);
+
+		m_vkGraphicsPipelineCreateInfo.stageCount = static_cast<uint32_t>(m_shaderStageCreateInfos.size());
+		m_vkGraphicsPipelineCreateInfo.pStages = m_shaderStageCreateInfos.data();
+
+
+		// TODO tied to Vertex class.  Needs to be decoupled and smarter.
+		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+		//VkVertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
+		//auto attributeDescriptions = Vertex::getAttributeDescriptions();
+		vertexInputInfo.vertexBindingDescriptionCount = 1;
+		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+		vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+		m_vkGraphicsPipelineCreateInfo.pVertexInputState = &vertexInputInfo;
+
+		m_vkGraphicsPipelineCreateInfo.pInputAssemblyState = &m_inputAssemblyStateCreateInfo;
+
+		m_viewport.maxDepth = 1.0f;
+		//TODO make the viewportState smarter
+		m_viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+		m_viewportState.viewportCount = 1;
+		m_viewportState.pViewports = &m_viewport;
+		m_viewportState.scissorCount = 1;
+		m_viewportState.pScissors = &m_scissor;
+		m_vkGraphicsPipelineCreateInfo.pViewportState = &m_viewportState;
+
+		m_vkGraphicsPipelineCreateInfo.pRasterizationState = &m_pipelineRasterizationStateCreateInfo;
+
+		m_vkGraphicsPipelineCreateInfo.pMultisampleState = &m_pipelineMultisampleStateCreateInfo;
+
+		m_vkGraphicsPipelineCreateInfo.pDepthStencilState = nullptr; // Optional
+
+		m_pipelineColorBlendStateCreateInfo.attachmentCount = 1;
+		m_pipelineColorBlendStateCreateInfo.pAttachments = &m_pipelineColorBlendAttachmentState;
+		m_vkGraphicsPipelineCreateInfo.pColorBlendState = &m_pipelineColorBlendStateCreateInfo;
+
+
+		// TODO make this smarter
+		m_dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+		m_dynamicState.dynamicStateCount = static_cast<uint32_t>(m_dynamicStates.size());
+		m_dynamicState.pDynamicStates = m_dynamicStates.data();
+
+		m_vkGraphicsPipelineCreateInfo.pDynamicState = &m_dynamicState;
+
+
+		m_vkGraphicsPipelineCreateInfo.layout = m_pipelineLayout;
+
+		m_vkGraphicsPipelineCreateInfo.renderPass = m_renderPass;
+		m_vkGraphicsPipelineCreateInfo.subpass = 0;
+
+		m_vkGraphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
+		m_vkGraphicsPipelineCreateInfo.basePipelineIndex = -1; // Optional
+
+		return m_vkGraphicsPipelineCreateInfo;
+	}
+};
+
+
+
 void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vulcpp::VulkanInstance vulkanInstance = createVulkanInstance();
@@ -557,11 +788,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vulcpp::RenderPass renderPassOriginal(vkRenderPassCreateInfo, deviceClone);
 
-
-	//vulcpp::RenderPass renderPassOriginal =
-	//	vulcpp::RenderPass::createRenderPass(swapChainImageFormat, deviceClone);
-
-
 	vulcpp::SwapChainImageViewsFrameBuffers::setDevice(deviceClone);
 	vulcpp::SwapChainImageViewsFrameBuffers swapChainImageViewsFrameBuffers;
 	swapChainImageViewsFrameBuffers.setPhysicalDevice(physicalDevice);
@@ -631,8 +857,16 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vulcpp::PipelineLayout pipelineLayout(pipelineLayoutInfo, deviceClone);
 
+	GraphicsPipelineConfig graphicsPipelineConfig;
+	graphicsPipelineConfig.setInputAssemblyTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN);
+	graphicsPipelineConfig.setViewportExtent(vkSurfaceCapabilities.currentExtent);
+	graphicsPipelineConfig.setPipelineLayout(pipelineLayout);
+	graphicsPipelineConfig.setRenderPass(renderPassOriginal);
+	graphicsPipelineConfig.setVertexShaderModule(vertShaderModule);
+	graphicsPipelineConfig.setFragmentShaderModule(fragShaderModule);
 
-	//	VkPipeline			vkGraphicsPipeline = nullptr;
+	//	graphicsPipelineConfig.assemble();
+
 	VkPipelineShaderStageCreateInfo vertShaderStageCreateInfo{};
 	vertShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	vertShaderStageCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -755,7 +989,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkGraphicsPipelineCreateInfo.basePipelineIndex = -1; // Optional
 
 
-	vulcpp::GraphicsPipeline graphicsPipeline(vkGraphicsPipelineCreateInfo, deviceClone);
+	vulcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineConfig.assemble(), deviceClone);
+	//	vulcpp::GraphicsPipeline graphicsPipeline(vkGraphicsPipelineCreateInfo, deviceClone);
 
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};
 	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -774,8 +1009,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 			g_allDrawingFrames.drawingFrameAt(i).setCommandBuffer(commandBuffers[i]);
 		}
 	}
-
-
 
 	VkSemaphoreCreateInfo semaphoreInfo{};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -947,10 +1180,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);
 		hdc = hdc;
-		// TODO: Add any drawing code that uses hdc here...
 		EndPaint(hWnd, &ps);
 	}
 	break;
+
+	case WM_ERASEBKGND:
+		return 1L;
 
 	case WM_DESTROY:
 		PostQuitMessage(0);
@@ -970,7 +1205,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 ATOM RegisterMyWindowClass(HINSTANCE hInstance)
 {
-	WNDCLASSEXW wcex;
+	WNDCLASSEXW wcex{};
 
 	wcex.cbSize = sizeof(WNDCLASSEX);
 
