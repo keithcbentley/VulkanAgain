@@ -9,7 +9,6 @@
 
 #include <vulkan/vulkan.h>
 
-
 template<typename T>
 concept DefaultCopyConstructible = requires (T t) {
 	T(t);
@@ -86,7 +85,7 @@ concept Clone = requires (T t) {
 
 
 
-namespace vulcpp {
+namespace vkcpp {
 
 	template<typename VkHandleArg_t, typename VkOwnerArg_t = VkDevice>
 	class HandleWithOwner {
@@ -725,7 +724,7 @@ namespace vulcpp {
 			VkQueue vkQueue;
 			vkGetDeviceQueue(m_vkHandle, deviceQueueFamily, deviceQueueIndex, &vkQueue);
 			if (vkQueue == nullptr) {
-				throw vulcpp::Exception(VK_ERROR_UNKNOWN);
+				throw Exception(VK_ERROR_UNKNOWN);
 			}
 			return vkQueue;
 		}
@@ -980,7 +979,7 @@ namespace vulcpp {
 		}
 
 		static 	std::vector<VkImageView> createSwapChainImageViews(
-			const vulcpp::SwapChain& swapChain,
+			const SwapChain& swapChain,
 			VkFormat			swapChainImageFormat
 		) {
 			std::vector<VkImage> swapChainImages = swapChain.getImages();
@@ -1030,7 +1029,7 @@ namespace vulcpp {
 		}
 
 		static SwapChain createSwapChain(
-			vulcpp::Surface surface,
+			Surface surface,
 			VkExtent2D						swapChainExtent,
 			uint32_t						swapChainMinImageCount,
 			VkFormat						swapChainImageFormat,
@@ -1057,7 +1056,7 @@ namespace vulcpp {
 			swapChainCreateInfo.clipped = VK_TRUE;
 			swapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
 
-			return vulcpp::SwapChain(&swapChainCreateInfo, s_device);
+			return SwapChain(&swapChainCreateInfo, s_device);
 		}
 
 

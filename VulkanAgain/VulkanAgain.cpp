@@ -73,7 +73,7 @@ const int windowWidth = 800;
 const int windowHeight = 600;
 
 uint32_t findMemoryTypeIndex(
-	vulcpp::PhysicalDevice& physicalDevice,
+	vkcpp::PhysicalDevice& physicalDevice,
 	uint32_t typeFilter,
 	VkMemoryPropertyFlags properties
 ) {
@@ -93,7 +93,7 @@ uint32_t findMemoryTypeIndex(
 
 class BufferAndDeviceMemoryMapped {
 
-	BufferAndDeviceMemoryMapped(vulcpp::Buffer&& buffer, vulcpp::DeviceMemory&& deviceMemory, void* mappedMemory)
+	BufferAndDeviceMemoryMapped(vkcpp::Buffer&& buffer, vkcpp::DeviceMemory&& deviceMemory, void* mappedMemory)
 		: m_buffer(std::move(buffer))
 		, m_deviceMemory(std::move(deviceMemory))
 		, m_mappedMemory(mappedMemory) {
@@ -101,8 +101,8 @@ class BufferAndDeviceMemoryMapped {
 
 public:
 
-	vulcpp::Buffer			m_buffer;
-	vulcpp::DeviceMemory	m_deviceMemory;
+	vkcpp::Buffer			m_buffer;
+	vkcpp::DeviceMemory	m_deviceMemory;
 	void* m_mappedMemory = nullptr;
 
 	BufferAndDeviceMemoryMapped() {}
@@ -127,8 +127,8 @@ public:
 
 
 	static BufferAndDeviceMemoryMapped create(
-		vulcpp::PhysicalDevice physicalDevice,
-		vulcpp::Device device,
+		vkcpp::PhysicalDevice physicalDevice,
+		vkcpp::Device device,
 		VkDeviceSize size,
 		VkBufferUsageFlags usage,
 		VkMemoryPropertyFlags properties
@@ -139,7 +139,7 @@ public:
 		bufferInfo.usage = usage;
 		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-		vulcpp::Buffer buffer(bufferInfo, device);
+		vkcpp::Buffer buffer(bufferInfo, device);
 
 		VkMemoryRequirements memRequirements;
 		vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
@@ -149,7 +149,7 @@ public:
 		allocInfo.allocationSize = memRequirements.size;
 		allocInfo.memoryTypeIndex = findMemoryTypeIndex(physicalDevice, memRequirements.memoryTypeBits, properties);
 
-		vulcpp::DeviceMemory deviceMemory(allocInfo, device);
+		vkcpp::DeviceMemory deviceMemory(allocInfo, device);
 
 		if (vkBindBufferMemory(device, buffer, deviceMemory, 0) != VK_SUCCESS) {
 			throw std::runtime_error("failed to bind buffer memory!");
@@ -168,9 +168,9 @@ public:
 class DrawingFrame {
 
 public:
-	vulcpp::Fence	m_inFlightFence;
-	vulcpp::Semaphore m_imageAvailableSemaphore;
-	vulcpp::Semaphore m_renderFinishedSemaphore;
+	vkcpp::Fence	m_inFlightFence;
+	vkcpp::Semaphore m_imageAvailableSemaphore;
+	vkcpp::Semaphore m_renderFinishedSemaphore;
 	VkCommandBuffer	m_vkCommandBuffer = nullptr;
 	BufferAndDeviceMemoryMapped	m_uniformBufferMemory;
 	VkDescriptorSet	m_vkDescriptorSet = nullptr;
@@ -182,15 +182,15 @@ public:
 	DrawingFrame(DrawingFrame&&) = delete;
 	DrawingFrame& operator=(DrawingFrame&&) = delete;
 
-	void moveInFlightFence(vulcpp::Fence&& fence) {
+	void moveInFlightFence(vkcpp::Fence&& fence) {
 		m_inFlightFence = std::move(fence);
 	}
 
-	void moveImageAvailableSemaphore(vulcpp::Semaphore&& semaphore) {
+	void moveImageAvailableSemaphore(vkcpp::Semaphore&& semaphore) {
 		m_imageAvailableSemaphore = std::move(semaphore);
 	}
 
-	void moveRenderFinishedSemaphore(vulcpp::Semaphore&& semaphore) {
+	void moveRenderFinishedSemaphore(vkcpp::Semaphore&& semaphore) {
 		m_renderFinishedSemaphore = std::move(semaphore);
 	}
 
@@ -244,26 +244,26 @@ static const int SWAP_CHAIN_IMAGE_COUNT = 5;
 static int g_nextFrameToDrawIndex = 0;
 
 
-vulcpp::VulkanInstance createVulkanInstance() {
+vkcpp::VulkanInstance createVulkanInstance() {
 
-	vulcpp::VulkanInstanceCreateInfo vulkanInstanceCreateInfo{};
+	vkcpp::VulkanInstanceCreateInfo vulkanInstanceCreateInfo{};
 	vulkanInstanceCreateInfo.addLayer("VK_LAYER_KHRONOS_validation");
 
 	vulkanInstanceCreateInfo.addExtension("VK_EXT_debug_utils");
 	vulkanInstanceCreateInfo.addExtension("VK_KHR_surface");
 	vulkanInstanceCreateInfo.addExtension("VK_KHR_win32_surface");
 
-	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = vulcpp::DebugUtilsMessenger::getCreateInfo();
+	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = vkcpp::DebugUtilsMessenger::getCreateInfo();
 	vulkanInstanceCreateInfo.pNext = &debugCreateInfo;
 
-	return vulcpp::VulkanInstance(vulkanInstanceCreateInfo);
+	return vkcpp::VulkanInstance(vulkanInstanceCreateInfo);
 }
 
 
 void recordCommandBuffer(
 	VkCommandBuffer		commandBuffer,
 	uint32_t			swapChainImageIndex,
-	vulcpp::SwapChainImageViewsFrameBuffers& swapChainImageViewsFrameBuffers,
+	vkcpp::SwapChainImageViewsFrameBuffers& swapChainImageViewsFrameBuffers,
 	VkBuffer			vkVertexBuffer,
 	VkDescriptorSet		descriptorSet,
 	VkPipelineLayout	vkPipelineLayout,
@@ -336,8 +336,8 @@ struct UniformBuffersMemory {
 	std::vector<BufferAndDeviceMemoryMapped>	m_uniformBufferMemory;
 
 	void createUniformBuffers(
-		vulcpp::PhysicalDevice& physicalDevice,
-		vulcpp::Device device,
+		vkcpp::PhysicalDevice& physicalDevice,
+		vkcpp::Device device,
 		int count
 	) {
 		VkDeviceSize bufferSize = sizeof(ModelViewProjTransform);
@@ -376,32 +376,32 @@ public:
 	HINSTANCE				g_hInstance = NULL;
 	HWND					g_hWnd = NULL;
 
-	vulcpp::VulkanInstance	g_vulkanInstance;
-	vulcpp::Surface	g_surfaceOriginal;
-	vulcpp::PhysicalDevice	g_physicalDevice;
-	vulcpp::Device	g_deviceOriginal;
+	vkcpp::VulkanInstance	g_vulkanInstance;
+	vkcpp::Surface	g_surfaceOriginal;
+	vkcpp::PhysicalDevice	g_physicalDevice;
+	vkcpp::Device	g_deviceOriginal;
 
 	VkQueue				g_vkGraphicsQueue = nullptr;
 	VkQueue				g_vkPresentationQueue = nullptr;
 
-	vulcpp::RenderPass g_renderPassOriginal;
+	vkcpp::RenderPass g_renderPassOriginal;
 
 	uint32_t						g_swapChainMinImageCount = SWAP_CHAIN_IMAGE_COUNT;
-	vulcpp::SwapChainImageViewsFrameBuffers	g_swapChainImageViewsFrameBuffers;
+	vkcpp::SwapChainImageViewsFrameBuffers	g_swapChainImageViewsFrameBuffers;
 
-	vulcpp::ShaderModule g_vertShaderModule;
-	vulcpp::ShaderModule g_fragShaderModule;
+	vkcpp::ShaderModule g_vertShaderModule;
+	vkcpp::ShaderModule g_fragShaderModule;
 
-	vulcpp::DescriptorPool			g_descriptorPoolOriginal;
-	vulcpp::DescriptorSetLayout		g_descriptorSetLayoutOriginal;
+	vkcpp::DescriptorPool			g_descriptorPoolOriginal;
+	vkcpp::DescriptorSetLayout		g_descriptorSetLayoutOriginal;
 
-	vulcpp::PipelineLayout	g_pipelineLayout;
-	vulcpp::GraphicsPipeline	g_graphicsPipeline;
+	vkcpp::PipelineLayout	g_pipelineLayout;
+	vkcpp::GraphicsPipeline	g_graphicsPipeline;
 
-	vulcpp::Buffer			g_vertexBuffer;
-	vulcpp::DeviceMemory		g_vertexDeviceMemory;
+	vkcpp::Buffer			g_vertexBuffer;
+	vkcpp::DeviceMemory		g_vertexDeviceMemory;
 
-	vulcpp::CommandPool		g_commandPoolOriginal;
+	vkcpp::CommandPool		g_commandPoolOriginal;
 
 };
 Globals g_globals;
@@ -409,7 +409,7 @@ AllDrawingFrames g_allDrawingFrames(MAX_FRAMES_IN_FLIGHT);
 
 
 
-vulcpp::DescriptorSetLayout createUboDescriptorSetLayout(VkDevice vkDevice) {
+vkcpp::DescriptorSetLayout createUboDescriptorSetLayout(VkDevice vkDevice) {
 	VkDescriptorSetLayoutBinding uboLayoutBinding{};
 	uboLayoutBinding.binding = 0;
 	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -422,11 +422,11 @@ vulcpp::DescriptorSetLayout createUboDescriptorSetLayout(VkDevice vkDevice) {
 	layoutInfo.bindingCount = 1;
 	layoutInfo.pBindings = &uboLayoutBinding;
 
-	return vulcpp::DescriptorSetLayout(layoutInfo, vkDevice);
+	return vkcpp::DescriptorSetLayout(layoutInfo, vkDevice);
 }
 
 
-vulcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
+vkcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
 
 	VkDescriptorPoolSize poolSize{};
 	poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -438,14 +438,14 @@ vulcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
 	poolCreateInfo.pPoolSizes = &poolSize;
 	poolCreateInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
-	return vulcpp::DescriptorPool(poolCreateInfo, vkDevice);
+	return vkcpp::DescriptorPool(poolCreateInfo, vkDevice);
 }
 
 
 void createDescriptorSets(
-	vulcpp::Device device,
+	vkcpp::Device device,
 	VkDescriptorPool		descriptorPool,
-	vulcpp::DescriptorSetLayout descriptorSetLayout,
+	vkcpp::DescriptorSetLayout descriptorSetLayout,
 	AllDrawingFrames& allDrawingFrames
 ) {
 	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
@@ -596,10 +596,10 @@ public:
 
 	VkGraphicsPipelineCreateInfo m_vkGraphicsPipelineCreateInfo{};
 
-	vulcpp::PipelineLayout	m_pipelineLayout;
-	vulcpp::RenderPass		m_renderPass;
-	vulcpp::ShaderModule	m_vertexShaderModule;
-	vulcpp::ShaderModule	m_fragmentShaderModule;
+	vkcpp::PipelineLayout	m_pipelineLayout;
+	vkcpp::RenderPass		m_renderPass;
+	vkcpp::ShaderModule	m_vertexShaderModule;
+	vkcpp::ShaderModule	m_fragmentShaderModule;
 
 	// TODO needs to be smarter
 	VkVertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
@@ -610,11 +610,11 @@ public:
 		return m_inputAssemblyStateCreateInfo.setTopology(topology);
 	}
 
-	void setVertexShaderModule(vulcpp::ShaderModule vertexShaderModule) {
+	void setVertexShaderModule(vkcpp::ShaderModule vertexShaderModule) {
 		m_vertexShaderModule = vertexShaderModule;
 	}
 
-	void setFragmentShaderModule(vulcpp::ShaderModule fragmentShaderModule) {
+	void setFragmentShaderModule(vkcpp::ShaderModule fragmentShaderModule) {
 		m_fragmentShaderModule = fragmentShaderModule;
 	}
 
@@ -627,11 +627,11 @@ public:
 		m_scissor.extent = extent;
 	}
 
-	void setPipelineLayout(vulcpp::PipelineLayout pipelineLayout) {
+	void setPipelineLayout(vkcpp::PipelineLayout pipelineLayout) {
 		m_pipelineLayout = pipelineLayout;
 	}
 
-	void setRenderPass(vulcpp::RenderPass renderPass) {
+	void setRenderPass(vkcpp::RenderPass renderPass) {
 		m_renderPass = renderPass;
 	}
 
@@ -715,23 +715,23 @@ public:
 
 void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
-	vulcpp::VulkanInstance vulkanInstance = createVulkanInstance();
+	vkcpp::VulkanInstance vulkanInstance = createVulkanInstance();
 	vulkanInstance.createDebugMessenger();
 
-	vulcpp::PhysicalDevice physicalDevice = vulkanInstance.getPhysicalDevice(0);
+	vkcpp::PhysicalDevice physicalDevice = vulkanInstance.getPhysicalDevice(0);
 	//auto allQueueFamilyProperties = physicalDevice.getAllQueueFamilyProperties();
 
-	vulcpp::DeviceCreateInfo deviceCreateInfo{};
+	vkcpp::DeviceCreateInfo deviceCreateInfo{};
 	deviceCreateInfo.addExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-	vulcpp::DeviceQueueCreateInfo deviceQueueCreateInfo{};
+	vkcpp::DeviceQueueCreateInfo deviceQueueCreateInfo{};
 	deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
 	deviceCreateInfo.queueCreateInfoCount = 1;
 
 	VkPhysicalDeviceFeatures vkPhysicalDeviceFeatures{};
 	deviceCreateInfo.pEnabledFeatures = &vkPhysicalDeviceFeatures;
 
-	vulcpp::Device deviceOriginal(deviceCreateInfo, physicalDevice);
-	vulcpp::Device deviceClone = deviceOriginal;
+	vkcpp::Device deviceOriginal(deviceCreateInfo, physicalDevice);
+	vkcpp::Device deviceClone = deviceOriginal;
 
 	const int queueFamilyIndex = 0;
 	const int queueIndex = 0;
@@ -743,7 +743,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkWin32SurfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 	vkWin32SurfaceCreateInfo.hwnd = hWnd;
 	vkWin32SurfaceCreateInfo.hinstance = hInstance;
-	vulcpp::Surface surfaceOriginal(vkWin32SurfaceCreateInfo, vulkanInstance);
+	vkcpp::Surface surfaceOriginal(vkWin32SurfaceCreateInfo, vulkanInstance);
 
 	VkSurfaceCapabilitiesKHR vkSurfaceCapabilities = surfaceOriginal.getSurfaceCapabilities(physicalDevice);
 	std::vector<VkSurfaceFormatKHR> surfaceFormats = surfaceOriginal.getSurfaceFormats(physicalDevice);
@@ -786,10 +786,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkRenderPassCreateInfo.dependencyCount = 1;
 	vkRenderPassCreateInfo.pDependencies = &vkSubpassDependency;
 
-	vulcpp::RenderPass renderPassOriginal(vkRenderPassCreateInfo, deviceClone);
+	vkcpp::RenderPass renderPassOriginal(vkRenderPassCreateInfo, deviceClone);
 
-	vulcpp::SwapChainImageViewsFrameBuffers::setDevice(deviceClone);
-	vulcpp::SwapChainImageViewsFrameBuffers swapChainImageViewsFrameBuffers;
+	vkcpp::SwapChainImageViewsFrameBuffers::setDevice(deviceClone);
+	vkcpp::SwapChainImageViewsFrameBuffers swapChainImageViewsFrameBuffers;
 	swapChainImageViewsFrameBuffers.setPhysicalDevice(physicalDevice);
 	swapChainImageViewsFrameBuffers.setSurface(surfaceOriginal);
 	swapChainImageViewsFrameBuffers.setRenderPass(renderPassOriginal);
@@ -804,7 +804,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkBufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 	vkBufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-	vulcpp::Buffer vertexBufferOriginal(vkBufferCreateInfo, deviceClone);
+	vkcpp::Buffer vertexBufferOriginal(vkBufferCreateInfo, deviceClone);
 
 	VkMemoryRequirements vkMemoryRequirements;
 	vkGetBufferMemoryRequirements(deviceClone, vertexBufferOriginal, &vkMemoryRequirements);
@@ -817,7 +817,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		vkMemoryRequirements.memoryTypeBits,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-	vulcpp::DeviceMemory vertexDeviceMemory(vkMemoryAllocateInfo, deviceClone);
+	vkcpp::DeviceMemory vertexDeviceMemory(vkMemoryAllocateInfo, deviceClone);
 	vkBindBufferMemory(deviceClone, vertexBufferOriginal, vertexDeviceMemory, 0);
 	void* data;
 	vkMapMemory(deviceClone, vertexDeviceMemory, 0, vkBufferCreateInfo.size, 0, &data);
@@ -834,16 +834,16 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	}
 
 
-	vulcpp::ShaderModule	vertShaderModule =
-		vulcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert2.spv", deviceClone);
-	vulcpp::ShaderModule	fragShaderModule =
-		vulcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/frag.spv", deviceClone);
+	vkcpp::ShaderModule	vertShaderModule =
+		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert2.spv", deviceClone);
+	vkcpp::ShaderModule	fragShaderModule =
+		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/frag.spv", deviceClone);
 
 
 
-	vulcpp::DescriptorPool descriptorPoolOriginal = createDescriptorPool(deviceClone);
+	vkcpp::DescriptorPool descriptorPoolOriginal = createDescriptorPool(deviceClone);
 
-	vulcpp::DescriptorSetLayout descriptorSetLayoutOriginal = createUboDescriptorSetLayout(deviceClone);
+	vkcpp::DescriptorSetLayout descriptorSetLayoutOriginal = createUboDescriptorSetLayout(deviceClone);
 	createDescriptorSets(deviceClone, descriptorPoolOriginal, descriptorSetLayoutOriginal, g_allDrawingFrames);
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -855,7 +855,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 	pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
-	vulcpp::PipelineLayout pipelineLayout(pipelineLayoutInfo, deviceClone);
+	vkcpp::PipelineLayout pipelineLayout(pipelineLayoutInfo, deviceClone);
 
 	GraphicsPipelineConfig graphicsPipelineConfig;
 	graphicsPipelineConfig.setInputAssemblyTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN);
@@ -865,13 +865,13 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	graphicsPipelineConfig.setVertexShaderModule(vertShaderModule);
 	graphicsPipelineConfig.setFragmentShaderModule(fragShaderModule);
 
-	vulcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineConfig.assemble(), deviceClone);
+	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineConfig.assemble(), deviceClone);
 
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};
 	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
-	vulcpp::CommandPool commandPoolOriginal(commandPoolCreateInfo, deviceClone);
+	vkcpp::CommandPool commandPoolOriginal(commandPoolCreateInfo, deviceClone);
 
 	{
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo{};
@@ -894,11 +894,11 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 		g_allDrawingFrames.drawingFrameAt(i).moveImageAvailableSemaphore(
-			vulcpp::Semaphore(semaphoreInfo, deviceClone));
+			vkcpp::Semaphore(semaphoreInfo, deviceClone));
 		g_allDrawingFrames.drawingFrameAt(i).moveRenderFinishedSemaphore(
-			vulcpp::Semaphore(semaphoreInfo, deviceClone));
+			vkcpp::Semaphore(semaphoreInfo, deviceClone));
 		g_allDrawingFrames.drawingFrameAt(i).moveInFlightFence(
-			vulcpp::Fence(fenceInfo, deviceClone));
+			vkcpp::Fence(fenceInfo, deviceClone));
 	}
 
 #undef globals
@@ -968,9 +968,9 @@ void drawFrame(Globals& globals)
 	const int	currentFrameToDrawIndex = g_nextFrameToDrawIndex;
 	DrawingFrame& currentDrawingFrame = g_allDrawingFrames.drawingFrameAt(currentFrameToDrawIndex);;
 	VkDevice vkDevice = currentDrawingFrame.getDevice();
-	vulcpp::Fence inFlightFence = currentDrawingFrame.m_inFlightFence;
-	vulcpp::Semaphore imageAvailableSemaphore = currentDrawingFrame.m_imageAvailableSemaphore;
-	vulcpp::Semaphore renderFinishedSemaphore = currentDrawingFrame.m_renderFinishedSemaphore;
+	vkcpp::Fence inFlightFence = currentDrawingFrame.m_inFlightFence;
+	vkcpp::Semaphore imageAvailableSemaphore = currentDrawingFrame.m_imageAvailableSemaphore;
+	vkcpp::Semaphore renderFinishedSemaphore = currentDrawingFrame.m_renderFinishedSemaphore;
 	VkCommandBuffer& vkCommandBuffer = currentDrawingFrame.m_vkCommandBuffer;
 	VkDescriptorSet& vkDescriptorSet = currentDrawingFrame.m_vkDescriptorSet;
 
@@ -1151,7 +1151,7 @@ void MessageLoop(Globals& globals) {
 					try {
 						globals.g_swapChainImageViewsFrameBuffers.recreateSwapChainImageViewsFrameBuffers();
 					}
-					catch (vulcpp::ShutdownException&)
+					catch (vkcpp::ShutdownException&)
 					{
 						std::cout << "Yikes\n";
 						graphicsValid = false;
