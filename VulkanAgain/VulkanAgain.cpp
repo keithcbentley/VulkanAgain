@@ -993,11 +993,12 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkWin32SurfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 	vkWin32SurfaceCreateInfo.hwnd = hWnd;
 	vkWin32SurfaceCreateInfo.hinstance = hInstance;
-	vkcpp::Surface surfaceOriginal(vkWin32SurfaceCreateInfo, vulkanInstance);
+	vkcpp::Surface surfaceOriginal(vkWin32SurfaceCreateInfo, vulkanInstance, physicalDevice);
 
-	VkSurfaceCapabilitiesKHR vkSurfaceCapabilities = surfaceOriginal.getSurfaceCapabilities(physicalDevice);
-	std::vector<VkSurfaceFormatKHR> surfaceFormats = surfaceOriginal.getSurfaceFormats(physicalDevice);
-	std::vector<VkPresentModeKHR> presentModes = surfaceOriginal.getSurfacePresentModes(physicalDevice);
+	VkSurfaceCapabilitiesKHR vkSurfaceCapabilities = surfaceOriginal.getSurfaceCapabilities();
+	//std::vector<VkSurfaceFormatKHR> surfaceFormats = surfaceOriginal.getSurfaceFormats();
+	//std::vector<VkPresentModeKHR> presentModes = surfaceOriginal.getSurfacePresentModes();
+
 
 	const VkFormat swapChainImageFormat = VK_FORMAT_B8G8R8A8_SRGB;
 
@@ -1039,12 +1040,29 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::RenderPass renderPassOriginal(vkRenderPassCreateInfo, deviceClone);
 
 	vkcpp::SwapChainImageViewsFrameBuffers::setDevice(deviceClone);
-	vkcpp::SwapChainImageViewsFrameBuffers swapChainImageViewsFrameBuffers;
-	swapChainImageViewsFrameBuffers.setPhysicalDevice(physicalDevice);
-	swapChainImageViewsFrameBuffers.setSurface(surfaceOriginal);
+
+	const VkColorSpaceKHR swapChainImageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+	const VkPresentModeKHR swapChainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+
+	VkSwapchainCreateInfoKHR swapChainCreateInfo{};
+	swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	swapChainCreateInfo.surface = surfaceOriginal;
+	swapChainCreateInfo.minImageCount = SWAP_CHAIN_IMAGE_COUNT;
+	swapChainCreateInfo.imageFormat = swapChainImageFormat;
+	swapChainCreateInfo.imageColorSpace = swapChainImageColorSpace;
+	swapChainCreateInfo.imageArrayLayers = 1;
+	swapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	swapChainCreateInfo.queueFamilyIndexCount = 0;
+	swapChainCreateInfo.pQueueFamilyIndices = nullptr;
+	swapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	swapChainCreateInfo.presentMode = swapChainPresentMode;
+	swapChainCreateInfo.clipped = VK_TRUE;
+	swapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
+
+
+	vkcpp::SwapChainImageViewsFrameBuffers swapChainImageViewsFrameBuffers(swapChainCreateInfo, surfaceOriginal);
 	swapChainImageViewsFrameBuffers.setRenderPass(renderPassOriginal);
-	swapChainImageViewsFrameBuffers.setFormat(swapChainImageFormat);
-	swapChainImageViewsFrameBuffers.setMinImageCount(SWAP_CHAIN_IMAGE_COUNT);
 
 	swapChainImageViewsFrameBuffers.recreateSwapChainImageViewsFrameBuffers();
 
