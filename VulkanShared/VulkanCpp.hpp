@@ -76,6 +76,8 @@ namespace vkcpp {
 
 	};
 
+	class Device;
+
 	template<typename HandleArg_t, typename OwnerArg_t = VkDevice>
 	class HandleWithOwner {
 
@@ -160,19 +162,23 @@ namespace vkcpp {
 			}
 			return m_handle;
 		}
+
 		OwnerArg_t getOwner() const {
 			if (!m_owner) {
 				throw NullHandleException();
 			}
 			return m_owner;
 		}
+
 		VkDevice getVkDevice() const
-			requires std::same_as<Owner_t, VkDevice> {
+			requires std::same_as<Owner_t, VkDevice>
+		|| std::same_as<Owner_t, Device> {
 			if (!m_owner) {
 				throw NullHandleException();
 			}
 			return m_owner;
 		}
+
 	};
 
 
@@ -791,12 +797,6 @@ namespace vkcpp {
 
 
 
-	class Test : public HandleWithOwner<VkBuffer, Device> {
-
-	public:
-		Test() {}
-
-	};
 
 	class Buffer : public HandleWithOwner<VkBuffer, Device> {
 
@@ -824,7 +824,7 @@ namespace vkcpp {
 
 		VkMemoryRequirements  getMemoryRequirements() {
 			VkMemoryRequirements vkMemoryRequirements;
-			vkGetBufferMemoryRequirements(getOwner(), *this, &vkMemoryRequirements);
+			vkGetBufferMemoryRequirements(getVkDevice(), *this, &vkMemoryRequirements);
 			return vkMemoryRequirements;
 		}
 
@@ -838,8 +838,6 @@ namespace vkcpp {
 				getOwner().findMemoryTypeIndex(vkMemoryRequirements.memoryTypeBits, vkRequiredProperties);
 			return vkcpp::DeviceMemory(vkMemoryAllocateInfo, getOwner());
 		}
-
-
 
 	};
 
@@ -925,12 +923,12 @@ namespace vkcpp {
 
 		std::vector<VkImage> getImages() const {
 			uint32_t swapChainImageCount;
-			VkResult vkResult = vkGetSwapchainImagesKHR(getOwner(), *this, &swapChainImageCount, nullptr);
+			VkResult vkResult = vkGetSwapchainImagesKHR(getVkDevice(), *this, &swapChainImageCount, nullptr);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
 			std::vector<VkImage> swapChainImages(swapChainImageCount);
-			vkResult = vkGetSwapchainImagesKHR(getOwner(), *this, &swapChainImageCount, swapChainImages.data());
+			vkResult = vkGetSwapchainImagesKHR(getVkDevice(), *this, &swapChainImageCount, swapChainImages.data());
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
