@@ -44,62 +44,51 @@ concept Cloneable = requires (T t) {
 	t.clone();
 };
 
-template<typename T>
-concept Base = requires{
-	requires !std::default_initializable<T>;
-	requires VirtualDestructor<T>;
-	requires !DefaultCopyConstructible<T>;
-	requires !DefaultCopyAssignable<T>;
-	requires !DefaultMoveConstructible<T>;
-	requires !DefaultMoveAssignable<T>;
-	requires BoolConvertible<T>;
-};
-
-template<typename T>
-concept Original = requires (T t) {
-	requires std::default_initializable<T>;
-	requires !DefaultCopyConstructible<T>;
-	requires !DefaultCopyAssignable<T>;
-	requires DefaultMoveConstructible<T>;
-	requires DefaultMoveAssignable<T>;
-	requires BoolConvertible<T>;
-};
-
-
-template<typename T>
-concept OriginalCloneable = requires (T t) {
-	requires Original<T>;
-	requires Cloneable<T>;
-};
-
-template<typename T>
-concept Clone = requires (T t) {
-	requires std::default_initializable<T>;
-	requires DefaultCopyConstructible<T>;
-	requires DefaultCopyAssignable<T>;
-	requires DefaultMoveConstructible<T>;
-	requires DefaultMoveAssignable<T>;
-	requires BoolConvertible<T>;
-};
 
 
 
 
 namespace vkcpp {
 
-	template<typename VkHandleArg_t, typename VkOwnerArg_t = VkDevice>
+	class Exception : public std::exception {
+		VkResult	m_vkResult = VK_ERROR_UNKNOWN;
+
+	public:
+		Exception(VkResult vkResult) :m_vkResult(vkResult) {}
+
+		Exception(const char* msg) : std::exception(msg) {}
+
+	};
+
+
+
+	class ShutdownException : public Exception {
+
+	public:
+		ShutdownException() : Exception(VK_NOT_READY) {}
+
+	};
+
+	class NullHandleException : public Exception {
+
+	public:
+		NullHandleException() : Exception(VK_INCOMPLETE) {}
+
+	};
+
+	template<typename HandleArg_t, typename OwnerArg_t = VkDevice>
 	class HandleWithOwner {
 
 	public:
-		using VkHandle_t = VkHandleArg_t;
-		using VkOwner_t = VkOwnerArg_t;
-		using DestroyFunc_t = void (*)(VkHandleArg_t, VkOwnerArg_t);
+		using Handle_t = HandleArg_t;
+		using Owner_t = OwnerArg_t;
+		using DestroyFunc_t = void (*)(HandleArg_t, OwnerArg_t);
 
 	private:
 
 		void destroy() {
 			if (m_pfnDestroy) {
-				(*m_pfnDestroy)(m_vkHandle, m_vkOwner);
+				(*m_pfnDestroy)(m_handle, m_owner);
 			}
 			makeEmpty();
 		}
@@ -108,33 +97,33 @@ namespace vkcpp {
 	protected:
 
 		void makeEmpty() {
-			m_vkHandle = nullptr;
-			m_vkOwner = nullptr;
+			m_handle = Handle_t{};
+			m_owner = Owner_t();
 			m_pfnDestroy = nullptr;
 		}
 
-		VkHandleArg_t	m_vkHandle = nullptr;
-		VkOwnerArg_t	m_vkOwner = nullptr;
+		Handle_t	m_handle{};
+		Owner_t	m_owner{};
 		DestroyFunc_t	m_pfnDestroy = nullptr;
 
 		HandleWithOwner() = default;
 		~HandleWithOwner() { destroy(); }
 
-		HandleWithOwner(VkHandleArg_t vkHandle, VkOwnerArg_t vkOwner)
-			: m_vkHandle(vkHandle)
-			, m_vkOwner(vkOwner)
+		HandleWithOwner(Handle_t handle, Owner_t owner)
+			: m_handle(handle)
+			, m_owner(owner)
 			, m_pfnDestroy(nullptr) {
 		}
 
-		HandleWithOwner(VkHandleArg_t vkHandle, VkOwnerArg_t vkOwner, DestroyFunc_t pfnDestroy)
-			: m_vkHandle(vkHandle)
-			, m_vkOwner(vkOwner)
+		HandleWithOwner(HandleArg_t handle, OwnerArg_t owner, DestroyFunc_t pfnDestroy)
+			: m_handle(handle)
+			, m_owner(owner)
 			, m_pfnDestroy(pfnDestroy) {
 		}
 
 		HandleWithOwner(const HandleWithOwner& other)
-			: m_vkHandle(other.m_vkHandle)
-			, m_vkOwner(other.m_vkOwner)
+			: m_handle(other.m_handle)
+			, m_owner(other.m_owner)
 			, m_pfnDestroy(nullptr) {
 		}
 
@@ -148,8 +137,8 @@ namespace vkcpp {
 		}
 
 		HandleWithOwner(HandleWithOwner&& other) noexcept
-			: m_vkHandle(other.m_vkHandle)
-			, m_vkOwner(other.m_vkOwner)
+			: m_handle(other.m_handle)
+			, m_owner(other.m_owner)
 			, m_pfnDestroy(other.m_pfnDestroy) {
 			other.makeEmpty();
 		}
@@ -164,29 +153,29 @@ namespace vkcpp {
 
 	public:
 
-		operator bool() const { return m_vkHandle != nullptr; }
-		operator VkHandle_t() const { return m_vkHandle; }
-		VkOwnerArg_t getOwner() const { return m_vkOwner; }
+		operator bool() const { return !!m_handle; }
+		operator Handle_t() const {
+			if (!m_handle) {
+				throw NullHandleException();
+			}
+			return m_handle;
+		}
+		OwnerArg_t getOwner() const {
+			if (!m_owner) {
+				throw NullHandleException();
+			}
+			return m_owner;
+		}
+		VkDevice getVkDevice() const
+			requires std::same_as<Owner_t, VkDevice> {
+			if (!m_owner) {
+				throw NullHandleException();
+			}
+			return m_owner;
+		}
 	};
 
 
-	class Exception : public std::exception {
-		VkResult	m_vkResult = VK_ERROR_UNKNOWN;
-
-	public:
-		Exception(VkResult vkResult) :m_vkResult(vkResult) {}
-
-		Exception(const char* msg) : std::exception(msg) {}
-
-	};
-
-
-	class ShutdownException : public Exception {
-
-	public:
-		ShutdownException() : Exception(VK_ERROR_UNKNOWN) {}
-
-	};
 
 
 	class VersionNumber {
@@ -372,6 +361,24 @@ namespace vkcpp {
 
 		operator VkPhysicalDevice() { return m_vkPhysicalDevice; }
 
+		uint32_t findMemoryTypeIndex(
+			uint32_t usableMemoryIndexBits,
+			VkMemoryPropertyFlags requiredProperties
+		) {
+			VkPhysicalDeviceMemoryProperties memProperties;
+			vkGetPhysicalDeviceMemoryProperties(m_vkPhysicalDevice, &memProperties);
+
+			for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+				if ((usableMemoryIndexBits & (1 << i))
+					&& (memProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties) {
+					return i;
+				}
+			}
+			throw std::runtime_error("failed to find suitable memory type!");
+		}
+
+
+
 
 		std::vector<VkQueueFamilyProperties>	getAllQueueFamilyProperties() const {
 			uint32_t queueFamilyCount = 0;
@@ -442,15 +449,15 @@ namespace vkcpp {
 
 	};
 
-	class VulkanInstance : public HandleWithOwner<VkInstance> {
+	class VulkanInstance : public HandleWithOwner<VkInstance, VkInstance> {
 
 		VkDebugUtilsMessengerEXT	m_messenger = nullptr;
 
 		VulkanInstance(VkInstance vkInstance, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(vkInstance, nullptr, pfnDestroy) {
+			: HandleWithOwner(vkInstance, vkInstance, pfnDestroy) {
 		}
 
-		static void destroy(VkInstance vkInstance, VkDevice) {
+		static void destroy(VkInstance vkInstance, VkInstance) {
 			if (vkInstance) {
 				vkDestroyInstance(vkInstance, nullptr);
 			}
@@ -572,7 +579,7 @@ namespace vkcpp {
 			VkSurfaceCapabilitiesKHR vkSurfaceCapabilities;
 			VkResult vkResult = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
 				vkPhysicalDevice,
-				m_vkHandle,
+				m_handle,
 				&vkSurfaceCapabilities
 			);
 			if (vkResult == VK_ERROR_UNKNOWN) {
@@ -693,14 +700,14 @@ namespace vkcpp {
 
 	};
 
-	class Device : public HandleWithOwner<VkDevice> {
+	class Device : public HandleWithOwner<VkDevice, VkPhysicalDevice> {
 
 
-		Device(VkDevice vkDevice, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(vkDevice, vkDevice, pfnDestroy) {
+		Device(VkDevice vkDevice, VkPhysicalDevice vkPhysicalDevice, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkDevice, vkPhysicalDevice, pfnDestroy) {
 		}
 
-		static void destroy(VkDevice vkDevice, VkDevice) {
+		static void destroy(VkDevice vkDevice, VkPhysicalDevice) {
 			if (vkDevice) {
 				vkDestroyDevice(vkDevice, nullptr);
 			}
@@ -716,13 +723,16 @@ namespace vkcpp {
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
-			new(this) Device(vkDevice, &destroy);
+			new(this) Device(vkDevice, physicalDevice, &destroy);
 		}
 
+		PhysicalDevice getPhysicalDevice() {
+			return PhysicalDevice(getOwner());
+		}
 
 		VkQueue getDeviceQueue(int deviceQueueFamily, int deviceQueueIndex) const {
 			VkQueue vkQueue;
-			vkGetDeviceQueue(m_vkHandle, deviceQueueFamily, deviceQueueIndex, &vkQueue);
+			vkGetDeviceQueue(m_handle, deviceQueueFamily, deviceQueueIndex, &vkQueue);
 			if (vkQueue == nullptr) {
 				throw Exception(VK_ERROR_UNKNOWN);
 			}
@@ -738,40 +748,97 @@ namespace vkcpp {
 			int imageIndex = 0;
 			for (VkImage imageIn : images) {
 				vkImageViewCreateInfo->image = imageIn;
-				vkCreateImageView(m_vkHandle, vkImageViewCreateInfo, nullptr, &imageViews[imageIndex]);
+				vkCreateImageView(m_handle, vkImageViewCreateInfo, nullptr, &imageViews[imageIndex]);
 				++imageIndex;
 			}
 			return imageViews;
 		}
 
 
+		uint32_t findMemoryTypeIndex(uint32_t usableMemoryIndexBits, VkMemoryPropertyFlags requiredProperties) {
+			return getPhysicalDevice().findMemoryTypeIndex(usableMemoryIndexBits, requiredProperties);
+		}
+
 
 	};
 
 
-	class Buffer : public HandleWithOwner<VkBuffer> {
+	class DeviceMemory : public HandleWithOwner<VkDeviceMemory> {
 
-		static void destroy(VkBuffer vkBuffer, VkDevice vkDevice) {
-			if (vkBuffer && vkDevice) {
-				vkDestroyBuffer(vkDevice, vkBuffer, nullptr);
+		DeviceMemory(VkDeviceMemory vkDeviceMemory, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkDeviceMemory, vkDevice, pfnDestroy) {
+		}
+
+		static void destroy(VkDeviceMemory vkDeviceMemory, VkDevice vkDevice) {
+			if (vkDeviceMemory && vkDevice) {
+				vkFreeMemory(vkDevice, vkDeviceMemory, nullptr);
 			}
 		}
 
-		Buffer(VkBuffer vkBuffer, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner<VkBuffer>(vkBuffer, vkDevice, pfnDestroy) {
+	public:
+
+		DeviceMemory() {}
+		DeviceMemory(const VkMemoryAllocateInfo& vkMemoryAllocateInfo, VkDevice vkDevice) {
+			VkDeviceMemory vkDeviceMemory;
+			VkResult vkResult = vkAllocateMemory(vkDevice, &vkMemoryAllocateInfo, nullptr, &vkDeviceMemory);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			new(this)DeviceMemory(vkDeviceMemory, vkDevice, &destroy);
+		}
+
+	};
+
+
+
+	class Test : public HandleWithOwner<VkBuffer, Device> {
+
+	public:
+		Test() {}
+
+	};
+
+	class Buffer : public HandleWithOwner<VkBuffer, Device> {
+
+		static void destroy(VkBuffer vkBuffer, Device device) {
+			if (vkBuffer && device) {
+				vkDestroyBuffer(device, vkBuffer, nullptr);
+			}
+		}
+
+		Buffer(VkBuffer vkBuffer, Device device, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkBuffer, device, pfnDestroy) {
 		}
 
 	public:
 
 		Buffer() {}
-		Buffer(VkBufferCreateInfo& vkBufferCreateInfo, VkDevice vkDevice) {
+		Buffer(VkBufferCreateInfo& vkBufferCreateInfo, Device device) {
 			VkBuffer vkBuffer;
-			VkResult vkResult = vkCreateBuffer(vkDevice, &vkBufferCreateInfo, nullptr, &vkBuffer);
+			VkResult vkResult = vkCreateBuffer(device, &vkBufferCreateInfo, nullptr, &vkBuffer);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
-			new(this)Buffer(vkBuffer, vkDevice, &destroy);
+			new(this)Buffer(vkBuffer, device, &destroy);
 		}
+
+		VkMemoryRequirements  getMemoryRequirements() {
+			VkMemoryRequirements vkMemoryRequirements;
+			vkGetBufferMemoryRequirements(getOwner(), *this, &vkMemoryRequirements);
+			return vkMemoryRequirements;
+		}
+
+		DeviceMemory allocateDeviceMemory(VkMemoryPropertyFlags vkRequiredProperties) {
+			VkMemoryRequirements vkMemoryRequirements = getMemoryRequirements();
+
+			VkMemoryAllocateInfo vkMemoryAllocateInfo{};
+			vkMemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			vkMemoryAllocateInfo.allocationSize = vkMemoryRequirements.size;
+			vkMemoryAllocateInfo.memoryTypeIndex =
+				getOwner().findMemoryTypeIndex(vkMemoryRequirements.memoryTypeBits, vkRequiredProperties);
+			return vkcpp::DeviceMemory(vkMemoryAllocateInfo, getOwner());
+		}
+
 
 
 	};
@@ -1084,11 +1151,11 @@ namespace vkcpp {
 			return vkSwapChain != nullptr;
 		}
 
-		VkExtent2D getImageExtent() {
+		VkExtent2D getImageExtent() const {
 			return m_swapChainOriginal.imageExtent();
 		}
 
-		RenderPass getRenderPass() {
+		RenderPass getRenderPass() const {
 			return m_renderPass;
 		}
 
@@ -1178,7 +1245,7 @@ namespace vkcpp {
 			VkCommandBufferAllocateInfo& vkCommandBufferAllocateInfo
 		) const {
 			std::vector<VkCommandBuffer> commandBuffers(vkCommandBufferAllocateInfo.commandBufferCount);
-			VkResult vkResult = vkAllocateCommandBuffers(m_vkOwner, &vkCommandBufferAllocateInfo, commandBuffers.data());
+			VkResult vkResult = vkAllocateCommandBuffers(m_owner, &vkCommandBufferAllocateInfo, commandBuffers.data());
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
@@ -1189,6 +1256,24 @@ namespace vkcpp {
 
 	};
 
+	//class CommandBuffer : public HandleWithOwner<VkCommandBuffer> {
+
+	//	CommandBuffer(VkCommandBuffer vkCommandBuffer, VkDevice vkDevice)
+	//		: HandleWithOwner(vkDevice, vkCommandBuffer) {
+	//	}
+
+	//	void destroy(VkCommandBuffer vkCommandBuffer, VkDevice vkDevice) {
+	//		if (vkCommandBuffer) {
+	//			vkFreeCommandBuffers(vkDevice, 1, &)
+	//		}
+	//	}
+
+	//public:
+
+	//	CommandBuffer() {}
+
+	//	CommandBu
+	//};
 
 	class DescriptorPool : public HandleWithOwner<VkDescriptorPool> {
 
@@ -1246,34 +1331,6 @@ namespace vkcpp {
 	};
 
 
-	class DeviceMemory : public HandleWithOwner<VkDeviceMemory> {
-
-		DeviceMemory(VkDeviceMemory vkDeviceMemory, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(vkDeviceMemory, vkDevice, pfnDestroy) {
-		}
-
-		static void destroy(VkDeviceMemory vkDeviceMemory, VkDevice vkDevice) {
-			if (vkDeviceMemory && vkDevice) {
-				vkFreeMemory(vkDevice, vkDeviceMemory, nullptr);
-			}
-		}
-
-	public:
-
-		DeviceMemory() {}
-		DeviceMemory(const VkMemoryAllocateInfo& vkMemoryAllocateInfo, VkDevice vkDevice) {
-			VkDeviceMemory vkDeviceMemory;
-			VkResult vkResult = vkAllocateMemory(vkDevice, &vkMemoryAllocateInfo, nullptr, &vkDeviceMemory);
-			if (vkResult != VK_SUCCESS) {
-				throw Exception(vkResult);
-			}
-			new(this)DeviceMemory(vkDeviceMemory, vkDevice, &destroy);
-		}
-
-	};
-
-
-
 	class Semaphore : public HandleWithOwner<VkSemaphore> {
 
 		Semaphore(VkSemaphore vkSemaphore, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
@@ -1326,15 +1383,16 @@ namespace vkcpp {
 
 		void reset() {
 			VkFence vkFence = *this;
-			vkResetFences(m_vkOwner, 1, &vkFence);
+			vkResetFences(m_owner, 1, &vkFence);
 		}
 
 		void wait() {
 			VkFence vkFence = *this;
-			vkWaitForFences(m_vkOwner, 1, &vkFence, VK_TRUE, UINT64_MAX);
+			vkWaitForFences(m_owner, 1, &vkFence, VK_TRUE, UINT64_MAX);
 		}
 
 	};
+
 
 	class PipelineLayout : public HandleWithOwner<VkPipelineLayout> {
 
@@ -1390,6 +1448,34 @@ namespace vkcpp {
 
 
 	};
+
+
+	class Image : public HandleWithOwner<VkImage> {
+
+		Image(VkImage vkImage, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkImage, vkDevice, pfnDestroy) {
+
+		}
+
+		static void destroy(VkImage vkImage, VkDevice vkDevice) {
+			if (vkImage) {
+				vkDestroyImage(vkDevice, vkImage, nullptr);
+			}
+		}
+
+	public:
+		Image() {}
+
+		Image(const VkImageCreateInfo& vkImageCreateInfo, VkDevice vkDevice) {
+			VkImage vkImage;
+			VkResult vkResult = vkCreateImage(vkDevice, &vkImageCreateInfo, nullptr, &vkImage);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			new(this) Image(vkImage, vkDevice, &destroy);
+		}
+	};
+
 
 
 }
