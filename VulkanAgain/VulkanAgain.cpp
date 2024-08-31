@@ -261,14 +261,14 @@ vkcpp::VulkanInstance createVulkanInstance() {
 
 void recordCommandBuffer(
 	VkCommandBuffer		commandBuffer,
-	uint32_t			swapChainImageIndex,
-	vkcpp::SwapChainImageViewsFrameBuffers& swapChainImageViewsFrameBuffers,
+	uint32_t			swapchainImageIndex,
+	vkcpp::SwapchainImageViewsFrameBuffers& swapchainImageViewsFrameBuffers,
 	VkBuffer			vkVertexBuffer,
 	VkDescriptorSet		descriptorSet,
 	VkPipelineLayout	vkPipelineLayout,
 	VkPipeline			graphicsPipeline
 ) {
-	const VkExtent2D swapChainImageExtent = swapChainImageViewsFrameBuffers.getImageExtent();
+	const VkExtent2D swapchainImageExtent = swapchainImageViewsFrameBuffers.getImageExtent();
 
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -281,10 +281,10 @@ void recordCommandBuffer(
 
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassInfo.renderPass = swapChainImageViewsFrameBuffers.getRenderPass();
-	renderPassInfo.framebuffer = swapChainImageViewsFrameBuffers.getFrameBuffer(swapChainImageIndex);
+	renderPassInfo.renderPass = swapchainImageViewsFrameBuffers.getRenderPass();
+	renderPassInfo.framebuffer = swapchainImageViewsFrameBuffers.getFrameBuffer(swapchainImageIndex);
 	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = swapChainImageExtent;
+	renderPassInfo.renderArea.extent = swapchainImageExtent;
 	VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
 	renderPassInfo.clearValueCount = 1;
 	renderPassInfo.pClearValues = &clearColor;
@@ -295,15 +295,15 @@ void recordCommandBuffer(
 	VkViewport viewport{};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
-	viewport.width = static_cast<float>(swapChainImageExtent.width);
-	viewport.height = static_cast<float>(swapChainImageExtent.height);
+	viewport.width = static_cast<float>(swapchainImageExtent.width);
+	viewport.height = static_cast<float>(swapchainImageExtent.height);
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
 	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
 	VkRect2D scissor{};
 	scissor.offset = { 0, 0 };
-	scissor.extent = swapChainImageExtent;
+	scissor.extent = swapchainImageExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
@@ -383,8 +383,8 @@ public:
 
 	vkcpp::RenderPass g_renderPassOriginal;
 
-	uint32_t						g_swapChainMinImageCount = SWAP_CHAIN_IMAGE_COUNT;
-	vkcpp::SwapChainImageViewsFrameBuffers	g_swapChainImageViewsFrameBuffers;
+	uint32_t						g_swapchainMinImageCount = SWAP_CHAIN_IMAGE_COUNT;
+	vkcpp::SwapchainImageViewsFrameBuffers	g_swapchainImageViewsFrameBuffers;
 
 	vkcpp::ShaderModule g_vertShaderModule;
 	vkcpp::ShaderModule g_fragShaderModule;
@@ -1000,10 +1000,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	//std::vector<VkPresentModeKHR> presentModes = surfaceOriginal.getSurfacePresentModes();
 
 
-	const VkFormat swapChainImageFormat = VK_FORMAT_B8G8R8A8_SRGB;
+	const VkFormat swapchainImageFormat = VK_FORMAT_B8G8R8A8_SRGB;
 
 	VkAttachmentDescription colorAttachment{};
-	colorAttachment.format = swapChainImageFormat;
+	colorAttachment.format = swapchainImageFormat;
 	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
 	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -1039,32 +1039,32 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::RenderPass renderPassOriginal(vkRenderPassCreateInfo, deviceClone);
 
-	vkcpp::SwapChainImageViewsFrameBuffers::setDevice(deviceClone);
+	vkcpp::SwapchainImageViewsFrameBuffers::setDevice(deviceClone);
 
-	const VkColorSpaceKHR swapChainImageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-	const VkPresentModeKHR swapChainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+	const VkColorSpaceKHR swapchainImageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+	const VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
 
-	VkSwapchainCreateInfoKHR swapChainCreateInfo{};
-	swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	swapChainCreateInfo.surface = surfaceOriginal;
-	swapChainCreateInfo.minImageCount = SWAP_CHAIN_IMAGE_COUNT;
-	swapChainCreateInfo.imageFormat = swapChainImageFormat;
-	swapChainCreateInfo.imageColorSpace = swapChainImageColorSpace;
-	swapChainCreateInfo.imageArrayLayers = 1;
-	swapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-	swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	swapChainCreateInfo.queueFamilyIndexCount = 0;
-	swapChainCreateInfo.pQueueFamilyIndices = nullptr;
-	swapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-	swapChainCreateInfo.presentMode = swapChainPresentMode;
-	swapChainCreateInfo.clipped = VK_TRUE;
-	swapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
+	VkSwapchainCreateInfoKHR swapchainCreateInfo{};
+	swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	swapchainCreateInfo.surface = surfaceOriginal;
+	swapchainCreateInfo.minImageCount = SWAP_CHAIN_IMAGE_COUNT;
+	swapchainCreateInfo.imageFormat = swapchainImageFormat;
+	swapchainCreateInfo.imageColorSpace = swapchainImageColorSpace;
+	swapchainCreateInfo.imageArrayLayers = 1;
+	swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	swapchainCreateInfo.queueFamilyIndexCount = 0;
+	swapchainCreateInfo.pQueueFamilyIndices = nullptr;
+	swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	swapchainCreateInfo.presentMode = swapchainPresentMode;
+	swapchainCreateInfo.clipped = VK_TRUE;
+	swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
 
 
-	vkcpp::SwapChainImageViewsFrameBuffers swapChainImageViewsFrameBuffers(swapChainCreateInfo, surfaceOriginal);
-	swapChainImageViewsFrameBuffers.setRenderPass(renderPassOriginal);
+	vkcpp::SwapchainImageViewsFrameBuffers swapchainImageViewsFrameBuffers(swapchainCreateInfo, surfaceOriginal);
+	swapchainImageViewsFrameBuffers.setRenderPass(renderPassOriginal);
 
-	swapChainImageViewsFrameBuffers.recreateSwapChainImageViewsFrameBuffers();
+	swapchainImageViewsFrameBuffers.recreateSwapchainImageViewsFrameBuffers();
 
 	VkBufferCreateInfo vkBufferCreateInfo{};
 	vkBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1186,7 +1186,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_vkPresentationQueue = vkPresentationQueue;
 
 	globals.g_renderPassOriginal = std::move(renderPassOriginal);
-	globals.g_swapChainImageViewsFrameBuffers = std::move(swapChainImageViewsFrameBuffers);
+	globals.g_swapchainImageViewsFrameBuffers = std::move(swapchainImageViewsFrameBuffers);
 
 	globals.g_vertShaderModule = std::move(vertShaderModule);
 	globals.g_fragShaderModule = std::move(fragShaderModule);
@@ -1195,7 +1195,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 void updateUniformBuffer(
 	BufferAndDeviceMemoryMapped& uniformBufferMemory,
-	const VkExtent2D				swapChainImageExtent
+	const VkExtent2D				swapchainImageExtent
 ) {
 	static auto startTime = std::chrono::high_resolution_clock::now();
 
@@ -1205,7 +1205,7 @@ void updateUniformBuffer(
 	ModelViewProjTransform modelViewProjTransform{};
 	modelViewProjTransform.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	modelViewProjTransform.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	modelViewProjTransform.proj = glm::perspective(glm::radians(45.0f), (float)swapChainImageExtent.width / (float)swapChainImageExtent.height, 0.1f, 10.0f);
+	modelViewProjTransform.proj = glm::perspective(glm::radians(45.0f), (float)swapchainImageExtent.width / (float)swapchainImageExtent.height, 0.1f, 10.0f);
 	modelViewProjTransform.proj[1][1] *= -1;
 
 	memcpy(
@@ -1218,7 +1218,7 @@ void updateUniformBuffer(
 void drawFrame(Globals& globals)
 {
 	//std::cout << "--->>>drawFrame\n";
-	if (!globals.g_swapChainImageViewsFrameBuffers.canDraw()) {
+	if (!globals.g_swapchainImageViewsFrameBuffers.canDraw()) {
 		return;
 	}
 
@@ -1234,20 +1234,20 @@ void drawFrame(Globals& globals)
 
 	inFlightFence.wait();
 
-	uint32_t	swapChainImageIndex;
+	uint32_t	swapchainImageIndex;
 	vkAcquireNextImageKHR(
 		vkDevice,
-		globals.g_swapChainImageViewsFrameBuffers.vkSwapchain(),
+		globals.g_swapchainImageViewsFrameBuffers.vkSwapchain(),
 		UINT64_MAX,
 		imageAvailableSemaphore,
 		VK_NULL_HANDLE,
-		&swapChainImageIndex);
+		&swapchainImageIndex);
 
 	vkResetCommandBuffer(vkCommandBuffer, 0);
 	recordCommandBuffer(
 		vkCommandBuffer,
-		swapChainImageIndex,
-		globals.g_swapChainImageViewsFrameBuffers,
+		swapchainImageIndex,
+		globals.g_swapchainImageViewsFrameBuffers,
 		globals.g_vertexBuffer,
 		vkDescriptorSet,
 		globals.g_pipelineLayout,
@@ -1255,7 +1255,7 @@ void drawFrame(Globals& globals)
 
 	updateUniformBuffer(
 		currentDrawingFrame.m_uniformBufferMemory,
-		globals.g_swapChainImageViewsFrameBuffers.getImageExtent()
+		globals.g_swapchainImageViewsFrameBuffers.getImageExtent()
 	);
 
 	VkSubmitInfo submitInfo{};
@@ -1286,10 +1286,10 @@ void drawFrame(Globals& globals)
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.waitSemaphoreCount = 1;
 	presentInfo.pWaitSemaphores = renderFinishedSemaphores;
-	VkSwapchainKHR swapChains[] = { globals.g_swapChainImageViewsFrameBuffers.vkSwapchain() };
+	VkSwapchainKHR swapchains[] = { globals.g_swapchainImageViewsFrameBuffers.vkSwapchain() };
 	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = swapChains;
-	presentInfo.pImageIndices = &swapChainImageIndex;
+	presentInfo.pSwapchains = swapchains;
+	presentInfo.pImageIndices = &swapchainImageIndex;
 	presentInfo.pResults = nullptr; // Optional
 	vkQueuePresentKHR(globals.g_vkPresentationQueue, &presentInfo);
 
@@ -1407,7 +1407,7 @@ void MessageLoop(Globals& globals) {
 			if (g_windowPosChanged) {
 				if (graphicsValid) {
 					try {
-						globals.g_swapChainImageViewsFrameBuffers.recreateSwapChainImageViewsFrameBuffers();
+						globals.g_swapchainImageViewsFrameBuffers.recreateSwapchainImageViewsFrameBuffers();
 					}
 					catch (vkcpp::ShutdownException&)
 					{

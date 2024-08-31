@@ -884,47 +884,47 @@ namespace vkcpp {
 	};
 
 
-	class SwapChain : public HandleWithOwner<VkSwapchainKHR, Device> {
+	class Swapchain : public HandleWithOwner<VkSwapchainKHR, Device> {
 
-		SwapChain(VkSwapchainKHR vkSwapChain, Device device, DestroyFunc_t pfnDestroy, VkExtent2D vkSwapChainImageExtent)
-			: HandleWithOwner(vkSwapChain, device, pfnDestroy)
-			, m_vkSwapChainImageExtent(vkSwapChainImageExtent) {
+		Swapchain(VkSwapchainKHR vkSwapchain, Device device, DestroyFunc_t pfnDestroy, VkExtent2D vkSwapchainImageExtent)
+			: HandleWithOwner(vkSwapchain, device, pfnDestroy)
+			, m_vkSwapchainImageExtent(vkSwapchainImageExtent) {
 		}
 
-		static void destroy(VkSwapchainKHR vkSwapChain, Device device) {
-			if (vkSwapChain) {
-				vkDestroySwapchainKHR(device, vkSwapChain, nullptr);
+		static void destroy(VkSwapchainKHR vkSwapchain, Device device) {
+			if (vkSwapchain) {
+				vkDestroySwapchainKHR(device, vkSwapchain, nullptr);
 			}
 		}
 
 	public:
 
-		SwapChain() {}
-		SwapChain(VkSwapchainCreateInfoKHR* vkSwapChainCreateInfo, Device device) {
-			VkSwapchainKHR vkSwapChain;
-			VkResult vkResult = vkCreateSwapchainKHR(device, vkSwapChainCreateInfo, nullptr, &vkSwapChain);
+		Swapchain() {}
+		Swapchain(VkSwapchainCreateInfoKHR* vkSwapchainCreateInfo, Device device) {
+			VkSwapchainKHR vkSwapchain;
+			VkResult vkResult = vkCreateSwapchainKHR(device, vkSwapchainCreateInfo, nullptr, &vkSwapchain);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
-			new(this)SwapChain(vkSwapChain, device, &destroy, vkSwapChainCreateInfo->imageExtent);
+			new(this)Swapchain(vkSwapchain, device, &destroy, vkSwapchainCreateInfo->imageExtent);
 		}
 
-		VkExtent2D		m_vkSwapChainImageExtent = { .width = 0, .height = 0 };
+		VkExtent2D		m_vkSwapchainImageExtent = { .width = 0, .height = 0 };
 
-		VkExtent2D imageExtent() const { return m_vkSwapChainImageExtent; }
+		VkExtent2D imageExtent() const { return m_vkSwapchainImageExtent; }
 
 		std::vector<VkImage> getImages() const {
-			uint32_t swapChainImageCount;
-			VkResult vkResult = vkGetSwapchainImagesKHR(getVkDevice(), *this, &swapChainImageCount, nullptr);
+			uint32_t swapchainImageCount;
+			VkResult vkResult = vkGetSwapchainImagesKHR(getVkDevice(), *this, &swapchainImageCount, nullptr);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
-			std::vector<VkImage> swapChainImages(swapChainImageCount);
-			vkResult = vkGetSwapchainImagesKHR(getVkDevice(), *this, &swapChainImageCount, swapChainImages.data());
+			std::vector<VkImage> swapchainImages(swapchainImageCount);
+			vkResult = vkGetSwapchainImagesKHR(getVkDevice(), *this, &swapchainImageCount, swapchainImages.data());
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
-			return swapChainImages;
+			return swapchainImages;
 		}
 
 	};
@@ -1265,7 +1265,7 @@ namespace vkcpp {
 
 
 
-	class SwapChainImageViewsFrameBuffers {
+	class SwapchainImageViewsFrameBuffers {
 
 	public:
 		static inline	Device		s_device;
@@ -1275,52 +1275,52 @@ namespace vkcpp {
 
 		RenderPass	m_renderPass;
 
-		SwapChain	m_swapChainOriginal;
-		std::vector<VkImageView>	m_swapChainImageViews;
-		std::vector<VkFramebuffer>	m_swapChainFrameBuffers;
+		Swapchain	m_swapchainOriginal;
+		std::vector<VkImageView>	m_swapchainImageViews;
+		std::vector<VkFramebuffer>	m_swapchainFrameBuffers;
 
 	private:
 
 		void makeEmpty() {
-			m_swapChainImageViews.clear();
-			m_swapChainFrameBuffers.clear();
+			m_swapchainImageViews.clear();
+			m_swapchainFrameBuffers.clear();
 		}
 
 
 		void destroyFrameBuffers() {
-			for (VkFramebuffer vkFrameBuffer : m_swapChainFrameBuffers) {
+			for (VkFramebuffer vkFrameBuffer : m_swapchainFrameBuffers) {
 				vkDestroyFramebuffer(s_device, vkFrameBuffer, nullptr);
 			}
-			m_swapChainFrameBuffers.clear();
+			m_swapchainFrameBuffers.clear();
 		}
 
 		void destroyImageViews() {
-			for (VkImageView vkImageView : m_swapChainImageViews) {
+			for (VkImageView vkImageView : m_swapchainImageViews) {
 				vkDestroyImageView(s_device, vkImageView, nullptr);
 			}
-			m_swapChainImageViews.clear();
+			m_swapchainImageViews.clear();
 		}
 
 		void destroy() {
 			if (!s_device) {
 				return;
 			}
-			if (m_swapChainOriginal) {
+			if (m_swapchainOriginal) {
 				vkDeviceWaitIdle(s_device);
 				destroyFrameBuffers();
 				destroyImageViews();
 			}
 		}
 
-		static 	std::vector<VkImageView> createSwapChainImageViews(
-			SwapChain	swapChain,
-			VkFormat	swapChainImageFormat
+		static 	std::vector<VkImageView> createSwapchainImageViews(
+			Swapchain	swapchain,
+			VkFormat	swapchainImageFormat
 		) {
-			std::vector<VkImage> swapChainImages = swapChain.getImages();
+			std::vector<VkImage> swapchainImages = swapchain.getImages();
 			VkImageViewCreateInfo imageViewCreateInfo{};
 			imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 			imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			imageViewCreateInfo.format = swapChainImageFormat;
+			imageViewCreateInfo.format = swapchainImageFormat;
 			imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
 			imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 			imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -1330,20 +1330,20 @@ namespace vkcpp {
 			imageViewCreateInfo.subresourceRange.levelCount = 1;
 			imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
 			imageViewCreateInfo.subresourceRange.layerCount = 1;
-			return ImageView::createVkImageViews(swapChainImages, imageViewCreateInfo, swapChain.getOwner());
+			return ImageView::createVkImageViews(swapchainImages, imageViewCreateInfo, swapchain.getOwner());
 		}
 
 
-		static std::vector<VkFramebuffer> createSwapChainFrameBuffers(
-			std::vector<VkImageView> swapChainImageViews,
-			VkExtent2D	swapChainExtent,
+		static std::vector<VkFramebuffer> createSwapchainFrameBuffers(
+			std::vector<VkImageView> swapchainImageViews,
+			VkExtent2D	swapchainExtent,
 			VkRenderPass	vkRenderPass) {
-			std::vector<VkFramebuffer>	swapChainFrameBuffers;
+			std::vector<VkFramebuffer>	swapchainFrameBuffers;
 
-			swapChainFrameBuffers.resize(swapChainImageViews.size());
-			for (size_t i = 0; i < swapChainImageViews.size(); i++) {
+			swapchainFrameBuffers.resize(swapchainImageViews.size());
+			for (size_t i = 0; i < swapchainImageViews.size(); i++) {
 				VkImageView attachments[] = {
-					swapChainImageViews[i]
+					swapchainImageViews[i]
 				};
 
 				VkFramebufferCreateInfo framebufferInfo{};
@@ -1351,33 +1351,33 @@ namespace vkcpp {
 				framebufferInfo.renderPass = vkRenderPass;
 				framebufferInfo.attachmentCount = 1;
 				framebufferInfo.pAttachments = attachments;
-				framebufferInfo.width = swapChainExtent.width;
-				framebufferInfo.height = swapChainExtent.height;
+				framebufferInfo.width = swapchainExtent.width;
+				framebufferInfo.height = swapchainExtent.height;
 				framebufferInfo.layers = 1;
 
-				if (vkCreateFramebuffer(s_device, &framebufferInfo, nullptr, &swapChainFrameBuffers[i]) != VK_SUCCESS) {
+				if (vkCreateFramebuffer(s_device, &framebufferInfo, nullptr, &swapchainFrameBuffers[i]) != VK_SUCCESS) {
 					throw std::runtime_error("failed to create framebuffer!");
 				}
 			}
-			return swapChainFrameBuffers;
+			return swapchainFrameBuffers;
 		}
 
 
-		static SwapChain createSwapChain(
+		static Swapchain createSwapchain(
 			VkSwapchainCreateInfoKHR& vkSwapchainCreateInfo,
 			Surface surface
 		) {
 			const VkSurfaceCapabilitiesKHR vkSurfaceCapabilities = surface.getSurfaceCapabilities();
-			const VkExtent2D swapChainExtent = vkSurfaceCapabilities.currentExtent;
-			if (swapChainExtent.width == 0 || swapChainExtent.height == 0) {
-				return SwapChain{};
+			const VkExtent2D swapchainExtent = vkSurfaceCapabilities.currentExtent;
+			if (swapchainExtent.width == 0 || swapchainExtent.height == 0) {
+				return Swapchain{};
 			}
 
 			vkSwapchainCreateInfo.surface = surface;
-			vkSwapchainCreateInfo.imageExtent = swapChainExtent;
+			vkSwapchainCreateInfo.imageExtent = swapchainExtent;
 			vkSwapchainCreateInfo.preTransform = vkSurfaceCapabilities.currentTransform;
 
-			return SwapChain(&vkSwapchainCreateInfo, s_device);
+			return Swapchain(&vkSwapchainCreateInfo, s_device);
 		}
 
 
@@ -1385,38 +1385,38 @@ namespace vkcpp {
 
 	public:
 
-		SwapChainImageViewsFrameBuffers() {}
-		~SwapChainImageViewsFrameBuffers() {
+		SwapchainImageViewsFrameBuffers() {}
+		~SwapchainImageViewsFrameBuffers() {
 			destroy();
 		}
 
-		SwapChainImageViewsFrameBuffers(
-			const VkSwapchainCreateInfoKHR& vkSwapChainCreateInfo,
+		SwapchainImageViewsFrameBuffers(
+			const VkSwapchainCreateInfoKHR& vkSwapchainCreateInfo,
 			Surface surface)
-			: m_vkSwapchainCreateInfo(vkSwapChainCreateInfo)
+			: m_vkSwapchainCreateInfo(vkSwapchainCreateInfo)
 			, m_surface(surface) {
 
 		}
 
-		SwapChainImageViewsFrameBuffers(const SwapChainImageViewsFrameBuffers&) = delete;
-		SwapChainImageViewsFrameBuffers& operator=(const SwapChainImageViewsFrameBuffers&) = delete;
+		SwapchainImageViewsFrameBuffers(const SwapchainImageViewsFrameBuffers&) = delete;
+		SwapchainImageViewsFrameBuffers& operator=(const SwapchainImageViewsFrameBuffers&) = delete;
 
-		SwapChainImageViewsFrameBuffers(SwapChainImageViewsFrameBuffers&& other) noexcept
+		SwapchainImageViewsFrameBuffers(SwapchainImageViewsFrameBuffers&& other) noexcept
 			: m_vkSwapchainCreateInfo(std::move(other.m_vkSwapchainCreateInfo))
 			, m_surface(std::move(other.m_surface))
 			, m_renderPass(std::move(other.m_renderPass))
-			, m_swapChainOriginal(std::move(other.m_swapChainOriginal))
-			, m_swapChainImageViews(std::move(other.m_swapChainImageViews))
-			, m_swapChainFrameBuffers(std::move(other.m_swapChainFrameBuffers)) {
+			, m_swapchainOriginal(std::move(other.m_swapchainOriginal))
+			, m_swapchainImageViews(std::move(other.m_swapchainImageViews))
+			, m_swapchainFrameBuffers(std::move(other.m_swapchainFrameBuffers)) {
 			other.makeEmpty();
 		}
 
-		SwapChainImageViewsFrameBuffers& operator=(SwapChainImageViewsFrameBuffers&& other) noexcept {
+		SwapchainImageViewsFrameBuffers& operator=(SwapchainImageViewsFrameBuffers&& other) noexcept {
 			if (this == &other) {
 				return *this;
 			}
-			(*this).~SwapChainImageViewsFrameBuffers();
-			new(this) SwapChainImageViewsFrameBuffers(std::move(other));
+			(*this).~SwapchainImageViewsFrameBuffers();
+			new(this) SwapchainImageViewsFrameBuffers(std::move(other));
 			other.makeEmpty();
 			return *this;
 		}
@@ -1428,21 +1428,21 @@ namespace vkcpp {
 
 
 		operator bool() {
-			return m_swapChainOriginal != nullptr;
+			return m_swapchainOriginal != nullptr;
 		}
 
 		VkSwapchainKHR vkSwapchain() {
-			VkSwapchainKHR vkSwapChain = m_swapChainOriginal;
-			return vkSwapChain;
+			VkSwapchainKHR vkSwapchain = m_swapchainOriginal;
+			return vkSwapchain;
 		}
 
 		bool canDraw() {
-			VkSwapchainKHR vkSwapChain = m_swapChainOriginal;
-			return vkSwapChain != nullptr;
+			VkSwapchainKHR vkSwapchain = m_swapchainOriginal;
+			return vkSwapchain != nullptr;
 		}
 
 		VkExtent2D getImageExtent() const {
-			return m_swapChainOriginal.imageExtent();
+			return m_swapchainOriginal.imageExtent();
 		}
 
 		RenderPass getRenderPass() const {
@@ -1450,7 +1450,7 @@ namespace vkcpp {
 		}
 
 		VkFramebuffer getFrameBuffer(int index) {
-			return m_swapChainFrameBuffers.at(index);
+			return m_swapchainFrameBuffers.at(index);
 		}
 
 
@@ -1458,7 +1458,7 @@ namespace vkcpp {
 			m_renderPass = renderPass;
 		}
 
-		void recreateSwapChainImageViewsFrameBuffers() {
+		void recreateSwapchainImageViewsFrameBuffers() {
 
 			if (!s_device) {
 				return;
@@ -1468,13 +1468,13 @@ namespace vkcpp {
 			destroyFrameBuffers();
 			destroyImageViews();
 
-			m_swapChainOriginal = std::move(createSwapChain(m_vkSwapchainCreateInfo, m_surface));
-			if (!m_swapChainOriginal) {
+			m_swapchainOriginal = std::move(createSwapchain(m_vkSwapchainCreateInfo, m_surface));
+			if (!m_swapchainOriginal) {
 				return;
 			}
-			m_swapChainImageViews = createSwapChainImageViews(m_swapChainOriginal, m_vkSwapchainCreateInfo.imageFormat);
-			m_swapChainFrameBuffers = createSwapChainFrameBuffers(
-				m_swapChainImageViews,
+			m_swapchainImageViews = createSwapchainImageViews(m_swapchainOriginal, m_vkSwapchainCreateInfo.imageFormat);
+			m_swapchainFrameBuffers = createSwapchainFrameBuffers(
+				m_swapchainImageViews,
 				m_vkSwapchainCreateInfo.imageExtent,
 				m_renderPass);
 		}
