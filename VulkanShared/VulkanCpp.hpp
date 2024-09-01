@@ -368,8 +368,7 @@ namespace vkcpp {
 
 		uint32_t findMemoryTypeIndex(
 			uint32_t usableMemoryIndexBits,
-			VkMemoryPropertyFlags requiredProperties
-		) {
+			VkMemoryPropertyFlags requiredProperties) const {
 			VkPhysicalDeviceMemoryProperties memProperties;
 			vkGetPhysicalDeviceMemoryProperties(m_vkPhysicalDevice, &memProperties);
 
@@ -834,6 +833,85 @@ namespace vkcpp {
 	};
 
 
+	class BufferAndDeviceMemoryMapped {
+
+		BufferAndDeviceMemoryMapped(Buffer&& buffer, DeviceMemory&& deviceMemory, void* mappedMemory)
+			: m_buffer(std::move(buffer))
+			, m_deviceMemory(std::move(deviceMemory))
+			, m_mappedMemory(mappedMemory) {
+		}
+
+	public:
+
+		Buffer			m_buffer;
+		DeviceMemory	m_deviceMemory;
+		void* m_mappedMemory = nullptr;
+
+		BufferAndDeviceMemoryMapped() {}
+
+		BufferAndDeviceMemoryMapped(const BufferAndDeviceMemoryMapped&) = delete;
+		BufferAndDeviceMemoryMapped& operator=(const BufferAndDeviceMemoryMapped&) = delete;
+
+		BufferAndDeviceMemoryMapped(BufferAndDeviceMemoryMapped&& other) noexcept
+			: m_buffer(std::move(other.m_buffer))
+			, m_deviceMemory(std::move(other.m_deviceMemory))
+			, m_mappedMemory(other.m_mappedMemory) {
+		}
+
+		BufferAndDeviceMemoryMapped& operator=(BufferAndDeviceMemoryMapped&& other) noexcept {
+			if (this == &other) {
+				return *this;
+			}
+			(*this).~BufferAndDeviceMemoryMapped();
+			new(this) BufferAndDeviceMemoryMapped(std::move(other));
+			return *this;
+		}
+
+
+		BufferAndDeviceMemoryMapped(
+			VkDeviceSize size,
+			VkBufferUsageFlags usage,
+			VkMemoryPropertyFlags properties,
+			Device device
+		) {
+			VkBufferCreateInfo bufferInfo{};
+			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			bufferInfo.size = size;
+			bufferInfo.usage = usage;
+			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+			vkcpp::Buffer buffer(bufferInfo, device);
+
+			VkMemoryRequirements memRequirements = buffer.getMemoryRequirements();
+
+			VkMemoryAllocateInfo allocInfo{};
+			allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			allocInfo.allocationSize = memRequirements.size;
+			allocInfo.memoryTypeIndex = device.findMemoryTypeIndex(memRequirements.memoryTypeBits, properties);
+
+			DeviceMemory deviceMemory(allocInfo, device);
+
+			VkResult vkResult = vkBindBufferMemory(device, buffer, deviceMemory, 0);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+
+			// TODO: should this be a method on DeviceMemory?
+			void* mappedMemory;
+			vkMapMemory(device, deviceMemory, 0, size, 0, &mappedMemory);
+
+			new(this) BufferAndDeviceMemoryMapped(std::move(buffer), std::move(deviceMemory), mappedMemory);
+
+		}
+
+		void unmapMemory() {
+			vkUnmapMemory(m_deviceMemory.getVkDevice(), m_deviceMemory);
+		}
+
+	};
+
+
+
 	class ShaderModule : public HandleWithOwner<VkShaderModule> {
 
 		static std::vector<char> readFile(const std::string& filename) {
@@ -1262,6 +1340,8 @@ namespace vkcpp {
 		}
 
 	};
+
+
 
 
 

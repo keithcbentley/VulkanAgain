@@ -92,78 +92,6 @@ const int windowHeight = 600;
 
 
 
-class BufferAndDeviceMemoryMapped {
-
-	BufferAndDeviceMemoryMapped(vkcpp::Buffer&& buffer, vkcpp::DeviceMemory&& deviceMemory, void* mappedMemory)
-		: m_buffer(std::move(buffer))
-		, m_deviceMemory(std::move(deviceMemory))
-		, m_mappedMemory(mappedMemory) {
-	}
-
-public:
-
-	vkcpp::Buffer		m_buffer;
-	vkcpp::DeviceMemory	m_deviceMemory;
-	void* m_mappedMemory = nullptr;
-
-	BufferAndDeviceMemoryMapped() {}
-
-	BufferAndDeviceMemoryMapped(const BufferAndDeviceMemoryMapped&) = delete;
-	BufferAndDeviceMemoryMapped& operator=(const BufferAndDeviceMemoryMapped&) = delete;
-
-	BufferAndDeviceMemoryMapped(BufferAndDeviceMemoryMapped&& other) noexcept
-		: m_buffer(std::move(other.m_buffer))
-		, m_deviceMemory(std::move(other.m_deviceMemory))
-		, m_mappedMemory(other.m_mappedMemory) {
-	}
-
-	BufferAndDeviceMemoryMapped& operator=(BufferAndDeviceMemoryMapped&& other) noexcept {
-		if (this == &other) {
-			return *this;
-		}
-		(*this).~BufferAndDeviceMemoryMapped();
-		new(this) BufferAndDeviceMemoryMapped(std::move(other));
-		return *this;
-	}
-
-
-	static BufferAndDeviceMemoryMapped create(
-		vkcpp::Device device,
-		VkDeviceSize size,
-		VkBufferUsageFlags usage,
-		VkMemoryPropertyFlags properties
-	) {
-		VkBufferCreateInfo bufferInfo{};
-		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		bufferInfo.size = size;
-		bufferInfo.usage = usage;
-		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-		vkcpp::Buffer buffer(bufferInfo, device);
-
-		VkMemoryRequirements memRequirements = buffer.getMemoryRequirements();
-
-		VkMemoryAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocInfo.allocationSize = memRequirements.size;
-		allocInfo.memoryTypeIndex = device.findMemoryTypeIndex(memRequirements.memoryTypeBits, properties);
-
-		vkcpp::DeviceMemory deviceMemory(allocInfo, device);
-
-		if (vkBindBufferMemory(device, buffer, deviceMemory, 0) != VK_SUCCESS) {
-			throw std::runtime_error("failed to bind buffer memory!");
-		}
-
-		void* mappedMemory;
-		vkMapMemory(device, deviceMemory, 0, size, 0, &mappedMemory);
-
-		return BufferAndDeviceMemoryMapped(std::move(buffer), std::move(deviceMemory), mappedMemory);
-
-	}
-
-};
-
-
 class DrawingFrame {
 
 public:
@@ -171,7 +99,7 @@ public:
 	vkcpp::Semaphore m_imageAvailableSemaphore;
 	vkcpp::Semaphore m_renderFinishedSemaphore;
 	VkCommandBuffer	m_vkCommandBuffer = nullptr;
-	BufferAndDeviceMemoryMapped	m_uniformBufferMemory;
+	vkcpp::BufferAndDeviceMemoryMapped	m_uniformBufferMemory;
 	VkDescriptorSet	m_vkDescriptorSet = nullptr;
 
 	DrawingFrame() {};
@@ -197,7 +125,7 @@ public:
 		m_vkCommandBuffer = vkCommandBuffer;
 	}
 
-	void moveUniformMemoryBuffer(BufferAndDeviceMemoryMapped&& bufferAndDeviceMemoryMapped) {
+	void moveUniformMemoryBuffer(vkcpp::BufferAndDeviceMemoryMapped&& bufferAndDeviceMemoryMapped) {
 		m_uniformBufferMemory = std::move(bufferAndDeviceMemoryMapped);
 	}
 
@@ -332,7 +260,7 @@ void recordCommandBuffer(
 
 struct UniformBuffersMemory {
 
-	std::vector<BufferAndDeviceMemoryMapped>	m_uniformBufferMemory;
+	std::vector<vkcpp::BufferAndDeviceMemoryMapped>	m_uniformBufferMemory;
 
 	void createUniformBuffers(
 		vkcpp::Device device,
@@ -344,11 +272,11 @@ struct UniformBuffersMemory {
 
 		for (int i = 0; i < count; i++) {
 			m_uniformBufferMemory[i] = std::move(
-				BufferAndDeviceMemoryMapped::create(
-					device,
+				vkcpp::BufferAndDeviceMemoryMapped(
 					bufferSize,
 					VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+					device
 				));
 		}
 	}
@@ -395,8 +323,7 @@ public:
 	vkcpp::PipelineLayout	g_pipelineLayout;
 	vkcpp::GraphicsPipeline	g_graphicsPipeline;
 
-	vkcpp::Buffer			g_vertexBuffer;
-	vkcpp::DeviceMemory		g_vertexDeviceMemory;
+	vkcpp::BufferAndDeviceMemoryMapped	g_vertexBufferAndDeviceMemory;
 
 	vkcpp::CommandPool		g_commandPoolOriginal;
 
@@ -1066,21 +993,15 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	swapchainImageViewsFrameBuffers.recreateSwapchainImageViewsFrameBuffers();
 
-	VkBufferCreateInfo vkBufferCreateInfo{};
-	vkBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	vkBufferCreateInfo.size = sizeof(vertices[0]) * vertices.size();
-	vkBufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-	vkBufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	const int vertexSize = sizeof(vertices[0]) * vertices.size();
+	vkcpp::BufferAndDeviceMemoryMapped vertexBufferAndDeviceMemory(
+		vertexSize,
+		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		deviceClone);
 
-	vkcpp::Buffer vertexBuffer(vkBufferCreateInfo, deviceClone);
-	vkcpp::DeviceMemory vertexDeviceMemory =
-		vertexBuffer.allocateDeviceMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-	vkBindBufferMemory(deviceClone, vertexBuffer, vertexDeviceMemory, 0);
-	void* data;
-	vkMapMemory(deviceClone, vertexDeviceMemory, 0, vkBufferCreateInfo.size, 0, &data);
-	memcpy(data, vertices.data(), (size_t)vkBufferCreateInfo.size);
-	vkUnmapMemory(deviceClone, vertexDeviceMemory);
+	memcpy(vertexBufferAndDeviceMemory.m_mappedMemory, vertices.data(), (size_t)vertexSize);
+	vertexBufferAndDeviceMemory.unmapMemory();
 
 
 	{
@@ -1170,8 +1091,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_surfaceOriginal = std::move(surfaceOriginal);
 
 
-	globals.g_vertexBuffer = std::move(vertexBuffer);
-	globals.g_vertexDeviceMemory = std::move(vertexDeviceMemory);
+	globals.g_vertexBufferAndDeviceMemory = std::move(vertexBufferAndDeviceMemory);
 
 	globals.g_descriptorSetLayoutOriginal = std::move(descriptorSetLayoutOriginal);
 	globals.g_descriptorPoolOriginal = std::move(descriptorPoolOriginal);
@@ -1194,7 +1114,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 }
 
 void updateUniformBuffer(
-	BufferAndDeviceMemoryMapped& uniformBufferMemory,
+	vkcpp::BufferAndDeviceMemoryMapped& uniformBufferMemory,
 	const VkExtent2D				swapchainImageExtent
 ) {
 	static auto startTime = std::chrono::high_resolution_clock::now();
@@ -1248,7 +1168,7 @@ void drawFrame(Globals& globals)
 		vkCommandBuffer,
 		swapchainImageIndex,
 		globals.g_swapchainImageViewsFrameBuffers,
-		globals.g_vertexBuffer,
+		globals.g_vertexBufferAndDeviceMemory.m_buffer,
 		vkDescriptorSet,
 		globals.g_pipelineLayout,
 		globals.g_graphicsPipeline);
