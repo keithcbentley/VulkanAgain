@@ -247,9 +247,11 @@ void recordCommandBuffer(
 		0, 1,
 		&descriptorSet,
 		0, nullptr);
+
 	vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
+
 	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
 		throw std::runtime_error("failed to record command buffer!");
 	}
@@ -302,9 +304,9 @@ public:
 	HWND					g_hWnd = NULL;
 
 	vkcpp::VulkanInstance	g_vulkanInstance;
-	vkcpp::Surface	g_surfaceOriginal;
+	vkcpp::Surface			g_surfaceOriginal;
 	vkcpp::PhysicalDevice	g_physicalDevice;
-	vkcpp::Device	g_deviceOriginal;
+	vkcpp::Device			g_deviceOriginal;
 
 	VkQueue				g_vkGraphicsQueue = nullptr;
 	VkQueue				g_vkPresentationQueue = nullptr;
@@ -326,6 +328,8 @@ public:
 	vkcpp::BufferAndDeviceMemoryMapped	g_vertexBufferAndDeviceMemory;
 
 	vkcpp::CommandPool		g_commandPoolOriginal;
+
+	vkcpp::ImageAndDeviceMemory	g_textureImageAndDeviceMemory;
 
 };
 Globals g_globals;
@@ -635,7 +639,7 @@ public:
 	}
 };
 
-#ifdef NEVER_DEFINE
+
 
 class ImageCreateInfo : public VkImageCreateInfo {
 
@@ -656,157 +660,111 @@ public:
 		sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 	}
-
 };
 
-void createImage(
-	uint32_t width,
-	uint32_t height,
-	VkFormat format,
-	VkImageTiling tiling,
-	VkImageUsageFlags usage,
-	VkMemoryPropertyFlags properties,
-	VkPhysicalDevice vkPhysicalDevice,
-	VkDevice vkDevice
-) {
+class ImageMemoryBarrier : public VkImageMemoryBarrier {
 
-	//VkImage& image,
-	//	VkDeviceMemory& imageMemory
+public:
+	ImageMemoryBarrier(VkImageLayout oldLayoutArg, VkImageLayout newLayoutArg, VkImage imageArg)
+		:VkImageMemoryBarrier{} {
+		sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		oldLayout = oldLayoutArg;
+		newLayout = newLayoutArg;
+		srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		image = imageArg;
+		subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		subresourceRange.baseMipLevel = 0;
+		subresourceRange.levelCount = 1;
+		subresourceRange.baseArrayLayer = 0;
+		subresourceRange.layerCount = 1;
 
-	ImageCreateInfo imageInfo;
-	imageInfo.extent.width = width;
-	imageInfo.extent.height = height;
-	imageInfo.format = format;
-	imageInfo.tiling = tiling;
-	imageInfo.usage = usage;
-
-	vkcpp::Image image(imageInfo, vkDevice);
-
-
-	VkMemoryRequirements memRequirements;
-	vkGetImageMemoryRequirements(vkDevice, image, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = findMemoryTypeIndex(vkPhysicalDevice, memRequirements.memoryTypeBits, properties);
-	vkcpp::DeviceMemory imageDeviceMemory(allocInfo, vkDevice);
-
-	vkBindImageMemory(vkDevice, image, imageDeviceMemory, 0);
-
-}
-
-
-VkCommandBuffer beginSingleTimeCommands(vkcpp::CommandPool commandPool) {
-
-	VkCommandBufferAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = commandPool;
-	allocInfo.commandBufferCount = 1;
-
-	// TODO: need to figure out command buffers better.
-	VkCommandBuffer commandBuffer;
-	vkAllocateCommandBuffers(commandPool.getOwner(), &allocInfo, &commandBuffer);
-
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-	vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-	return commandBuffer;
-}
-
-void endSingleTimeCommands(
-	VkCommandBuffer vkCommandBuffer,
-	VkQueue  vkGraphicsQueue,
-	VkDevice vkDevice,
-	VkCommandPool	vkCommandPool) {
-
-	vkEndCommandBuffer(vkCommandBuffer);
-
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &vkCommandBuffer;
-
-	vkQueueSubmit(vkGraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(vkGraphicsQueue);
-
-	vkFreeCommandBuffers(vkDevice, vkCommandPool, 1, &vkCommandBuffer);
-}
-
-
-void transitionImageLayout(
-	VkImage vkImage,
-	VkFormat vkFormat,
-	VkImageLayout oldLayout,
-	VkImageLayout newLayout,
-	vkcpp::CommandPool commandPool,
-	VkQueue  vkGraphicsQueue,
-	VkDevice vkDevice,
-	) {
-
-	VkCommandBuffer commandBuffer = beginSingleTimeCommands(commandPool);
-
-	VkImageMemoryBarrier barrier{};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = oldLayout;
-	barrier.newLayout = newLayout;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = vkImage;
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = 1;
-	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
-
-	VkPipelineStageFlags sourceStage;
-	VkPipelineStageFlags destinationStage;
-
-	if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-		sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		//	Note that this grabs oldLayout and newLayout from the structure, not the args.
+		if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+			srcAccessMask = 0;
+			dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		}
+		else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+			srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		}
+		else {
+			throw std::invalid_argument("unsupported layout transition!");
+		}
 	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-		sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-	}
-	else {
+	VkPipelineStageFlags getSourcePipelineStageFlags() {
+		if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+			return VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		}
+		if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+			return VK_PIPELINE_STAGE_TRANSFER_BIT;
+		}
 		throw std::invalid_argument("unsupported layout transition!");
 	}
 
+	VkPipelineStageFlags getDestinationPipelineStageFlags() {
+		if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+			return VK_PIPELINE_STAGE_TRANSFER_BIT;
+		}
+
+		if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+			return VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		}
+
+		throw std::invalid_argument("unsupported layout transition!");
+	}
+
+
+};
+
+
+void transitionImageLayout(
+	VkImage image,
+	VkFormat format,
+	VkImageLayout oldLayout,
+	VkImageLayout newLayout,
+	vkcpp::CommandPool commandPool,
+	VkQueue graphicsQueue) {
+
+	vkcpp::CommandBuffer commandBuffer(commandPool);
+	commandBuffer.beginOneTimeSubmit();
+
+	ImageMemoryBarrier barrier(oldLayout, newLayout, image);
 	vkCmdPipelineBarrier(
 		commandBuffer,
-		sourceStage, destinationStage,
+		barrier.getSourcePipelineStageFlags(),
+		barrier.getDestinationPipelineStageFlags(),
 		0,
 		0, nullptr,
 		0, nullptr,
 		1, &barrier
 	);
 
-	endSingleTimeCommands(commandBuffer, vkGraphicsQueue, vkDevice, commandPool);
+	vkEndCommandBuffer(commandBuffer);
+
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	VkCommandBuffer vkCommandBuffer = commandBuffer;
+	submitInfo.pCommandBuffers = &vkCommandBuffer;
+
+	vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(graphicsQueue);
 
 }
-
 
 
 void copyBufferToImage(
 	VkBuffer buffer,
 	VkImage image,
 	uint32_t width,
-	uint32_t height
-) {
+	uint32_t height,
+	vkcpp::CommandPool commandPool,
+	VkQueue graphicsQueue) {
 
-	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+	vkcpp::CommandBuffer commandBuffer(commandPool);
+	commandBuffer.beginOneTimeSubmit();
 
 	VkBufferImageCopy region{};
 	region.bufferOffset = 0;
@@ -817,77 +775,113 @@ void copyBufferToImage(
 	region.imageSubresource.baseArrayLayer = 0;
 	region.imageSubresource.layerCount = 1;
 	region.imageOffset = { 0, 0, 0 };
-	region.imageExtent = { width, height, 1 };
+	region.imageExtent = {
+		width,
+		height,
+		1
+	};
 
 	vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+	vkEndCommandBuffer(commandBuffer);
 
-	endSingleTimeCommands(commandBuffer);
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	VkCommandBuffer vkCommandBuffer = commandBuffer;
+	submitInfo.pCommandBuffers = &vkCommandBuffer;
+
+	vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(graphicsQueue);
 }
 
-const char* g_textureImageFileName = "textures/texture.jpg"
 
-void createTextureImageFromFile(const char* fileName) {
-	int	texWidth;
+
+vkcpp::ImageAndDeviceMemory createImageAndDeviceMemory(
+	uint32_t width,
+	uint32_t height,
+	VkFormat format,
+	VkImageTiling tiling,
+	VkImageUsageFlags usage,
+	VkMemoryPropertyFlags properties,
+	vkcpp::Device device
+) {
+	ImageCreateInfo imageCreateInfo;
+	imageCreateInfo.extent.width = width;
+	imageCreateInfo.extent.height = height;
+	imageCreateInfo.format = format;
+	imageCreateInfo.tiling = tiling;
+	imageCreateInfo.usage = usage;
+
+	return vkcpp::ImageAndDeviceMemory(imageCreateInfo, properties, device);
+
+}
+
+
+
+vkcpp::ImageAndDeviceMemory createTextureImage(
+	vkcpp::Device device,
+	vkcpp::CommandPool commandPool,
+	VkQueue graphicsQueue
+) {
+	int texWidth;
 	int texHeight;
-	int	texChannels;
-	stbi_uc* pixels = stbi_load(fileName, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	int texChannels;
+
+	stbi_uc* pixels = stbi_load("c:/vulkan/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 	if (!pixels) {
 		throw std::runtime_error("failed to load texture image!");
 	}
 
+	const VkDeviceSize imageSize = texWidth * texHeight * 4;
 
-	VkDeviceSize imageSize = texWidth * texHeight * 4;
-
-
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	createBuffer(
+	vkcpp::BufferAndDeviceMemoryMapped stagingBufferAndDeviceMemoryMapped(
 		imageSize,
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		stagingBuffer,
-		stagingBufferMemory
-	);
+		device);
 
-	void* data;
-	vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
-	memcpy(data, pixels, static_cast<size_t>(imageSize));
-	vkUnmapMemory(device, stagingBufferMemory);
+	memcpy(stagingBufferAndDeviceMemoryMapped.m_mappedMemory, pixels, static_cast<size_t>(imageSize));
+	stagingBufferAndDeviceMemoryMapped.unmapMemory();
 
 	stbi_image_free(pixels);
 
-	createImage(
-		texWidth, texHeight,
-		VK_FORMAT_R8G8B8A8_SRGB,
-		VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		textureImage,
-		textureImageMemory
-	);
+	vkcpp::ImageAndDeviceMemory textureImageAndDeviceMemory =
+		createImageAndDeviceMemory(
+			texWidth,
+			texHeight,
+			VK_FORMAT_R8G8B8A8_SRGB,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			device);
 
 	transitionImageLayout(
-		textureImage,
+		textureImageAndDeviceMemory.m_image,
 		VK_FORMAT_R8G8B8A8_SRGB,
 		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-	);
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		commandPool,
+		graphicsQueue);
+
 	copyBufferToImage(
-		stagingBuffer,
-		textureImage,
-		static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight)
-	);
+		stagingBufferAndDeviceMemoryMapped.m_buffer,
+		textureImageAndDeviceMemory.m_image,
+		static_cast<uint32_t>(texWidth),
+		static_cast<uint32_t>(texHeight),
+		commandPool,
+		graphicsQueue);
+
 	transitionImageLayout(
-		textureImage,
+		textureImageAndDeviceMemory.m_image,
 		VK_FORMAT_R8G8B8A8_SRGB,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-	);
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		commandPool,
+		graphicsQueue);
 
-	vkDestroyBuffer(device, stagingBuffer, nullptr);
-	vkFreeMemory(device, stagingBufferMemory, nullptr);
+	return textureImageAndDeviceMemory;
 }
-#endif
+
 
 
 void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
@@ -908,11 +902,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	deviceCreateInfo.pEnabledFeatures = &vkPhysicalDeviceFeatures;
 
 	vkcpp::Device deviceOriginal(deviceCreateInfo, physicalDevice);
-	vkcpp::Device deviceClone = deviceOriginal;
 
 	const int queueFamilyIndex = 0;
 	const int queueIndex = 0;
-	VkQueue vkGraphicsQueue = deviceClone.getDeviceQueue(queueFamilyIndex, queueIndex);
+	VkQueue vkGraphicsQueue = deviceOriginal.getDeviceQueue(queueFamilyIndex, queueIndex);
 	VkQueue vkPresentationQueue = vkGraphicsQueue;
 
 
@@ -964,9 +957,9 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkRenderPassCreateInfo.dependencyCount = 1;
 	vkRenderPassCreateInfo.pDependencies = &vkSubpassDependency;
 
-	vkcpp::RenderPass renderPassOriginal(vkRenderPassCreateInfo, deviceClone);
+	vkcpp::RenderPass renderPassOriginal(vkRenderPassCreateInfo, deviceOriginal);
 
-	vkcpp::SwapchainImageViewsFrameBuffers::setDevice(deviceClone);
+	vkcpp::SwapchainImageViewsFrameBuffers::setDevice(deviceOriginal);
 
 	const VkColorSpaceKHR swapchainImageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 	const VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
@@ -998,7 +991,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		vertexSize,
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		deviceClone);
+		deviceOriginal);
 
 	memcpy(vertexBufferAndDeviceMemory.m_mappedMemory, vertices.data(), (size_t)vertexSize);
 	vertexBufferAndDeviceMemory.unmapMemory();
@@ -1006,7 +999,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	{
 		UniformBuffersMemory  uniformBuffersMemory;
-		uniformBuffersMemory.createUniformBuffers(deviceClone, MAX_FRAMES_IN_FLIGHT);
+		uniformBuffersMemory.createUniformBuffers(deviceOriginal, MAX_FRAMES_IN_FLIGHT);
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 			g_allDrawingFrames.drawingFrameAt(i).moveUniformMemoryBuffer(std::move(uniformBuffersMemory.m_uniformBufferMemory[i]));
 		}
@@ -1014,16 +1007,16 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 
 	vkcpp::ShaderModule	vertShaderModule =
-		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert2.spv", deviceClone);
+		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert2.spv", deviceOriginal);
 	vkcpp::ShaderModule	fragShaderModule =
-		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/frag.spv", deviceClone);
+		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/frag.spv", deviceOriginal);
 
 
 
-	vkcpp::DescriptorPool descriptorPoolOriginal = createDescriptorPool(deviceClone);
+	vkcpp::DescriptorPool descriptorPoolOriginal = createDescriptorPool(deviceOriginal);
 
-	vkcpp::DescriptorSetLayout descriptorSetLayoutOriginal = createUboDescriptorSetLayout(deviceClone);
-	createDescriptorSets(deviceClone, descriptorPoolOriginal, descriptorSetLayoutOriginal, g_allDrawingFrames);
+	vkcpp::DescriptorSetLayout descriptorSetLayoutOriginal = createUboDescriptorSetLayout(deviceOriginal);
+	createDescriptorSets(deviceOriginal, descriptorPoolOriginal, descriptorSetLayoutOriginal, g_allDrawingFrames);
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	std::vector<VkDescriptorSetLayout> descriptorSetLayouts{ descriptorSetLayoutOriginal };
@@ -1034,7 +1027,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 	pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
-	vkcpp::PipelineLayout pipelineLayout(pipelineLayoutInfo, deviceClone);
+	vkcpp::PipelineLayout pipelineLayout(pipelineLayoutInfo, deviceOriginal);
 
 	GraphicsPipelineConfig graphicsPipelineConfig;
 	graphicsPipelineConfig.setInputAssemblyTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN);
@@ -1044,13 +1037,13 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	graphicsPipelineConfig.setVertexShaderModule(vertShaderModule);
 	graphicsPipelineConfig.setFragmentShaderModule(fragShaderModule);
 
-	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineConfig.assemble(), deviceClone);
+	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineConfig.assemble(), deviceOriginal);
 
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};
 	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
-	vkcpp::CommandPool commandPoolOriginal(commandPoolCreateInfo, deviceClone);
+	vkcpp::CommandPool commandPoolOriginal(commandPoolCreateInfo, deviceOriginal);
 
 	{
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo{};
@@ -1073,12 +1066,20 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 		g_allDrawingFrames.drawingFrameAt(i).moveImageAvailableSemaphore(
-			vkcpp::Semaphore(semaphoreInfo, deviceClone));
+			vkcpp::Semaphore(semaphoreInfo, deviceOriginal));
 		g_allDrawingFrames.drawingFrameAt(i).moveRenderFinishedSemaphore(
-			vkcpp::Semaphore(semaphoreInfo, deviceClone));
+			vkcpp::Semaphore(semaphoreInfo, deviceOriginal));
 		g_allDrawingFrames.drawingFrameAt(i).moveInFlightFence(
-			vkcpp::Fence(fenceInfo, deviceClone));
+			vkcpp::Fence(fenceInfo, deviceOriginal));
 	}
+
+	vkcpp::ImageAndDeviceMemory textureImageAndDeviceMemory{};
+
+	for (int i = 0; i < 100; i++) {
+		textureImageAndDeviceMemory =
+			createTextureImage(deviceOriginal, commandPoolOriginal, vkGraphicsQueue);
+	}
+
 
 #undef globals
 
@@ -1110,6 +1111,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	globals.g_vertShaderModule = std::move(vertShaderModule);
 	globals.g_fragShaderModule = std::move(fragShaderModule);
+
+	globals.g_textureImageAndDeviceMemory = std::move(textureImageAndDeviceMemory);
 
 }
 

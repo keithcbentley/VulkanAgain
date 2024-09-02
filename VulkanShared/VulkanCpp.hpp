@@ -89,7 +89,7 @@ namespace vkcpp {
 	private:
 
 		void destroy() {
-			if (m_pfnDestroy) {
+			if (m_pfnDestroy && m_handle) {
 				(*m_pfnDestroy)(m_handle, m_owner);
 			}
 			makeEmpty();
@@ -98,15 +98,16 @@ namespace vkcpp {
 
 	protected:
 
-		void makeEmpty() {
-			m_handle = Handle_t{};
-			m_owner = Owner_t();
-			m_pfnDestroy = nullptr;
-		}
-
 		Handle_t	m_handle{};
 		Owner_t	m_owner{};
 		DestroyFunc_t	m_pfnDestroy = nullptr;
+
+		void makeEmpty() {
+			m_handle = Handle_t{};
+			m_owner = Owner_t{};
+			m_pfnDestroy = nullptr;
+		}
+
 
 		HandleWithOwner() = default;
 		~HandleWithOwner() { destroy(); }
@@ -182,7 +183,6 @@ namespace vkcpp {
 	};
 
 
-
 	class VersionNumber {
 	public:
 		uint32_t	m_version;
@@ -218,7 +218,6 @@ namespace vkcpp {
 				throw Exception(vkResult);
 			}
 			return allInstanceLayerProperties;
-
 		}
 	};
 
@@ -362,7 +361,8 @@ namespace vkcpp {
 		}
 
 
-		PhysicalDevice(VkPhysicalDevice vkPhysicalDevice) :m_vkPhysicalDevice(vkPhysicalDevice) {}
+		PhysicalDevice(VkPhysicalDevice vkPhysicalDevice)
+			:m_vkPhysicalDevice(vkPhysicalDevice) {}
 
 		operator VkPhysicalDevice() const { return m_vkPhysicalDevice; }
 
@@ -381,9 +381,6 @@ namespace vkcpp {
 			throw std::runtime_error("failed to find suitable memory type!");
 		}
 
-
-
-
 		std::vector<VkQueueFamilyProperties>	getAllQueueFamilyProperties() const {
 			uint32_t queueFamilyCount = 0;
 			vkGetPhysicalDeviceQueueFamilyProperties(m_vkPhysicalDevice, &queueFamilyCount, nullptr);
@@ -392,7 +389,6 @@ namespace vkcpp {
 			vkGetPhysicalDeviceQueueFamilyProperties(m_vkPhysicalDevice, &queueFamilyCount, allQueueFamilyProperties.data());
 			return allQueueFamilyProperties;
 		}
-
 
 	};
 
@@ -413,12 +409,13 @@ namespace vkcpp {
 		VulkanInstanceCreateInfo(VulkanInstanceCreateInfo&&) = delete;
 		VulkanInstanceCreateInfo& operator=(VulkanInstanceCreateInfo&&) = delete;
 
+		operator VkInstanceCreateInfo* () = delete;
 
 		VulkanInstanceCreateInfo() : VkInstanceCreateInfo{} {
 			sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		}
 
-		VulkanInstanceCreateInfo& construct() {
+		VkInstanceCreateInfo& construct() {
 			m_layerStrings.clear();
 			ppEnabledLayerNames = nullptr;
 			for (const std::string& layerName : m_layerNames) {
@@ -462,9 +459,7 @@ namespace vkcpp {
 		}
 
 		static void destroy(VkInstance vkInstance, VkInstance) {
-			if (vkInstance) {
-				vkDestroyInstance(vkInstance, nullptr);
-			}
+			vkDestroyInstance(vkInstance, nullptr);
 		}
 
 	public:
@@ -559,9 +554,7 @@ namespace vkcpp {
 		PhysicalDevice	m_physicalDevice;
 
 		static void destroyFunc(VkSurfaceKHR vkSurface, VkInstance vkInstance) {
-			if (vkSurface && vkInstance) {
-				vkDestroySurfaceKHR(vkInstance, vkSurface, nullptr);
-			}
+			vkDestroySurfaceKHR(vkInstance, vkSurface, nullptr);
 		}
 
 		Surface(
@@ -661,10 +654,8 @@ namespace vkcpp {
 
 	class DeviceCreateInfo : public VkDeviceCreateInfo {
 
-		std::vector<std::string>	m_layerNames{};
 		std::vector<std::string>	m_extensionNames{};
 
-		std::vector<const char*>	m_layerStrings{};
 		std::vector<const char*>	m_extensionStrings{};
 
 	public:
@@ -674,21 +665,13 @@ namespace vkcpp {
 		DeviceCreateInfo(DeviceCreateInfo&&) = delete;
 		DeviceCreateInfo& operator=(DeviceCreateInfo&&) = delete;
 
+		operator DeviceCreateInfo* () = delete;
+
 		DeviceCreateInfo() : VkDeviceCreateInfo{} {
 			sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 		}
 
 		DeviceCreateInfo& construct() {
-
-			m_layerStrings.clear();
-			ppEnabledLayerNames = nullptr;
-			for (const std::string& layerName : m_layerNames) {
-				m_layerStrings.push_back(layerName.c_str());
-			}
-			enabledLayerCount = static_cast<uint32_t>(m_layerNames.size());
-			if (enabledLayerCount > 0) {
-				ppEnabledLayerNames = m_layerStrings.data();
-			}
 
 			m_extensionStrings.clear();
 			ppEnabledExtensionNames = nullptr;
@@ -703,9 +686,6 @@ namespace vkcpp {
 			return *this;
 		}
 
-		void addLayer(const char* layerName) {
-			m_layerNames.push_back(layerName);
-		}
 
 		void addExtension(const char* extensionName) {
 			m_extensionNames.push_back(extensionName);
@@ -722,9 +702,7 @@ namespace vkcpp {
 		}
 
 		static void destroy(VkDevice vkDevice, VkPhysicalDevice) {
-			if (vkDevice) {
-				vkDestroyDevice(vkDevice, nullptr);
-			}
+			vkDestroyDevice(vkDevice, nullptr);
 		}
 
 
@@ -769,9 +747,7 @@ namespace vkcpp {
 		}
 
 		static void destroy(VkDeviceMemory vkDeviceMemory, VkDevice vkDevice) {
-			if (vkDeviceMemory && vkDevice) {
-				vkFreeMemory(vkDevice, vkDeviceMemory, nullptr);
-			}
+			vkFreeMemory(vkDevice, vkDeviceMemory, nullptr);
 		}
 
 	public:
@@ -792,9 +768,7 @@ namespace vkcpp {
 	class Buffer : public HandleWithOwner<VkBuffer, Device> {
 
 		static void destroy(VkBuffer vkBuffer, Device device) {
-			if (vkBuffer && device) {
-				vkDestroyBuffer(device, vkBuffer, nullptr);
-			}
+			vkDestroyBuffer(device, vkBuffer, nullptr);
 		}
 
 		Buffer(VkBuffer vkBuffer, Device device, DestroyFunc_t pfnDestroy)
@@ -874,22 +848,14 @@ namespace vkcpp {
 			VkMemoryPropertyFlags properties,
 			Device device
 		) {
-			VkBufferCreateInfo bufferInfo{};
-			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-			bufferInfo.size = size;
-			bufferInfo.usage = usage;
-			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			VkBufferCreateInfo vkBufferCreateInfo{};
+			vkBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			vkBufferCreateInfo.size = size;
+			vkBufferCreateInfo.usage = usage;
+			vkBufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-			vkcpp::Buffer buffer(bufferInfo, device);
-
-			VkMemoryRequirements memRequirements = buffer.getMemoryRequirements();
-
-			VkMemoryAllocateInfo allocInfo{};
-			allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			allocInfo.allocationSize = memRequirements.size;
-			allocInfo.memoryTypeIndex = device.findMemoryTypeIndex(memRequirements.memoryTypeBits, properties);
-
-			DeviceMemory deviceMemory(allocInfo, device);
+			vkcpp::Buffer buffer(vkBufferCreateInfo, device);
+			DeviceMemory deviceMemory = buffer.allocateDeviceMemory(properties);
 
 			VkResult vkResult = vkBindBufferMemory(device, buffer, deviceMemory, 0);
 			if (vkResult != VK_SUCCESS) {
@@ -911,7 +877,6 @@ namespace vkcpp {
 	};
 
 
-
 	class ShaderModule : public HandleWithOwner<VkShaderModule> {
 
 		static std::vector<char> readFile(const std::string& filename) {
@@ -930,9 +895,7 @@ namespace vkcpp {
 		}
 
 		static void destroy(VkShaderModule vkShaderModule, VkDevice vkDevice) {
-			if (vkShaderModule && vkDevice) {
-				vkDestroyShaderModule(vkDevice, vkShaderModule, nullptr);
-			}
+			vkDestroyShaderModule(vkDevice, vkShaderModule, nullptr);
 		}
 
 		ShaderModule(VkShaderModule vkShaderModule, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
@@ -970,9 +933,7 @@ namespace vkcpp {
 		}
 
 		static void destroy(VkSwapchainKHR vkSwapchain, Device device) {
-			if (vkSwapchain) {
-				vkDestroySwapchainKHR(device, vkSwapchain, nullptr);
-			}
+			vkDestroySwapchainKHR(device, vkSwapchain, nullptr);
 		}
 
 	public:
@@ -1015,9 +976,7 @@ namespace vkcpp {
 		}
 
 		static void destroy(VkRenderPass vkRenderPass, VkDevice vkDevice) {
-			if (vkRenderPass && vkDevice) {
-				vkDestroyRenderPass(vkDevice, vkRenderPass, nullptr);
-			}
+			vkDestroyRenderPass(vkDevice, vkRenderPass, nullptr);
 		}
 
 	public:
@@ -1042,9 +1001,7 @@ namespace vkcpp {
 		}
 
 		static void destroy(VkCommandPool vkCommandPool, VkDevice vkDevice) {
-			if (vkCommandPool && vkDevice) {
-				vkDestroyCommandPool(vkDevice, vkCommandPool, nullptr);
-			}
+			vkDestroyCommandPool(vkDevice, vkCommandPool, nullptr);
 		}
 
 
@@ -1079,24 +1036,40 @@ namespace vkcpp {
 
 	};
 
-	//class CommandBuffer : public HandleWithOwner<VkCommandBuffer> {
+	class CommandBuffer : public HandleWithOwner<VkCommandBuffer, CommandPool> {
 
-	//	CommandBuffer(VkCommandBuffer vkCommandBuffer, VkDevice vkDevice)
-	//		: HandleWithOwner(vkDevice, vkCommandBuffer) {
-	//	}
+		CommandBuffer(VkCommandBuffer vkCommandBuffer, CommandPool commandPool, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkCommandBuffer, commandPool, pfnDestroy) {
+		}
 
-	//	void destroy(VkCommandBuffer vkCommandBuffer, VkDevice vkDevice) {
-	//		if (vkCommandBuffer) {
-	//			vkFreeCommandBuffers(vkDevice, 1, &)
-	//		}
-	//	}
+		static void destroy(VkCommandBuffer vkCommandBuffer, CommandPool commandPool) {
+			vkFreeCommandBuffers(commandPool.getVkDevice(), commandPool, 1, &vkCommandBuffer);
+		}
 
-	//public:
+	public:
 
-	//	CommandBuffer() {}
+		CommandBuffer() {}
 
-	//	CommandBu
-	//};
+		CommandBuffer(CommandPool commandPool) {
+			VkCommandBufferAllocateInfo allocInfo{};
+			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			allocInfo.commandPool = commandPool;
+			allocInfo.commandBufferCount = 1;
+			VkCommandBuffer vkCommandBuffer;
+			vkAllocateCommandBuffers(commandPool.getVkDevice(), &allocInfo, &vkCommandBuffer);
+			new(this) CommandBuffer(vkCommandBuffer, commandPool, &destroy);
+		}
+
+		void beginOneTimeSubmit() {
+			VkCommandBufferBeginInfo beginInfo{};
+			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+			vkBeginCommandBuffer(*this, &beginInfo);
+		}
+
+
+	};
 
 	class DescriptorPool : public HandleWithOwner<VkDescriptorPool> {
 
@@ -1105,9 +1078,7 @@ namespace vkcpp {
 		}
 
 		static void destroy(VkDescriptorPool vkDescriptorPool, VkDevice vkDevice) {
-			if (vkDescriptorPool && vkDevice) {
-				vkDestroyDescriptorPool(vkDevice, vkDescriptorPool, nullptr);
-			}
+			vkDestroyDescriptorPool(vkDevice, vkDescriptorPool, nullptr);
 		}
 
 
@@ -1133,9 +1104,7 @@ namespace vkcpp {
 		}
 
 		static void destroy(VkDescriptorSetLayout vkDescriptorSetLayout, VkDevice vkDevice) {
-			if (vkDescriptorSetLayout && vkDevice) {
-				vkDestroyDescriptorSetLayout(vkDevice, vkDescriptorSetLayout, nullptr);
-			}
+			vkDestroyDescriptorSetLayout(vkDevice, vkDescriptorSetLayout, nullptr);
 		}
 
 	public:
@@ -1161,9 +1130,7 @@ namespace vkcpp {
 		}
 
 		static void destroy(VkSemaphore vkSemaphore, VkDevice vkDevice) {
-			if (vkSemaphore && vkDevice) {
-				vkDestroySemaphore(vkDevice, vkSemaphore, nullptr);
-			}
+			vkDestroySemaphore(vkDevice, vkSemaphore, nullptr);
 		}
 
 	public:
@@ -1187,9 +1154,7 @@ namespace vkcpp {
 		}
 
 		static void destroy(VkFence vkFence, VkDevice vkDevice) {
-			if (vkFence && vkDevice) {
-				vkDestroyFence(vkDevice, vkFence, nullptr);
-			}
+			vkDestroyFence(vkDevice, vkFence, nullptr);
 		}
 
 	public:
@@ -1224,9 +1189,7 @@ namespace vkcpp {
 		}
 
 		static void destroy(VkPipelineLayout vkPipelineLayout, VkDevice vkDevice) {
-			if (vkPipelineLayout) {
-				vkDestroyPipelineLayout(vkDevice, vkPipelineLayout, nullptr);
-			}
+			vkDestroyPipelineLayout(vkDevice, vkPipelineLayout, nullptr);
 		}
 
 	public:
@@ -1252,9 +1215,7 @@ namespace vkcpp {
 		}
 
 		static void destroy(VkPipeline vkPipeline, VkDevice vkDevice) {
-			if (vkPipeline) {
-				vkDestroyPipeline(vkDevice, vkPipeline, nullptr);
-			}
+			vkDestroyPipeline(vkDevice, vkPipeline, nullptr);
 		}
 
 	public:
@@ -1273,30 +1234,45 @@ namespace vkcpp {
 	};
 
 
-	class Image : public HandleWithOwner<VkImage> {
+	class Image : public HandleWithOwner<VkImage, Device> {
 
-		Image(VkImage vkImage, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(vkImage, vkDevice, pfnDestroy) {
+		Image(VkImage vkImage, Device device, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkImage, device, pfnDestroy) {
 
 		}
 
-		static void destroy(VkImage vkImage, VkDevice vkDevice) {
-			if (vkImage) {
-				vkDestroyImage(vkDevice, vkImage, nullptr);
-			}
+		static void destroy(VkImage vkImage, Device device) {
+			vkDestroyImage(device, vkImage, nullptr);
 		}
 
 	public:
 		Image() {}
 
-		Image(const VkImageCreateInfo& vkImageCreateInfo, VkDevice vkDevice) {
+		Image(const VkImageCreateInfo& vkImageCreateInfo, Device device) {
 			VkImage vkImage;
-			VkResult vkResult = vkCreateImage(vkDevice, &vkImageCreateInfo, nullptr, &vkImage);
+			VkResult vkResult = vkCreateImage(device, &vkImageCreateInfo, nullptr, &vkImage);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
-			new(this) Image(vkImage, vkDevice, &destroy);
+			new(this) Image(vkImage, device, &destroy);
 		}
+
+		VkMemoryRequirements  getMemoryRequirements() {
+			VkMemoryRequirements vkMemoryRequirements;
+			vkGetImageMemoryRequirements(getVkDevice(), *this, &vkMemoryRequirements);
+			return vkMemoryRequirements;
+		}
+
+		DeviceMemory allocateDeviceMemory(VkMemoryPropertyFlags vkRequiredProperties) {
+			VkMemoryRequirements vkMemoryRequirements = getMemoryRequirements();
+			VkMemoryAllocateInfo vkMemoryAllocateInfo{};
+			vkMemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			vkMemoryAllocateInfo.allocationSize = vkMemoryRequirements.size;
+			vkMemoryAllocateInfo.memoryTypeIndex =
+				getOwner().findMemoryTypeIndex(vkMemoryRequirements.memoryTypeBits, vkRequiredProperties);
+			return vkcpp::DeviceMemory(vkMemoryAllocateInfo, getOwner());
+		}
+
 	};
 
 	class ImageView : public HandleWithOwner<VkImageView> {
@@ -1307,9 +1283,7 @@ namespace vkcpp {
 		}
 
 		static void destroy(VkImageView vkImageView, VkDevice vkDevice) {
-			if (vkImageView) {
-				vkDestroyImageView(vkDevice, vkImageView, nullptr);
-			}
+			vkDestroyImageView(vkDevice, vkImageView, nullptr);
 		}
 
 	public:
@@ -1342,6 +1316,56 @@ namespace vkcpp {
 	};
 
 
+	class ImageAndDeviceMemory {
+
+		ImageAndDeviceMemory(Image&& image, DeviceMemory&& deviceMemory)
+			: m_image(std::move(image))
+			, m_deviceMemory(std::move(deviceMemory)) {
+		}
+
+	public:
+
+		Image			m_image;
+		DeviceMemory	m_deviceMemory;
+
+		ImageAndDeviceMemory() {}
+
+		ImageAndDeviceMemory(const ImageAndDeviceMemory&) = delete;
+		ImageAndDeviceMemory& operator=(const ImageAndDeviceMemory&) = delete;
+
+		ImageAndDeviceMemory(ImageAndDeviceMemory&& other) noexcept
+			: m_image(std::move(other.m_image))
+			, m_deviceMemory(std::move(other.m_deviceMemory)) {
+		}
+
+		ImageAndDeviceMemory& operator=(ImageAndDeviceMemory&& other) noexcept {
+			if (this == &other) {
+				return *this;
+			}
+			(*this).~ImageAndDeviceMemory();
+			new(this) ImageAndDeviceMemory(std::move(other));
+			return *this;
+		}
+
+
+		ImageAndDeviceMemory(
+			const VkImageCreateInfo& vkImageCreateInfo,
+			VkMemoryPropertyFlags properties,
+			Device device
+		) {
+			vkcpp::Image image(vkImageCreateInfo, device);
+			DeviceMemory deviceMemory = image.allocateDeviceMemory(properties);
+
+			VkResult vkResult = vkBindImageMemory(device, image, deviceMemory, 0);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+
+			new(this) ImageAndDeviceMemory(std::move(image), std::move(deviceMemory));
+
+		}
+
+	};
 
 
 
