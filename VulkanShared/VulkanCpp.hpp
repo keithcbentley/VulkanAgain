@@ -60,8 +60,6 @@ namespace vkcpp {
 
 	};
 
-
-
 	class ShutdownException : public Exception {
 
 	public:
@@ -75,6 +73,7 @@ namespace vkcpp {
 		NullHandleException() : Exception(VK_INCOMPLETE) {}
 
 	};
+
 
 	class Device;
 
@@ -1071,6 +1070,41 @@ namespace vkcpp {
 
 	};
 
+
+	class DescriptorPoolCreateInfo : public VkDescriptorPoolCreateInfo {
+
+		std::map<VkDescriptorType, int>	m_poolSizesMap;
+		std::vector<VkDescriptorPoolSize> m_poolSizes;
+
+	public:
+
+		DescriptorPoolCreateInfo()
+			: VkDescriptorPoolCreateInfo{} {
+			sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		}
+
+		void addDescriptorCount(VkDescriptorType vkDescriptorType, int count) {
+			m_poolSizesMap[vkDescriptorType] += count;
+		}
+
+		DescriptorPoolCreateInfo& construct() {
+			m_poolSizes.clear();
+			VkDescriptorPoolSize vkDescriptorPoolSize;
+			for (std::pair<VkDescriptorType, int> kv : m_poolSizesMap) {
+				std::cout << kv.first << " " << kv.second << "\n";
+				vkDescriptorPoolSize.type = kv.first;
+				vkDescriptorPoolSize.descriptorCount = kv.second;
+				m_poolSizes.push_back(vkDescriptorPoolSize);
+			}
+			poolSizeCount = static_cast<uint32_t>(m_poolSizes.size());
+			pPoolSizes = m_poolSizes.data();
+
+			return *this;
+		}
+
+	};
+
+
 	class DescriptorPool : public HandleWithOwner<VkDescriptorPool> {
 
 		DescriptorPool(VkDescriptorPool vkDescriptorPool, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
@@ -1085,9 +1119,9 @@ namespace vkcpp {
 	public:
 
 		DescriptorPool() {}
-		DescriptorPool(const VkDescriptorPoolCreateInfo& poolCreateInfo, VkDevice vkDevice) {
+		DescriptorPool(DescriptorPoolCreateInfo& poolCreateInfo, VkDevice vkDevice) {
 			VkDescriptorPool vkDescriptorPool;
-			VkResult vkResult = vkCreateDescriptorPool(vkDevice, &poolCreateInfo, nullptr, &vkDescriptorPool);
+			VkResult vkResult = vkCreateDescriptorPool(vkDevice, &poolCreateInfo.construct(), nullptr, &vkDescriptorPool);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
@@ -1264,7 +1298,6 @@ namespace vkcpp {
 			}
 			new(this)GraphicsPipeline(vkPipeline, vkDevice, &destroy);
 		}
-
 
 	};
 
@@ -1476,7 +1509,7 @@ namespace vkcpp {
 	public:
 		static inline	Device		s_device;
 
-		VkSwapchainCreateInfoKHR	m_vkSwapchainCreateInfo;
+		VkSwapchainCreateInfoKHR	m_vkSwapchainCreateInfo{};
 		vkcpp::Surface				m_surface;
 
 		RenderPass	m_renderPass;

@@ -7,6 +7,7 @@
 #include <fstream>
 #include <array>
 #include <chrono>
+#include <map>
 
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
 #define VK_USE_PLATFORM_WIN32_KHR
@@ -59,10 +60,10 @@ struct Vertex {
 
 
 const std::vector<Vertex> vertices = {
-	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
+	{{-0.9f, -0.9f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.9f, -0.9f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.9f, 0.9f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+	{{-0.9f, 0.9f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
 };
 
 struct ModelViewProjTransform {
@@ -276,17 +277,13 @@ struct UniformBuffersMemory {
 		int count
 	) {
 		VkDeviceSize bufferSize = sizeof(ModelViewProjTransform);
-
-		m_uniformBufferMemory.resize(count);
-
 		for (int i = 0; i < count; i++) {
-			m_uniformBufferMemory[i] = std::move(
-				vkcpp::BufferAndDeviceMemoryMapped(
-					bufferSize,
-					VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-					device
-				));
+			m_uniformBufferMemory.emplace_back(
+				bufferSize,
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				device
+			);
 		}
 	}
 };
@@ -365,7 +362,7 @@ vkcpp::DescriptorSetLayout createDrawingFrameDescriptorSetLayout(VkDevice vkDevi
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = bindings.size();
+	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
 	layoutInfo.pBindings = bindings.data();
 
 	return vkcpp::DescriptorSetLayout(layoutInfo, vkDevice);
@@ -374,17 +371,11 @@ vkcpp::DescriptorSetLayout createDrawingFrameDescriptorSetLayout(VkDevice vkDevi
 
 vkcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
 
-	std::array<VkDescriptorPoolSize, 2> poolSizes{};
-	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	vkcpp::DescriptorPoolCreateInfo poolCreateInfo;
+	poolCreateInfo.addDescriptorCount(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_FRAMES_IN_FLIGHT);
+	poolCreateInfo.addDescriptorCount(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_FRAMES_IN_FLIGHT);
 
-	VkDescriptorPoolCreateInfo poolCreateInfo{};
-	poolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-	poolCreateInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-	poolCreateInfo.pPoolSizes = poolSizes.data();
 	poolCreateInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
 	return vkcpp::DescriptorPool(poolCreateInfo, vkDevice);
@@ -1009,7 +1000,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	swapchainImageViewsFrameBuffers.recreateSwapchainImageViewsFrameBuffers();
 
-	const int vertexSize = sizeof(vertices[0]) * vertices.size();
+	const int vertexSize = sizeof(vertices[0]) * static_cast<int>(vertices.size());
 	vkcpp::BufferAndDeviceMemoryMapped vertexBufferAndDeviceMemory(
 		vertexSize,
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
