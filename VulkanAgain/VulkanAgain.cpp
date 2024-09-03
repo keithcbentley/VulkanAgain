@@ -338,7 +338,7 @@ AllDrawingFrames g_allDrawingFrames(MAX_FRAMES_IN_FLIGHT);
 
 
 
-vkcpp::DescriptorSetLayout createUboDescriptorSetLayout(VkDevice vkDevice) {
+vkcpp::DescriptorSetLayout createDrawingFrameDescriptorSetLayout(VkDevice vkDevice) {
 	VkDescriptorSetLayoutBinding uboLayoutBinding{};
 	uboLayoutBinding.binding = 0;
 	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -346,10 +346,19 @@ vkcpp::DescriptorSetLayout createUboDescriptorSetLayout(VkDevice vkDevice) {
 	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	uboLayoutBinding.pImmutableSamplers = nullptr;
 
+	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+	samplerLayoutBinding.binding = 1;
+	samplerLayoutBinding.descriptorCount = 1;
+	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	samplerLayoutBinding.pImmutableSamplers = nullptr;
+	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = 1;
-	layoutInfo.pBindings = &uboLayoutBinding;
+	layoutInfo.bindingCount = bindings.size();
+	layoutInfo.pBindings = bindings.data();
 
 	return vkcpp::DescriptorSetLayout(layoutInfo, vkDevice);
 }
@@ -357,15 +366,17 @@ vkcpp::DescriptorSetLayout createUboDescriptorSetLayout(VkDevice vkDevice) {
 
 vkcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
 
-	VkDescriptorPoolSize poolSize{};
-	poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	std::array<VkDescriptorPoolSize, 2> poolSizes{};
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
 	VkDescriptorPoolCreateInfo poolCreateInfo{};
 	poolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-	poolCreateInfo.poolSizeCount = 1;
-	poolCreateInfo.pPoolSizes = &poolSize;
+	poolCreateInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+	poolCreateInfo.pPoolSizes = poolSizes.data();
 	poolCreateInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
 	return vkcpp::DescriptorPool(poolCreateInfo, vkDevice);
@@ -376,6 +387,8 @@ void createDescriptorSets(
 	vkcpp::Device device,
 	vkcpp::DescriptorPool		descriptorPool,
 	vkcpp::DescriptorSetLayout descriptorSetLayout,
+	vkcpp::ImageView textureImageView,
+	vkcpp::Sampler textureSampler,
 	AllDrawingFrames& allDrawingFrames
 ) {
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -385,6 +398,12 @@ void createDescriptorSets(
 		vkDescriptorBufferInfo.buffer = allDrawingFrames.drawingFrameAt(i).m_uniformBufferMemory.m_buffer;
 		vkDescriptorBufferInfo.offset = 0;
 		vkDescriptorBufferInfo.range = sizeof(ModelViewProjTransform);
+
+		VkDescriptorImageInfo imageInfo{};
+		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		imageInfo.imageView = textureImageView;
+		imageInfo.sampler = textureSampler;
+
 
 		VkWriteDescriptorSet descriptorWrite{};
 		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -996,16 +1015,36 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		}
 	}
 
-
 	vkcpp::ShaderModule	vertShaderModule =
 		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert2.spv", deviceOriginal);
 	vkcpp::ShaderModule	fragShaderModule =
 		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/frag.spv", deviceOriginal);
 
+	VkCommandPoolCreateInfo commandPoolCreateInfo{};
+	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
+	vkcpp::CommandPool commandPoolOriginal(commandPoolCreateInfo, deviceOriginal);
 
-	vkcpp::DescriptorSetLayout descriptorSetLayoutOriginal = createUboDescriptorSetLayout(deviceOriginal);
+
+	vkcpp::ImageAndDeviceMemory textureImageAndDeviceMemory =
+		createTextureImage(deviceOriginal, commandPoolOriginal, vkGraphicsQueue);
+
+	vkcpp::ImageViewCreateInfo textureImageViewCreateInfo;
+	textureImageViewCreateInfo.image = textureImageAndDeviceMemory.m_image;
+	textureImageViewCreateInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+	vkcpp::ImageView textureImageView(textureImageViewCreateInfo, deviceOriginal);
+	vkcpp::SamplerCreateInfo textureSamplerCreateInfo;
+	vkcpp::Sampler textureSampler(textureSamplerCreateInfo, deviceOriginal);
+
+
+	vkcpp::DescriptorSetLayout descriptorSetLayoutOriginal = createDrawingFrameDescriptorSetLayout(deviceOriginal);
 	vkcpp::DescriptorPool descriptorPoolOriginal = createDescriptorPool(deviceOriginal);
-	createDescriptorSets(deviceOriginal, descriptorPoolOriginal, descriptorSetLayoutOriginal, g_allDrawingFrames);
+	createDescriptorSets(
+		deviceOriginal,
+		descriptorPoolOriginal, descriptorSetLayoutOriginal,
+		textureImageView, textureSampler,
+		g_allDrawingFrames);
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	std::vector<VkDescriptorSetLayout> descriptorSetLayouts{ descriptorSetLayoutOriginal };
@@ -1028,11 +1067,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineConfig.assemble(), deviceOriginal);
 
-	VkCommandPoolCreateInfo commandPoolCreateInfo{};
-	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
-	vkcpp::CommandPool commandPoolOriginal(commandPoolCreateInfo, deviceOriginal);
 
 	{
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo{};
@@ -1061,16 +1095,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		g_allDrawingFrames.drawingFrameAt(i).moveInFlightFence(
 			vkcpp::Fence(fenceInfo, deviceOriginal));
 	}
-
-	vkcpp::ImageAndDeviceMemory textureImageAndDeviceMemory =
-		createTextureImage(deviceOriginal, commandPoolOriginal, vkGraphicsQueue);
-
-	vkcpp::ImageViewCreateInfo textureImageViewCreateInfo;
-	textureImageViewCreateInfo.image = textureImageAndDeviceMemory.m_image;
-	textureImageViewCreateInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
-	vkcpp::ImageView textureImageView(textureImageViewCreateInfo, deviceOriginal);
-	vkcpp::SamplerCreateInfo textureSamplerCreateInfo;
-	vkcpp::Sampler textureSampler(textureSamplerCreateInfo, deviceOriginal);
 
 
 #undef globals
