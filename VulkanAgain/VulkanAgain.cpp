@@ -100,7 +100,7 @@ public:
 	vkcpp::Semaphore m_renderFinishedSemaphore;
 	VkCommandBuffer	m_vkCommandBuffer = nullptr;
 	vkcpp::BufferAndDeviceMemoryMapped	m_uniformBufferMemory;
-	VkDescriptorSet	m_vkDescriptorSet = nullptr;
+	vkcpp::DescriptorSet	m_descriptorSet;
 
 	DrawingFrame() {};
 
@@ -129,8 +129,8 @@ public:
 		m_uniformBufferMemory = std::move(bufferAndDeviceMemoryMapped);
 	}
 
-	void setDescriptorSet(VkDescriptorSet vkDescriptorSet) {
-		m_vkDescriptorSet = vkDescriptorSet;
+	void moveDescriptorSet(vkcpp::DescriptorSet&& descriptorSet) {
+		m_descriptorSet = std::move(descriptorSet);
 	}
 
 	VkDevice getVkDevice() const {
@@ -330,6 +330,7 @@ public:
 	vkcpp::CommandPool		g_commandPoolOriginal;
 
 	vkcpp::ImageAndDeviceMemory	g_textureImageAndDeviceMemory;
+	vkcpp::ImageView g_textureImageView;
 
 };
 Globals g_globals;
@@ -362,6 +363,7 @@ vkcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
 
 	VkDescriptorPoolCreateInfo poolCreateInfo{};
 	poolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 	poolCreateInfo.poolSizeCount = 1;
 	poolCreateInfo.pPoolSizes = &poolSize;
 	poolCreateInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
@@ -372,40 +374,29 @@ vkcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
 
 void createDescriptorSets(
 	vkcpp::Device device,
-	VkDescriptorPool		descriptorPool,
+	vkcpp::DescriptorPool		descriptorPool,
 	vkcpp::DescriptorSetLayout descriptorSetLayout,
 	AllDrawingFrames& allDrawingFrames
 ) {
-	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
-	VkDescriptorSetAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	allocInfo.descriptorPool = descriptorPool;
-	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-	allocInfo.pSetLayouts = layouts.data();
-
-	std::vector<VkDescriptorSet> descriptorSets;
-	descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-	if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
-		throw std::runtime_error("failed to allocate descriptor sets!");
-	}
-
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		VkDescriptorBufferInfo bufferInfo{};
-		bufferInfo.buffer = allDrawingFrames.drawingFrameAt(i).m_uniformBufferMemory.m_buffer;
-		bufferInfo.offset = 0;
-		bufferInfo.range = sizeof(ModelViewProjTransform);
+		vkcpp::DescriptorSet descriptorSet(descriptorSetLayout, descriptorPool);
+
+		VkDescriptorBufferInfo vkDescriptorBufferInfo{};
+		vkDescriptorBufferInfo.buffer = allDrawingFrames.drawingFrameAt(i).m_uniformBufferMemory.m_buffer;
+		vkDescriptorBufferInfo.offset = 0;
+		vkDescriptorBufferInfo.range = sizeof(ModelViewProjTransform);
 
 		VkWriteDescriptorSet descriptorWrite{};
 		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite.dstSet = descriptorSets[i];
+		descriptorWrite.dstSet = descriptorSet;
 		descriptorWrite.dstBinding = 0;
 		descriptorWrite.dstArrayElement = 0;
 		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		descriptorWrite.descriptorCount = 1;
-		descriptorWrite.pBufferInfo = &bufferInfo;
+		descriptorWrite.pBufferInfo = &vkDescriptorBufferInfo;
 
 		vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
-		allDrawingFrames.drawingFrameAt(i).setDescriptorSet(descriptorSets[i]);
+		allDrawingFrames.drawingFrameAt(i).moveDescriptorSet(std::move(descriptorSet));
 	}
 }
 
@@ -1012,10 +1003,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/frag.spv", deviceOriginal);
 
 
-
-	vkcpp::DescriptorPool descriptorPoolOriginal = createDescriptorPool(deviceOriginal);
-
 	vkcpp::DescriptorSetLayout descriptorSetLayoutOriginal = createUboDescriptorSetLayout(deviceOriginal);
+	vkcpp::DescriptorPool descriptorPoolOriginal = createDescriptorPool(deviceOriginal);
 	createDescriptorSets(deviceOriginal, descriptorPoolOriginal, descriptorSetLayoutOriginal, g_allDrawingFrames);
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -1073,12 +1062,15 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 			vkcpp::Fence(fenceInfo, deviceOriginal));
 	}
 
-	vkcpp::ImageAndDeviceMemory textureImageAndDeviceMemory{};
+	vkcpp::ImageAndDeviceMemory textureImageAndDeviceMemory =
+		createTextureImage(deviceOriginal, commandPoolOriginal, vkGraphicsQueue);
 
-	for (int i = 0; i < 100; i++) {
-		textureImageAndDeviceMemory =
-			createTextureImage(deviceOriginal, commandPoolOriginal, vkGraphicsQueue);
-	}
+	vkcpp::ImageViewCreateInfo textureImageViewCreateInfo;
+	textureImageViewCreateInfo.image = textureImageAndDeviceMemory.m_image;
+	textureImageViewCreateInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+	vkcpp::ImageView textureImageView(textureImageViewCreateInfo, deviceOriginal);
+	vkcpp::SamplerCreateInfo textureSamplerCreateInfo;
+	vkcpp::Sampler textureSampler(textureSamplerCreateInfo, deviceOriginal);
 
 
 #undef globals
@@ -1113,6 +1105,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_fragShaderModule = std::move(fragShaderModule);
 
 	globals.g_textureImageAndDeviceMemory = std::move(textureImageAndDeviceMemory);
+	globals.g_textureImageView = std::move(textureImageView);
 
 }
 
@@ -1153,7 +1146,7 @@ void drawFrame(Globals& globals)
 	vkcpp::Semaphore imageAvailableSemaphore = currentDrawingFrame.m_imageAvailableSemaphore;
 	vkcpp::Semaphore renderFinishedSemaphore = currentDrawingFrame.m_renderFinishedSemaphore;
 	VkCommandBuffer& vkCommandBuffer = currentDrawingFrame.m_vkCommandBuffer;
-	VkDescriptorSet& vkDescriptorSet = currentDrawingFrame.m_vkDescriptorSet;
+	VkDescriptorSet vkDescriptorSet = currentDrawingFrame.m_descriptorSet;
 
 	inFlightFence.wait();
 

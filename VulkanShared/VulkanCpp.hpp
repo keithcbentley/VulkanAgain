@@ -1096,7 +1096,6 @@ namespace vkcpp {
 
 	};
 
-
 	class DescriptorSetLayout : public HandleWithOwner<VkDescriptorSetLayout> {
 
 		DescriptorSetLayout(VkDescriptorSetLayout vkDescriptorSetLayout, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
@@ -1110,7 +1109,7 @@ namespace vkcpp {
 	public:
 
 		DescriptorSetLayout() {}
-		DescriptorSetLayout(VkDescriptorSetLayoutCreateInfo& descriptorSetLayoutCreateInfo, VkDevice vkDevice) {
+		DescriptorSetLayout(const VkDescriptorSetLayoutCreateInfo& descriptorSetLayoutCreateInfo, VkDevice vkDevice) {
 			VkDescriptorSetLayout vkDescriptorSetLayout;
 			VkResult vkResult = vkCreateDescriptorSetLayout(vkDevice, &descriptorSetLayoutCreateInfo, nullptr, &vkDescriptorSetLayout);
 			if (vkResult != VK_SUCCESS) {
@@ -1119,6 +1118,42 @@ namespace vkcpp {
 			new(this)DescriptorSetLayout(vkDescriptorSetLayout, vkDevice, &destroy);
 		}
 
+
+	};
+
+	class DescriptorSet : public HandleWithOwner<VkDescriptorSet, DescriptorPool> {
+
+		DescriptorSet(VkDescriptorSet vkDescriptorSet, DescriptorPool descriptorPool, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkDescriptorSet, descriptorPool, pfnDestroy) {
+		}
+
+		static void destroy(VkDescriptorSet vkDescriptorSet, DescriptorPool descriptorPool) {
+			vkFreeDescriptorSets(descriptorPool.getVkDevice(), descriptorPool, 1, &vkDescriptorSet);
+		}
+
+	public:
+
+		DescriptorSet() {}
+
+		DescriptorSet(DescriptorSetLayout descriptorSetLayout, DescriptorPool descriptorPool) {
+
+			VkDescriptorSetLayout vkDescriptorSetLayout = descriptorSetLayout;
+			VkDescriptorSetAllocateInfo vkDescriptorSetAllocateInfo{};
+			vkDescriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			vkDescriptorSetAllocateInfo.descriptorPool = descriptorPool;
+			vkDescriptorSetAllocateInfo.descriptorSetCount = 1;
+			vkDescriptorSetAllocateInfo.pSetLayouts = &vkDescriptorSetLayout;
+
+			VkDescriptorSet vkDescriptorSet;
+			VkResult vkResult = vkAllocateDescriptorSets(
+				descriptorPool.getVkDevice(),
+				&vkDescriptorSetAllocateInfo,
+				&vkDescriptorSet);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			new(this)DescriptorSet(vkDescriptorSet, descriptorPool, &destroy);
+		}
 
 	};
 
@@ -1238,7 +1273,6 @@ namespace vkcpp {
 
 		Image(VkImage vkImage, Device device, DestroyFunc_t pfnDestroy)
 			: HandleWithOwner(vkImage, device, pfnDestroy) {
-
 		}
 
 		static void destroy(VkImage vkImage, Device device) {
@@ -1275,6 +1309,27 @@ namespace vkcpp {
 
 	};
 
+	class ImageViewCreateInfo : public VkImageViewCreateInfo {
+
+	public:
+		ImageViewCreateInfo()
+			: VkImageViewCreateInfo() {
+			sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			viewType = VK_IMAGE_VIEW_TYPE_2D;
+			components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+			components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+			components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+			components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+			subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			subresourceRange.baseMipLevel = 0;
+			subresourceRange.levelCount = 1;
+			subresourceRange.baseArrayLayer = 0;
+			subresourceRange.layerCount = 1;
+		}
+
+
+	};
+
 	class ImageView : public HandleWithOwner<VkImageView> {
 
 		ImageView(VkImageView vkImageView, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
@@ -1301,14 +1356,14 @@ namespace vkcpp {
 
 		static std::vector<VkImageView> createVkImageViews(
 			std::vector<VkImage>& vkImages,
-			VkImageViewCreateInfo& vkImageViewCreateInfo,
+			ImageViewCreateInfo& imageViewCreateInfo,
 			Device device) {
-			std::vector<VkImageView> vkImageViews(vkImages.size());
-			int index = 0;
+			std::vector<VkImageView> vkImageViews;
 			for (VkImage vkImage : vkImages) {
-				vkImageViewCreateInfo.image = vkImage;
-				vkCreateImageView(device, &vkImageViewCreateInfo, nullptr, &vkImageViews[index]);
-				++index;
+				imageViewCreateInfo.image = vkImage;
+				VkImageView vkImageView;
+				vkCreateImageView(device, &imageViewCreateInfo, nullptr, &vkImageView);
+				vkImageViews.push_back(vkImageView);
 			}
 			return vkImageViews;
 		}
@@ -1367,7 +1422,54 @@ namespace vkcpp {
 
 	};
 
+	class SamplerCreateInfo : public VkSamplerCreateInfo {
 
+	public:
+
+		SamplerCreateInfo()
+			: VkSamplerCreateInfo{}
+		{
+			sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+			magFilter = VK_FILTER_LINEAR;
+			minFilter = VK_FILTER_LINEAR;
+			mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+			addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			anisotropyEnable = VK_FALSE;
+			maxAnisotropy = 1.0f;
+			borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+			unnormalizedCoordinates = VK_FALSE;
+			compareEnable = VK_FALSE;
+			compareOp = VK_COMPARE_OP_ALWAYS;
+		}
+	};
+
+	class Sampler : public HandleWithOwner<VkSampler, Device> {
+
+		Sampler(VkSampler sampler, Device device, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(sampler, device, pfnDestroy) {
+		}
+
+		static void destroy(VkSampler sampler, Device device) {
+			vkDestroySampler(device, sampler, nullptr);
+		}
+
+	public:
+
+		Sampler() {}
+
+		Sampler(const SamplerCreateInfo& samplerCreateInfo, Device device) {
+			VkSampler vkSampler;
+			VkResult vkResult = vkCreateSampler(device, &samplerCreateInfo, nullptr, &vkSampler);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			new(this) Sampler(vkSampler, device, &destroy);
+		}
+
+
+	};
 
 	class SwapchainImageViewsFrameBuffers {
 
@@ -1421,19 +1523,8 @@ namespace vkcpp {
 			VkFormat	swapchainImageFormat
 		) {
 			std::vector<VkImage> swapchainImages = swapchain.getImages();
-			VkImageViewCreateInfo imageViewCreateInfo{};
-			imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+			ImageViewCreateInfo imageViewCreateInfo{};
 			imageViewCreateInfo.format = swapchainImageFormat;
-			imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-			imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-			imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-			imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-			imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
-			imageViewCreateInfo.subresourceRange.levelCount = 1;
-			imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-			imageViewCreateInfo.subresourceRange.layerCount = 1;
 			return ImageView::createVkImageViews(swapchainImages, imageViewCreateInfo, swapchain.getOwner());
 		}
 
