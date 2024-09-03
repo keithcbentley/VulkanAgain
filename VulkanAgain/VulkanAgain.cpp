@@ -23,6 +23,7 @@
 struct Vertex {
 	glm::vec2	pos;
 	glm::vec3	color;
+	glm::vec2 texCoord;
 
 	static VkVertexInputBindingDescription getBindingDescription() {
 		VkVertexInputBindingDescription bindingDescription{};
@@ -34,8 +35,8 @@ struct Vertex {
 		return bindingDescription;
 	}
 
-	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
-		std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
+		std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
 
 		attributeDescriptions[0].binding = 0;
 		attributeDescriptions[0].location = 0;
@@ -47,15 +48,21 @@ struct Vertex {
 		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 		attributeDescriptions[1].offset = offsetof(Vertex, color);
 
+		attributeDescriptions[2].binding = 0;
+		attributeDescriptions[2].location = 2;
+		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+		attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+
 		return attributeDescriptions;
 	}
 };
 
+
 const std::vector<Vertex> vertices = {
-	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-	{{0.0f, 1.0f}, {1.0f, 1.0f, 0.0f}},
-	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
 };
 
 struct ModelViewProjTransform {
@@ -331,6 +338,7 @@ public:
 
 	vkcpp::ImageAndDeviceMemory	g_textureImageAndDeviceMemory;
 	vkcpp::ImageView g_textureImageView;
+	vkcpp::Sampler g_textureSampler;
 
 };
 Globals g_globals;
@@ -399,22 +407,31 @@ void createDescriptorSets(
 		vkDescriptorBufferInfo.offset = 0;
 		vkDescriptorBufferInfo.range = sizeof(ModelViewProjTransform);
 
-		VkDescriptorImageInfo imageInfo{};
-		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		imageInfo.imageView = textureImageView;
-		imageInfo.sampler = textureSampler;
+		VkDescriptorImageInfo vkDescriptorImageInfo{};
+		vkDescriptorImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		vkDescriptorImageInfo.imageView = textureImageView;
+		vkDescriptorImageInfo.sampler = textureSampler;
 
 
-		VkWriteDescriptorSet descriptorWrite{};
-		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite.dstSet = descriptorSet;
-		descriptorWrite.dstBinding = 0;
-		descriptorWrite.dstArrayElement = 0;
-		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorWrite.descriptorCount = 1;
-		descriptorWrite.pBufferInfo = &vkDescriptorBufferInfo;
+		std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
 
-		vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[0].dstSet = descriptorSet;
+		descriptorWrites[0].dstBinding = 0;
+		descriptorWrites[0].dstArrayElement = 0;
+		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrites[0].descriptorCount = 1;
+		descriptorWrites[0].pBufferInfo = &vkDescriptorBufferInfo;
+
+		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[1].dstSet = descriptorSet;
+		descriptorWrites[1].dstBinding = 1;
+		descriptorWrites[1].dstArrayElement = 0;
+		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrites[1].descriptorCount = 1;
+		descriptorWrites[1].pImageInfo = &vkDescriptorImageInfo;
+
+		vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 		allDrawingFrames.drawingFrameAt(i).moveDescriptorSet(std::move(descriptorSet));
 	}
 }
@@ -541,7 +558,7 @@ public:
 
 	// TODO needs to be smarter
 	VkVertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
-	std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions = Vertex::getAttributeDescriptions();
+	std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions = Vertex::getAttributeDescriptions();
 
 
 	PipelineInputAssemblyStateCreateInfo& setInputAssemblyTopology(VkPrimitiveTopology topology) {
@@ -635,13 +652,9 @@ public:
 		m_dynamicState.pDynamicStates = m_dynamicStates.data();
 
 		m_vkGraphicsPipelineCreateInfo.pDynamicState = &m_dynamicState;
-
-
 		m_vkGraphicsPipelineCreateInfo.layout = m_pipelineLayout;
-
 		m_vkGraphicsPipelineCreateInfo.renderPass = m_renderPass;
 		m_vkGraphicsPipelineCreateInfo.subpass = 0;
-
 		m_vkGraphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
 		m_vkGraphicsPipelineCreateInfo.basePipelineIndex = -1; // Optional
 
@@ -1016,9 +1029,9 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	}
 
 	vkcpp::ShaderModule	vertShaderModule =
-		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert2.spv", deviceOriginal);
+		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert3.spv", deviceOriginal);
 	vkcpp::ShaderModule	fragShaderModule =
-		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/frag.spv", deviceOriginal);
+		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/frag3.spv", deviceOriginal);
 
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};
 	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -1130,6 +1143,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	globals.g_textureImageAndDeviceMemory = std::move(textureImageAndDeviceMemory);
 	globals.g_textureImageView = std::move(textureImageView);
+	globals.g_textureSampler = std::move(textureSampler);
 
 }
 
