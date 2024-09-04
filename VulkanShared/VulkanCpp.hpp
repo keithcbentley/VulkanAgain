@@ -871,6 +871,8 @@ namespace vkcpp {
 
 		void unmapMemory() {
 			vkUnmapMemory(m_deviceMemory.getVkDevice(), m_deviceMemory);
+			m_mappedMemory = nullptr;
+
 		}
 
 	};
@@ -1130,6 +1132,43 @@ namespace vkcpp {
 
 	};
 
+	class DescriptorSetLayoutCreateInfo : public VkDescriptorSetLayoutCreateInfo {
+
+		std::vector<VkDescriptorSetLayoutBinding>	m_bindings;
+
+	public:
+
+		DescriptorSetLayoutCreateInfo()
+			: VkDescriptorSetLayoutCreateInfo{} {
+			sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+
+		}
+
+		DescriptorSetLayoutCreateInfo& addBinding(
+			int bindingIndex,
+			VkDescriptorType	vkDescriptorType,
+			VkShaderStageFlags	vkShaderStageFlags
+		) {
+			VkDescriptorSetLayoutBinding layoutBinding{};
+			layoutBinding.binding = bindingIndex;
+			layoutBinding.descriptorType = vkDescriptorType;
+			layoutBinding.descriptorCount = 1;
+			layoutBinding.stageFlags = vkShaderStageFlags;
+			layoutBinding.pImmutableSamplers = nullptr;
+
+			m_bindings.push_back(layoutBinding);
+			return *this;
+		}
+
+		DescriptorSetLayoutCreateInfo& construct() {
+
+			bindingCount = static_cast<uint32_t>(m_bindings.size());
+			pBindings = m_bindings.data();
+
+			return *this;
+		}
+	};
+
 	class DescriptorSetLayout : public HandleWithOwner<VkDescriptorSetLayout> {
 
 		DescriptorSetLayout(VkDescriptorSetLayout vkDescriptorSetLayout, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
@@ -1143,9 +1182,13 @@ namespace vkcpp {
 	public:
 
 		DescriptorSetLayout() {}
-		DescriptorSetLayout(const VkDescriptorSetLayoutCreateInfo& descriptorSetLayoutCreateInfo, VkDevice vkDevice) {
+		DescriptorSetLayout(DescriptorSetLayoutCreateInfo& descriptorSetLayoutCreateInfo, VkDevice vkDevice) {
 			VkDescriptorSetLayout vkDescriptorSetLayout;
-			VkResult vkResult = vkCreateDescriptorSetLayout(vkDevice, &descriptorSetLayoutCreateInfo, nullptr, &vkDescriptorSetLayout);
+			VkResult vkResult = vkCreateDescriptorSetLayout(
+				vkDevice,
+				&descriptorSetLayoutCreateInfo.construct(),
+				nullptr,
+				&vkDescriptorSetLayout);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
