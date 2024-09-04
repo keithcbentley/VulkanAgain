@@ -1757,6 +1757,117 @@ namespace vkcpp {
 
 
 
+	class DescriptorSetUpdater {
+
+		union WriteDescriptorInfo {
+			VkDescriptorBufferInfo	m_vkDescriptorBufferInfo;
+			VkDescriptorImageInfo m_vkDescriptorImageInfo;
+
+			WriteDescriptorInfo(const VkDescriptorBufferInfo& vkDescriptorBufferInfo)
+				: m_vkDescriptorBufferInfo(vkDescriptorBufferInfo) {
+			}
+
+			WriteDescriptorInfo(const VkDescriptorImageInfo& vkDescriptorImageInfo)
+				: m_vkDescriptorImageInfo(vkDescriptorImageInfo) {
+			}
+
+		};
+
+		vkcpp::DescriptorSet	m_descriptorSet;
+		std::vector<VkWriteDescriptorSet>	m_vkWriteDescriptorSets;
+		std::vector<WriteDescriptorInfo>	m_writeDescriptorInfos;
+
+	public:
+
+		DescriptorSetUpdater(vkcpp::DescriptorSet descriptorSet)
+			: m_descriptorSet(descriptorSet) {
+
+		}
+
+		void addWriteDescriptor(
+			int	bindingIndex,
+			VkDescriptorType vkDescriptorType,
+			vkcpp::Buffer buffer,
+			VkDeviceSize size) {
+
+			const VkDescriptorBufferInfo* marker = reinterpret_cast<VkDescriptorBufferInfo*>(-1);
+
+			VkWriteDescriptorSet	vkWriteDescriptorSet{};
+			vkWriteDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			vkWriteDescriptorSet.dstSet = m_descriptorSet;
+			vkWriteDescriptorSet.dstBinding = bindingIndex;
+			vkWriteDescriptorSet.dstArrayElement = 0;
+			vkWriteDescriptorSet.descriptorType = vkDescriptorType;
+			vkWriteDescriptorSet.descriptorCount = 1;
+			vkWriteDescriptorSet.pBufferInfo = marker;
+
+			VkDescriptorBufferInfo vkDescriptorBufferInfo{};
+			vkDescriptorBufferInfo.buffer = buffer;
+			vkDescriptorBufferInfo.offset = 0;
+			vkDescriptorBufferInfo.range = size;
+
+			m_vkWriteDescriptorSets.push_back(vkWriteDescriptorSet);
+			m_writeDescriptorInfos.push_back(vkDescriptorBufferInfo);
+
+		}
+
+		void addWriteDescriptor(
+			int				bindingIndex,
+			VkDescriptorType vkDescriptorType,
+			ImageView imageView,
+			Sampler sampler) {
+
+			const VkDescriptorImageInfo* marker = reinterpret_cast<VkDescriptorImageInfo*>(-1);
+
+			VkWriteDescriptorSet	vkWriteDescriptorSet{};
+			vkWriteDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			vkWriteDescriptorSet.dstSet = m_descriptorSet;
+			vkWriteDescriptorSet.dstBinding = bindingIndex;
+			vkWriteDescriptorSet.dstArrayElement = 0;
+			vkWriteDescriptorSet.descriptorType = vkDescriptorType;
+			vkWriteDescriptorSet.descriptorCount = 1;
+			vkWriteDescriptorSet.pImageInfo = marker;
+
+			VkDescriptorImageInfo vkDescriptorImageInfo{};
+			vkDescriptorImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			vkDescriptorImageInfo.imageView = imageView;
+			vkDescriptorImageInfo.sampler = sampler;
+
+			m_vkWriteDescriptorSets.push_back(vkWriteDescriptorSet);
+			m_writeDescriptorInfos.push_back(vkDescriptorImageInfo);
+
+		}
+
+
+
+		void construct() {
+			int	index = 0;
+			for (VkWriteDescriptorSet& vkWriteDescriptorSet : m_vkWriteDescriptorSets) {
+				//	Update marked pointers to the proper address from the info array.
+				if (vkWriteDescriptorSet.pBufferInfo) {
+					vkWriteDescriptorSet.pBufferInfo = &(m_writeDescriptorInfos.at(index).m_vkDescriptorBufferInfo);
+				}
+				if (vkWriteDescriptorSet.pImageInfo) {
+					vkWriteDescriptorSet.pImageInfo = &(m_writeDescriptorInfos.at(index).m_vkDescriptorImageInfo);
+				}
+				++index;
+			}
+		}
+
+		void updateDescriptorSets() {
+			construct();
+			vkUpdateDescriptorSets(
+				m_descriptorSet.getOwner().getVkDevice(),
+				static_cast<uint32_t>(m_vkWriteDescriptorSets.size()),
+				m_vkWriteDescriptorSets.data(),
+				0, nullptr);
+		}
+
+	};
+
+
+
+
 }
 
 

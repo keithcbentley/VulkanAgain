@@ -8,6 +8,7 @@
 #include <array>
 #include <chrono>
 #include <map>
+#include <variant>
 
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
 #define VK_USE_PLATFORM_WIN32_KHR
@@ -380,36 +381,21 @@ void createDescriptorSets(
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkcpp::DescriptorSet descriptorSet(descriptorSetLayout, descriptorPool);
 
-		VkDescriptorBufferInfo vkDescriptorBufferInfo{};
-		vkDescriptorBufferInfo.buffer = allDrawingFrames.drawingFrameAt(i).m_uniformBufferMemory.m_buffer;
-		vkDescriptorBufferInfo.offset = 0;
-		vkDescriptorBufferInfo.range = sizeof(ModelViewProjTransform);
+		vkcpp::DescriptorSetUpdater descriptorSetUpdater(descriptorSet);
+		descriptorSetUpdater.addWriteDescriptor(
+			0,
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			allDrawingFrames.drawingFrameAt(i).m_uniformBufferMemory.m_buffer,
+			sizeof(ModelViewProjTransform));
 
-		VkDescriptorImageInfo vkDescriptorImageInfo{};
-		vkDescriptorImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		vkDescriptorImageInfo.imageView = textureImageView;
-		vkDescriptorImageInfo.sampler = textureSampler;
+		descriptorSetUpdater.addWriteDescriptor(
+			1,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			textureImageView,
+			textureSampler);
 
 
-		std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
-
-		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[0].dstSet = descriptorSet;
-		descriptorWrites[0].dstBinding = 0;
-		descriptorWrites[0].dstArrayElement = 0;
-		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorWrites[0].descriptorCount = 1;
-		descriptorWrites[0].pBufferInfo = &vkDescriptorBufferInfo;
-
-		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[1].dstSet = descriptorSet;
-		descriptorWrites[1].dstBinding = 1;
-		descriptorWrites[1].dstArrayElement = 0;
-		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descriptorWrites[1].descriptorCount = 1;
-		descriptorWrites[1].pImageInfo = &vkDescriptorImageInfo;
-
-		vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+		descriptorSetUpdater.updateDescriptorSets();
 
 		allDrawingFrames.drawingFrameAt(i).moveDescriptorSet(std::move(descriptorSet));
 	}
