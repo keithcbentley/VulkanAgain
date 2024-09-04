@@ -408,13 +408,13 @@ namespace vkcpp {
 		VulkanInstanceCreateInfo(VulkanInstanceCreateInfo&&) = delete;
 		VulkanInstanceCreateInfo& operator=(VulkanInstanceCreateInfo&&) = delete;
 
-		operator VkInstanceCreateInfo* () = delete;
+		VkInstanceCreateInfo* operator& () = delete;
 
 		VulkanInstanceCreateInfo() : VkInstanceCreateInfo{} {
 			sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		}
 
-		VkInstanceCreateInfo& construct() {
+		VkInstanceCreateInfo* construct() {
 			m_layerStrings.clear();
 			ppEnabledLayerNames = nullptr;
 			for (const std::string& layerName : m_layerNames) {
@@ -435,7 +435,7 @@ namespace vkcpp {
 				ppEnabledExtensionNames = m_extensionStrings.data();
 			}
 
-			return *this;
+			return this;
 
 		}
 
@@ -466,7 +466,7 @@ namespace vkcpp {
 		VulkanInstance() {}
 		VulkanInstance(VulkanInstanceCreateInfo& vulkanInstanceCreateInfo) {
 			VkInstance vkInstance;
-			VkResult vkResult = vkCreateInstance(&vulkanInstanceCreateInfo.construct(), nullptr, &vkInstance);
+			VkResult vkResult = vkCreateInstance(vulkanInstanceCreateInfo.construct(), nullptr, &vkInstance);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
@@ -664,13 +664,13 @@ namespace vkcpp {
 		DeviceCreateInfo(DeviceCreateInfo&&) = delete;
 		DeviceCreateInfo& operator=(DeviceCreateInfo&&) = delete;
 
-		operator DeviceCreateInfo* () = delete;
+		DeviceCreateInfo* operator& () = delete;
 
 		DeviceCreateInfo() : VkDeviceCreateInfo{} {
 			sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 		}
 
-		DeviceCreateInfo& construct() {
+		VkDeviceCreateInfo* construct() {
 
 			m_extensionStrings.clear();
 			ppEnabledExtensionNames = nullptr;
@@ -682,7 +682,7 @@ namespace vkcpp {
 				ppEnabledExtensionNames = m_extensionStrings.data();
 			}
 
-			return *this;
+			return this;
 		}
 
 
@@ -710,7 +710,7 @@ namespace vkcpp {
 		Device() {}
 		Device(DeviceCreateInfo& deviceCreateInfo, PhysicalDevice physicalDevice) {
 			VkDevice vkDevice;
-			VkResult vkResult = vkCreateDevice(physicalDevice, &deviceCreateInfo.construct(), nullptr, &vkDevice);
+			VkResult vkResult = vkCreateDevice(physicalDevice, deviceCreateInfo.construct(), nullptr, &vkDevice);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
@@ -1080,6 +1080,8 @@ namespace vkcpp {
 
 	public:
 
+		VkDescriptorPoolCreateInfo* operator&() = delete;
+
 		DescriptorPoolCreateInfo()
 			: VkDescriptorPoolCreateInfo{} {
 			sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1089,7 +1091,7 @@ namespace vkcpp {
 			m_poolSizesMap[vkDescriptorType] += count;
 		}
 
-		DescriptorPoolCreateInfo& construct() {
+		VkDescriptorPoolCreateInfo* construct() {
 			m_poolSizes.clear();
 			VkDescriptorPoolSize vkDescriptorPoolSize;
 			for (std::pair<VkDescriptorType, int> kv : m_poolSizesMap) {
@@ -1101,7 +1103,7 @@ namespace vkcpp {
 			poolSizeCount = static_cast<uint32_t>(m_poolSizes.size());
 			pPoolSizes = m_poolSizes.data();
 
-			return *this;
+			return this;
 		}
 
 	};
@@ -1123,7 +1125,7 @@ namespace vkcpp {
 		DescriptorPool() {}
 		DescriptorPool(DescriptorPoolCreateInfo& poolCreateInfo, VkDevice vkDevice) {
 			VkDescriptorPool vkDescriptorPool;
-			VkResult vkResult = vkCreateDescriptorPool(vkDevice, &poolCreateInfo.construct(), nullptr, &vkDescriptorPool);
+			VkResult vkResult = vkCreateDescriptorPool(vkDevice, poolCreateInfo.construct(), nullptr, &vkDescriptorPool);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
@@ -1136,7 +1138,10 @@ namespace vkcpp {
 
 		std::vector<VkDescriptorSetLayoutBinding>	m_bindings;
 
+
 	public:
+
+		VkDescriptorSetLayoutCreateInfo* operator&() = delete;
 
 		DescriptorSetLayoutCreateInfo()
 			: VkDescriptorSetLayoutCreateInfo{} {
@@ -1160,12 +1165,10 @@ namespace vkcpp {
 			return *this;
 		}
 
-		DescriptorSetLayoutCreateInfo& construct() {
-
+		VkDescriptorSetLayoutCreateInfo* construct() {
 			bindingCount = static_cast<uint32_t>(m_bindings.size());
 			pBindings = m_bindings.data();
-
-			return *this;
+			return this;
 		}
 	};
 
@@ -1186,7 +1189,7 @@ namespace vkcpp {
 			VkDescriptorSetLayout vkDescriptorSetLayout;
 			VkResult vkResult = vkCreateDescriptorSetLayout(
 				vkDevice,
-				&descriptorSetLayoutCreateInfo.construct(),
+				descriptorSetLayoutCreateInfo.construct(),
 				nullptr,
 				&vkDescriptorSetLayout);
 			if (vkResult != VK_SUCCESS) {
