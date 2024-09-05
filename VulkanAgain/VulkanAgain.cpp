@@ -67,6 +67,10 @@ const std::vector<Vertex> g_vertices = {
 	{{-0.9f, 0.9f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
 };
 
+const std::vector<uint16_t> g_vertexIndices = {
+	0, 1, 2, 2, 3, 0
+};
+
 
 const wchar_t* szTitle = TEXT("Vulkan Again");
 const wchar_t* szWindowClass = TEXT("Vulkan Again Class");
@@ -195,7 +199,8 @@ void recordCommandBuffer(
 	vkcpp::CommandBuffer		commandBuffer,
 	uint32_t			swapchainImageIndex,
 	vkcpp::SwapchainImageViewsFrameBuffers& swapchainImageViewsFrameBuffers,
-	vkcpp::Buffer			vkVertexBuffer,
+	vkcpp::Buffer			vertexBuffer,
+	vkcpp::Buffer			vertexIndexBuffer,
 	VkDescriptorSet		descriptorSet,
 	VkPipelineLayout	vkPipelineLayout,
 	VkPipeline			graphicsPipeline
@@ -233,9 +238,11 @@ void recordCommandBuffer(
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
-	VkBuffer vertexBuffers[] = { vkVertexBuffer };
+	VkBuffer vertexBuffers[] = { vertexBuffer };
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
+	vkCmdBindIndexBuffer(commandBuffer, vertexIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
 	vkCmdBindDescriptorSets(
 		commandBuffer,
@@ -245,7 +252,7 @@ void recordCommandBuffer(
 		&descriptorSet,
 		0, nullptr);
 
-	vkCmdDraw(commandBuffer, static_cast<uint32_t>(g_vertices.size()), 1, 0, 0);
+	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(g_vertexIndices.size()), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -303,6 +310,7 @@ public:
 	vkcpp::GraphicsPipeline	g_graphicsPipeline;
 
 	vkcpp::BufferAndDeviceMemoryMapped	g_vertexBufferAndDeviceMemory;
+	vkcpp::BufferAndDeviceMemoryMapped	g_vertexIndicesBufferAndDeviceMemory;
 
 	vkcpp::CommandPool		g_commandPoolOriginal;
 
@@ -949,6 +957,13 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		(void*)g_vertices.data(),
 		deviceOriginal);
 
+	const int64_t vertexIndexSize = sizeof(g_vertexIndices[0]) * static_cast<int>(g_vertexIndices.size());
+	vkcpp::BufferAndDeviceMemoryMapped vertexIndicesBufferAndDeviceMemory(
+		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		vertexIndexSize,
+		(void*)g_vertexIndices.data(),
+		deviceOriginal);
 
 	{
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
@@ -1005,7 +1020,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::PipelineLayout pipelineLayout(pipelineLayoutInfo, deviceOriginal);
 
 	GraphicsPipelineConfig graphicsPipelineConfig;
-	graphicsPipelineConfig.setInputAssemblyTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN);
+	graphicsPipelineConfig.setInputAssemblyTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	graphicsPipelineConfig.setViewportExtent(vkSurfaceCapabilities.currentExtent);
 	graphicsPipelineConfig.setPipelineLayout(pipelineLayout);
 	graphicsPipelineConfig.setRenderPass(renderPassOriginal);
@@ -1057,6 +1072,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 
 	globals.g_vertexBufferAndDeviceMemory = std::move(vertexBufferAndDeviceMemory);
+	globals.g_vertexIndicesBufferAndDeviceMemory = std::move(vertexIndicesBufferAndDeviceMemory);
 
 	globals.g_descriptorSetLayoutOriginal = std::move(descriptorSetLayoutOriginal);
 	globals.g_descriptorPoolOriginal = std::move(descriptorPoolOriginal);
@@ -1136,6 +1152,7 @@ void drawFrame(Globals& globals)
 		swapchainImageIndex,
 		globals.g_swapchainImageViewsFrameBuffers,
 		globals.g_vertexBufferAndDeviceMemory.m_buffer,
+		globals.g_vertexIndicesBufferAndDeviceMemory.m_buffer,
 		currentDrawingFrame.m_descriptorSet,
 		globals.g_pipelineLayout,
 		globals.g_graphicsPipeline);
