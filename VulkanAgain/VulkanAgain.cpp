@@ -102,7 +102,7 @@ public:
 	vkcpp::Fence	m_inFlightFence;
 	vkcpp::Semaphore m_imageAvailableSemaphore;
 	vkcpp::Semaphore m_renderFinishedSemaphore;
-	VkCommandBuffer	m_vkCommandBuffer = nullptr;
+	vkcpp::CommandBuffer	m_commandBuffer;;
 	vkcpp::BufferAndDeviceMemoryMapped	m_uniformBufferMemory;
 	vkcpp::DescriptorSet	m_descriptorSet;
 
@@ -125,8 +125,8 @@ public:
 		m_renderFinishedSemaphore = std::move(semaphore);
 	}
 
-	void setCommandBuffer(VkCommandBuffer vkCommandBuffer) {
-		m_vkCommandBuffer = vkCommandBuffer;
+	void moveCommandBuffer(vkcpp::CommandBuffer&& vkCommandBuffer) {
+		m_commandBuffer = std::move(vkCommandBuffer);
 	}
 
 	void moveUniformMemoryBuffer(vkcpp::BufferAndDeviceMemoryMapped&& bufferAndDeviceMemoryMapped) {
@@ -192,7 +192,7 @@ vkcpp::VulkanInstance createVulkanInstance() {
 
 
 void recordCommandBuffer(
-	VkCommandBuffer		commandBuffer,
+	vkcpp::CommandBuffer		commandBuffer,
 	uint32_t			swapchainImageIndex,
 	vkcpp::SwapchainImageViewsFrameBuffers& swapchainImageViewsFrameBuffers,
 	VkBuffer			vkVertexBuffer,
@@ -202,14 +202,7 @@ void recordCommandBuffer(
 ) {
 	const VkExtent2D swapchainImageExtent = swapchainImageViewsFrameBuffers.getImageExtent();
 
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = 0; // Optional
-	beginInfo.pInheritanceInfo = nullptr; // Optional
-
-	if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-		throw std::runtime_error("failed to begin recording command buffer!");
-	}
+	commandBuffer.begin();
 
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -256,9 +249,7 @@ void recordCommandBuffer(
 
 	vkCmdEndRenderPass(commandBuffer);
 
-	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-		throw std::runtime_error("failed to record command buffer!");
-	}
+	commandBuffer.end();
 
 }
 
@@ -729,7 +720,7 @@ void transitionImageLayout(
 		1, &barrier
 	);
 
-	vkEndCommandBuffer(commandBuffer);
+	commandBuffer.end();
 
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1052,9 +1043,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		commandBufferAllocateInfo.commandPool = commandPoolOriginal;
 		commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		commandBufferAllocateInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
-		std::vector<VkCommandBuffer> commandBuffers = commandPoolOriginal.allocateCommandBuffers(commandBufferAllocateInfo);
+		std::vector<vkcpp::CommandBuffer> commandBuffers =
+			vkcpp::CommandBuffer::allocateCommandBuffers(commandBufferAllocateInfo, commandPoolOriginal);
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-			g_allDrawingFrames.drawingFrameAt(i).setCommandBuffer(commandBuffers[i]);
+			g_allDrawingFrames.drawingFrameAt(i).moveCommandBuffer(std::move(commandBuffers[i]));
 		}
 	}
 
@@ -1143,32 +1135,30 @@ void drawFrame(Globals& globals)
 
 
 	const int	currentFrameToDrawIndex = g_nextFrameToDrawIndex;
-	DrawingFrame& currentDrawingFrame = g_allDrawingFrames.drawingFrameAt(currentFrameToDrawIndex);;
-	VkDevice vkDevice = currentDrawingFrame.getVkDevice();
-	vkcpp::Fence inFlightFence = currentDrawingFrame.m_inFlightFence;
-	vkcpp::Semaphore imageAvailableSemaphore = currentDrawingFrame.m_imageAvailableSemaphore;
-	vkcpp::Semaphore renderFinishedSemaphore = currentDrawingFrame.m_renderFinishedSemaphore;
-	VkCommandBuffer& vkCommandBuffer = currentDrawingFrame.m_vkCommandBuffer;
-	VkDescriptorSet vkDescriptorSet = currentDrawingFrame.m_descriptorSet;
+	DrawingFrame& currentDrawingFrame = g_allDrawingFrames.drawingFrameAt(currentFrameToDrawIndex);
 
-	inFlightFence.wait();
+	VkDevice vkDevice = currentDrawingFrame.getVkDevice();
+	vkcpp::CommandBuffer commandBuffer = currentDrawingFrame.m_commandBuffer;
+
+	//	Wait for this drawing frame to be free
+	currentDrawingFrame.m_inFlightFence.wait();
 
 	uint32_t	swapchainImageIndex;
 	vkAcquireNextImageKHR(
 		vkDevice,
 		globals.g_swapchainImageViewsFrameBuffers.vkSwapchain(),
 		UINT64_MAX,
-		imageAvailableSemaphore,
+		currentDrawingFrame.m_imageAvailableSemaphore,
 		VK_NULL_HANDLE,
 		&swapchainImageIndex);
 
-	vkResetCommandBuffer(vkCommandBuffer, 0);
+	commandBuffer.reset();
 	recordCommandBuffer(
-		vkCommandBuffer,
+		commandBuffer,
 		swapchainImageIndex,
 		globals.g_swapchainImageViewsFrameBuffers,
 		globals.g_vertexBufferAndDeviceMemory.m_buffer,
-		vkDescriptorSet,
+		currentDrawingFrame.m_descriptorSet,
 		globals.g_pipelineLayout,
 		globals.g_graphicsPipeline);
 
@@ -1177,27 +1167,32 @@ void drawFrame(Globals& globals)
 		globals.g_swapchainImageViewsFrameBuffers.getImageExtent()
 	);
 
+
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-	VkSemaphore imageAvailableSemaphores[] = { imageAvailableSemaphore };
-
+	VkSemaphore imageAvailableSemaphores[] = { currentDrawingFrame.m_imageAvailableSemaphore };
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	submitInfo.waitSemaphoreCount = 1;
 	submitInfo.pWaitSemaphores = imageAvailableSemaphores;
 	submitInfo.pWaitDstStageMask = waitStages;
+
 	submitInfo.commandBufferCount = 1;
+	VkCommandBuffer commandBuffers[] = { commandBuffer };
+	submitInfo.pCommandBuffers = commandBuffers;
 
-	submitInfo.pCommandBuffers = &vkCommandBuffer;
-
-	VkSemaphore renderFinishedSemaphores[] = { renderFinishedSemaphore };
-
+	VkSemaphore renderFinishedSemaphores[] = { currentDrawingFrame.m_renderFinishedSemaphore };
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = renderFinishedSemaphores;
 
-	inFlightFence.reset();
+	//	Show that this drawing frame is now in use ..
+	//	Fence will be signaled when graphics queue is finished.
+	currentDrawingFrame.m_inFlightFence.reset();
 
-	if (vkQueueSubmit(globals.g_vkGraphicsQueue, 1, &submitInfo, inFlightFence) != VK_SUCCESS) {
+	if (vkQueueSubmit(
+		globals.g_vkGraphicsQueue,
+		1, &submitInfo,
+		currentDrawingFrame.m_inFlightFence) != VK_SUCCESS) {
 		throw std::runtime_error("failed to submit draw command buffer!");
 	}
 

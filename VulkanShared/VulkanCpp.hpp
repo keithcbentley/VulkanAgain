@@ -1022,16 +1022,6 @@ namespace vkcpp {
 			new(this)CommandPool(vkCommandPool, vkDevice, &destroy);
 		}
 
-		std::vector<VkCommandBuffer> allocateCommandBuffers(
-			VkCommandBufferAllocateInfo& vkCommandBufferAllocateInfo
-		) const {
-			std::vector<VkCommandBuffer> commandBuffers(vkCommandBufferAllocateInfo.commandBufferCount);
-			VkResult vkResult = vkAllocateCommandBuffers(m_owner, &vkCommandBufferAllocateInfo, commandBuffers.data());
-			if (vkResult != VK_SUCCESS) {
-				throw Exception(vkResult);
-			}
-			return commandBuffers;
-		}
 
 
 
@@ -1039,13 +1029,18 @@ namespace vkcpp {
 
 	class CommandBuffer : public HandleWithOwner<VkCommandBuffer, CommandPool> {
 
-		CommandBuffer(VkCommandBuffer vkCommandBuffer, CommandPool commandPool, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(vkCommandBuffer, commandPool, pfnDestroy) {
-		}
-
 		static void destroy(VkCommandBuffer vkCommandBuffer, CommandPool commandPool) {
 			vkFreeCommandBuffers(commandPool.getVkDevice(), commandPool, 1, &vkCommandBuffer);
 		}
+
+		CommandBuffer(
+			VkCommandBuffer vkCommandBuffer,
+			CommandPool commandPool,
+			DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkCommandBuffer, commandPool, pfnDestroy) {
+		}
+
+
 
 	public:
 
@@ -1062,6 +1057,42 @@ namespace vkcpp {
 			new(this) CommandBuffer(vkCommandBuffer, commandPool, &destroy);
 		}
 
+		static std::vector<CommandBuffer> allocateCommandBuffers(
+			VkCommandBufferAllocateInfo& vkCommandBufferAllocateInfo,
+			CommandPool	commandPool
+		) {
+			std::vector<VkCommandBuffer> vkCommandBuffers(vkCommandBufferAllocateInfo.commandBufferCount);
+			VkResult vkResult = vkAllocateCommandBuffers(
+				commandPool.getVkDevice(), &vkCommandBufferAllocateInfo, vkCommandBuffers.data());
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			std::vector<CommandBuffer> commandBuffers;
+			for (VkCommandBuffer vkCommandBuffer : vkCommandBuffers) {
+				//	Can't use emplace_back since full constructor is private.
+				commandBuffers.push_back(std::move(CommandBuffer(vkCommandBuffer, commandPool, &destroy)));
+			}
+			return commandBuffers;
+		}
+
+		void reset() {
+			VkResult vkResult = vkResetCommandBuffer(*this, 0);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+		}
+
+		void begin() {
+			VkCommandBufferBeginInfo beginInfo{};
+			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+			VkResult vkResult = vkBeginCommandBuffer(*this, &beginInfo);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+		}
+
+
 		void beginOneTimeSubmit() {
 			VkCommandBufferBeginInfo beginInfo{};
 			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1069,6 +1100,13 @@ namespace vkcpp {
 			vkBeginCommandBuffer(*this, &beginInfo);
 		}
 
+		void end() {
+			VkResult vkResult = vkEndCommandBuffer(*this);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+
+		}
 
 	};
 
