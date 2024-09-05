@@ -842,9 +842,9 @@ namespace vkcpp {
 
 
 		BufferAndDeviceMemoryMapped(
-			VkDeviceSize size,
 			VkBufferUsageFlags usage,
 			VkMemoryPropertyFlags properties,
+			int64_t size,
 			Device device
 		) {
 			VkBufferCreateInfo vkBufferCreateInfo{};
@@ -868,6 +868,24 @@ namespace vkcpp {
 			new(this) BufferAndDeviceMemoryMapped(std::move(buffer), std::move(deviceMemory), mappedMemory);
 
 		}
+
+		BufferAndDeviceMemoryMapped(
+			VkBufferUsageFlags usage,
+			VkMemoryPropertyFlags properties,
+			int64_t size,
+			void* pSrcMem,
+			Device device
+		) {
+			new(this)BufferAndDeviceMemoryMapped(
+				usage,
+				properties,
+				size,
+				device
+			);
+			memcpy(m_mappedMemory, pSrcMem, size);
+			unmapMemory();
+		}
+
 
 		void unmapMemory() {
 			vkUnmapMemory(m_deviceMemory.getVkDevice(), m_deviceMemory);

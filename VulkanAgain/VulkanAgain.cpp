@@ -60,7 +60,7 @@ struct Vertex {
 };
 
 
-const std::vector<Vertex> vertices = {
+const std::vector<Vertex> g_vertices = {
 	{{-0.9f, -0.9f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
 	{{0.9f, -0.9f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
 	{{0.9f, 0.9f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
@@ -195,7 +195,7 @@ void recordCommandBuffer(
 	vkcpp::CommandBuffer		commandBuffer,
 	uint32_t			swapchainImageIndex,
 	vkcpp::SwapchainImageViewsFrameBuffers& swapchainImageViewsFrameBuffers,
-	VkBuffer			vkVertexBuffer,
+	vkcpp::Buffer			vkVertexBuffer,
 	VkDescriptorSet		descriptorSet,
 	VkPipelineLayout	vkPipelineLayout,
 	VkPipeline			graphicsPipeline
@@ -245,7 +245,7 @@ void recordCommandBuffer(
 		&descriptorSet,
 		0, nullptr);
 
-	vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+	vkCmdDraw(commandBuffer, static_cast<uint32_t>(g_vertices.size()), 1, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -260,26 +260,6 @@ struct ModelViewProjTransform {
 	alignas(16) glm::mat4 proj;
 };
 
-
-struct UniformBuffersMemory {
-
-	std::vector<vkcpp::BufferAndDeviceMemoryMapped>	m_uniformBufferMemory;
-
-	void createUniformBuffers(
-		vkcpp::Device device,
-		int count
-	) {
-		VkDeviceSize bufferSize = sizeof(ModelViewProjTransform);
-		for (int i = 0; i < count; i++) {
-			m_uniformBufferMemory.emplace_back(
-				bufferSize,
-				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				device
-			);
-		}
-	}
-};
 
 
 class Globals {
@@ -333,8 +313,6 @@ public:
 };
 Globals g_globals;
 AllDrawingFrames g_allDrawingFrames(MAX_FRAMES_IN_FLIGHT);
-
-
 
 
 vkcpp::DescriptorSetLayout createDrawingFrameDescriptorSetLayout(VkDevice vkDevice) {
@@ -814,13 +792,11 @@ vkcpp::ImageAndDeviceMemory createTextureImage(
 	const VkDeviceSize imageSize = texWidth * texHeight * 4;
 
 	vkcpp::BufferAndDeviceMemoryMapped stagingBufferAndDeviceMemoryMapped(
-		imageSize,
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		imageSize,
+		pixels,
 		device);
-
-	memcpy(stagingBufferAndDeviceMemoryMapped.m_mappedMemory, pixels, static_cast<size_t>(imageSize));
-	stagingBufferAndDeviceMemoryMapped.unmapMemory();
 
 	stbi_image_free(pixels);
 
@@ -965,22 +941,24 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	swapchainImageViewsFrameBuffers.recreateSwapchainImageViewsFrameBuffers();
 
-	const int vertexSize = sizeof(vertices[0]) * static_cast<int>(vertices.size());
+	const int64_t vertexSize = sizeof(g_vertices[0]) * static_cast<int>(g_vertices.size());
 	vkcpp::BufferAndDeviceMemoryMapped vertexBufferAndDeviceMemory(
-		vertexSize,
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		vertexSize,
+		(void*)g_vertices.data(),
 		deviceOriginal);
-
-	memcpy(vertexBufferAndDeviceMemory.m_mappedMemory, vertices.data(), (size_t)vertexSize);
-	vertexBufferAndDeviceMemory.unmapMemory();
 
 
 	{
-		UniformBuffersMemory  uniformBuffersMemory;
-		uniformBuffersMemory.createUniformBuffers(deviceOriginal, MAX_FRAMES_IN_FLIGHT);
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-			g_allDrawingFrames.drawingFrameAt(i).moveUniformMemoryBuffer(std::move(uniformBuffersMemory.m_uniformBufferMemory[i]));
+			g_allDrawingFrames.drawingFrameAt(i).moveUniformMemoryBuffer(
+				vkcpp::BufferAndDeviceMemoryMapped(
+					VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+					sizeof(ModelViewProjTransform),
+					deviceOriginal
+				));
 		}
 	}
 
