@@ -23,7 +23,7 @@
 
 
 struct Vertex {
-	glm::vec2	pos;
+	glm::vec3	pos;
 	glm::vec3	color;
 	glm::vec2 texCoord;
 
@@ -42,7 +42,7 @@ struct Vertex {
 
 		attributeDescriptions[0].binding = 0;
 		attributeDescriptions[0].location = 0;
-		attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
 		attributeDescriptions[0].offset = offsetof(Vertex, pos);
 
 		attributeDescriptions[1].binding = 0;
@@ -61,16 +61,21 @@ struct Vertex {
 
 
 const std::vector<Vertex> g_vertices = {
-	{{-0.9f, -0.9f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.9f, -0.9f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.9f, 0.9f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-	{{-0.9f, 0.9f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
+	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+
+	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
 };
 
 const std::vector<uint16_t> g_vertexIndices = {
-	0, 1, 2, 2, 3, 0
+	0, 1, 2, 2, 3, 0,
+	4, 5, 6, 6, 7, 4
 };
-
 
 const wchar_t* szTitle = TEXT("Vulkan Again");
 const wchar_t* szWindowClass = TEXT("Vulkan Again Class");
@@ -978,9 +983,9 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	}
 
 	vkcpp::ShaderModule	vertShaderModule =
-		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert3.spv", deviceOriginal);
+		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert4.spv", deviceOriginal);
 	vkcpp::ShaderModule	fragShaderModule =
-		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/frag3.spv", deviceOriginal);
+		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/frag4.spv", deviceOriginal);
 
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};
 	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
