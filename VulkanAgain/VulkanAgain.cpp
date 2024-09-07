@@ -319,7 +319,7 @@ public:
 
 	vkcpp::CommandPool		g_commandPoolOriginal;
 
-	vkcpp::Image_DeviceMemory	g_textureImageAndDeviceMemory;
+	vkcpp::Image_DeviceMemory	g_textureImage_deviceMemory;
 	vkcpp::ImageView g_textureImageView;
 	vkcpp::Sampler g_textureSampler;
 
@@ -446,6 +446,7 @@ public:
 
 	}
 };
+
 
 class PipelineColorBlendStateCreateInfo : public VkPipelineColorBlendStateCreateInfo {
 
@@ -610,28 +611,6 @@ public:
 };
 
 
-
-class ImageCreateInfo : public VkImageCreateInfo {
-
-public:
-
-	ImageCreateInfo()
-		: VkImageCreateInfo{} {
-		sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-
-		imageType = VK_IMAGE_TYPE_2D;
-
-		extent.depth = 1;
-		mipLevels = 1;
-		arrayLayers = 1;
-		initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-		samples = VK_SAMPLE_COUNT_1_BIT;
-		sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-	}
-};
-
 class ImageMemoryBarrier : public VkImageMemoryBarrier {
 
 public:
@@ -775,12 +754,10 @@ vkcpp::Image_DeviceMemory createImageAndDeviceMemory(
 	VkMemoryPropertyFlags properties,
 	vkcpp::Device device
 ) {
-	ImageCreateInfo imageCreateInfo;
+	vkcpp::ImageCreateInfo imageCreateInfo(format, usage);
 	imageCreateInfo.extent.width = width;
 	imageCreateInfo.extent.height = height;
-	imageCreateInfo.format = format;
 	imageCreateInfo.tiling = tiling;
-	imageCreateInfo.usage = usage;
 
 	return vkcpp::Image_DeviceMemory(imageCreateInfo, properties, device);
 
@@ -788,7 +765,8 @@ vkcpp::Image_DeviceMemory createImageAndDeviceMemory(
 
 
 
-vkcpp::Image_DeviceMemory createTextureImage(
+vkcpp::Image_DeviceMemory createTextureImageFromFile(
+	const char* fileName,
 	vkcpp::Device device,
 	vkcpp::CommandPool commandPool,
 	VkQueue graphicsQueue
@@ -797,7 +775,7 @@ vkcpp::Image_DeviceMemory createTextureImage(
 	int texHeight;
 	int texChannels;
 
-	stbi_uc* pixels = stbi_load("c:/vulkan/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	stbi_uc* pixels = stbi_load(fileName, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 	if (!pixels) {
 		throw std::runtime_error("failed to load texture image!");
 	}
@@ -813,15 +791,14 @@ vkcpp::Image_DeviceMemory createTextureImage(
 
 	stbi_image_free(pixels);
 
-	vkcpp::Image_DeviceMemory textureImageAndDeviceMemory =
-		createImageAndDeviceMemory(
-			texWidth,
-			texHeight,
-			VK_FORMAT_R8G8B8A8_SRGB,
-			VK_IMAGE_TILING_OPTIMAL,
-			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			device);
+	vkcpp::Image_DeviceMemory textureImageAndDeviceMemory(
+		texWidth,
+		texHeight,
+		VK_FORMAT_R8G8B8A8_SRGB,
+		VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		device);
 
 	transitionImageLayout(
 		textureImageAndDeviceMemory.m_image,
@@ -994,12 +971,16 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::CommandPool commandPoolOriginal(commandPoolCreateInfo, deviceOriginal);
 
 
-	vkcpp::Image_DeviceMemory textureImageAndDeviceMemory =
-		createTextureImage(deviceOriginal, commandPoolOriginal, vkGraphicsQueue);
+	vkcpp::Image_DeviceMemory textureImage_deviceMemory =
+		createTextureImageFromFile(
+			"c:/vulkan/texture.jpg", deviceOriginal, commandPoolOriginal, vkGraphicsQueue);
 
-	vkcpp::ImageViewCreateInfo textureImageViewCreateInfo(VK_IMAGE_VIEW_TYPE_2D);
-	textureImageViewCreateInfo.image = textureImageAndDeviceMemory.m_image;
-	textureImageViewCreateInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+	vkcpp::ImageViewCreateInfo textureImageViewCreateInfo(
+		VK_IMAGE_VIEW_TYPE_2D,
+		VK_FORMAT_R8G8B8A8_SRGB,
+		VK_IMAGE_ASPECT_COLOR_BIT);
+	textureImageViewCreateInfo.image = textureImage_deviceMemory.m_image;
+
 	vkcpp::ImageView textureImageView(textureImageViewCreateInfo, deviceOriginal);
 	vkcpp::SamplerCreateInfo textureSamplerCreateInfo;
 	vkcpp::Sampler textureSampler(textureSamplerCreateInfo, deviceOriginal);
@@ -1097,7 +1078,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_vertShaderModule = std::move(vertShaderModule);
 	globals.g_fragShaderModule = std::move(fragShaderModule);
 
-	globals.g_textureImageAndDeviceMemory = std::move(textureImageAndDeviceMemory);
+	globals.g_textureImage_deviceMemory = std::move(textureImage_deviceMemory);
 	globals.g_textureImageView = std::move(textureImageView);
 	globals.g_textureSampler = std::move(textureSampler);
 

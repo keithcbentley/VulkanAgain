@@ -154,6 +154,14 @@ namespace vkcpp {
 			return m_owner;
 		}
 
+		//Device getDevice() const
+		//	requires std::same_as<Owner_t, Device> {
+		//	if (!m_owner) {
+		//		throw NullHandleException();
+		//	}
+		//	return m_owner;
+		//}
+
 	};
 
 
@@ -342,14 +350,15 @@ namespace vkcpp {
 
 		uint32_t findMemoryTypeIndex(
 			uint32_t usableMemoryIndexBits,
-			VkMemoryPropertyFlags requiredProperties) const {
+			VkMemoryPropertyFlags requiredProperties
+		) const {
 			VkPhysicalDeviceMemoryProperties memProperties;
 			vkGetPhysicalDeviceMemoryProperties(m_vkPhysicalDevice, &memProperties);
 
-			for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-				if ((usableMemoryIndexBits & (1 << i))
-					&& (memProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties) {
-					return i;
+			for (uint32_t index = 0; index < memProperties.memoryTypeCount; index++) {
+				if ((usableMemoryIndexBits & (1 << index))
+					&& (memProperties.memoryTypes[index].propertyFlags & requiredProperties) == requiredProperties) {
+					return index;
 				}
 			}
 			throw std::runtime_error("failed to find suitable memory type!");
@@ -1378,6 +1387,30 @@ namespace vkcpp {
 
 	};
 
+	class ImageCreateInfo : public VkImageCreateInfo {
+
+	public:
+
+		ImageCreateInfo(
+			VkFormat vkFormat,
+			VkImageUsageFlags vkUsage)
+			: VkImageCreateInfo{} {
+			sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+			format = vkFormat;
+			usage = vkUsage;
+
+			imageType = VK_IMAGE_TYPE_2D;
+
+			extent.depth = 1;
+			mipLevels = 1;
+			arrayLayers = 1;
+			initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+			samples = VK_SAMPLE_COUNT_1_BIT;
+			sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		}
+	};
 
 	class Image : public HandleWithOwner<VkImage, Device> {
 
@@ -1392,9 +1425,9 @@ namespace vkcpp {
 	public:
 		Image() {}
 
-		Image(const VkImageCreateInfo& vkImageCreateInfo, Device device) {
+		Image(const ImageCreateInfo& imageCreateInfo, Device device) {
 			VkImage vkImage;
-			VkResult vkResult = vkCreateImage(device, &vkImageCreateInfo, nullptr, &vkImage);
+			VkResult vkResult = vkCreateImage(device, &imageCreateInfo, nullptr, &vkImage);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
@@ -1419,19 +1452,24 @@ namespace vkcpp {
 
 	};
 
+
+
 	class ImageViewCreateInfo : public VkImageViewCreateInfo {
 
 	public:
-		ImageViewCreateInfo(VkImageViewType vkImageViewType)
+		ImageViewCreateInfo(
+			VkImageViewType vkImageViewType,
+			VkFormat	vkFormat,
+			VkImageAspectFlags aspectFlags)
 			: VkImageViewCreateInfo{} {
 			sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			viewType = VK_IMAGE_VIEW_TYPE_2D;
 			viewType = vkImageViewType;
+			format = vkFormat;
+			subresourceRange.aspectMask = aspectFlags;
 			components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
 			components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 			components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
 			components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-			subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			subresourceRange.baseMipLevel = 0;
 			subresourceRange.levelCount = 1;
 			subresourceRange.baseArrayLayer = 0;
@@ -1440,6 +1478,7 @@ namespace vkcpp {
 
 
 	};
+
 
 	class ImageView : public HandleWithOwner<VkImageView> {
 
@@ -1515,11 +1554,11 @@ namespace vkcpp {
 
 
 		Image_DeviceMemory(
-			const VkImageCreateInfo& vkImageCreateInfo,
+			const ImageCreateInfo& imageCreateInfo,
 			VkMemoryPropertyFlags properties,
 			Device device
 		) {
-			vkcpp::Image image(vkImageCreateInfo, device);
+			Image image(imageCreateInfo, device);
 			DeviceMemory deviceMemory = image.allocateDeviceMemory(properties);
 
 			VkResult vkResult = vkBindImageMemory(device, image, deviceMemory, 0);
@@ -1530,6 +1569,25 @@ namespace vkcpp {
 			new(this) Image_DeviceMemory(std::move(image), std::move(deviceMemory));
 
 		}
+
+		Image_DeviceMemory(
+			uint32_t width,
+			uint32_t height,
+			VkFormat format,
+			VkImageTiling tiling,
+			VkImageUsageFlags usage,
+			VkMemoryPropertyFlags properties,
+			Device device
+		) {
+			ImageCreateInfo imageCreateInfo(format, usage);
+			imageCreateInfo.extent.width = width;
+			imageCreateInfo.extent.height = height;
+			imageCreateInfo.tiling = tiling;
+
+			new(this) Image_DeviceMemory(imageCreateInfo, properties, device);
+
+		}
+
 
 	};
 
@@ -1634,8 +1692,10 @@ namespace vkcpp {
 			VkFormat	swapchainImageFormat
 		) {
 			std::vector<VkImage> swapchainImages = swapchain.getImages();
-			ImageViewCreateInfo imageViewCreateInfo(VK_IMAGE_VIEW_TYPE_2D);
-			imageViewCreateInfo.format = swapchainImageFormat;
+			ImageViewCreateInfo imageViewCreateInfo(
+				VK_IMAGE_VIEW_TYPE_2D,
+				swapchainImageFormat,
+				VK_IMAGE_ASPECT_COLOR_BIT);
 			return ImageView::createVkImageViews(swapchainImages, imageViewCreateInfo, swapchain.getOwner());
 		}
 
@@ -1783,7 +1843,34 @@ namespace vkcpp {
 				m_swapchainImageViews,
 				m_vkSwapchainCreateInfo.imageExtent,
 				m_renderPass);
+			createDepthBuffer(m_vkSwapchainCreateInfo.imageExtent, s_device);
 		}
+
+		void createDepthBuffer(
+			VkExtent2D vkExtent2D,
+			vkcpp::Device device
+		) {
+			vkcpp::ImageCreateInfo image_info(
+				VK_FORMAT_D16_UNORM, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+			image_info.imageType = VK_IMAGE_TYPE_2D;
+
+			image_info.extent.width = vkExtent2D.width;
+			image_info.extent.height = vkExtent2D.height;
+
+			vkcpp::Image_DeviceMemory image_deviceMemory(
+				image_info, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, device);
+
+			vkcpp::ImageViewCreateInfo view_info(
+				VK_IMAGE_VIEW_TYPE_2D,
+				VK_FORMAT_D16_UNORM,
+				VK_IMAGE_ASPECT_DEPTH_BIT);
+			view_info.image = image_deviceMemory.m_image;
+
+			vkcpp::ImageView imageView(view_info, device);
+
+		}
+
+
 
 	};
 
