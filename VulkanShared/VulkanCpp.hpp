@@ -1410,6 +1410,13 @@ namespace vkcpp {
 			sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 		}
+
+		ImageCreateInfo& setExtent(VkExtent2D  vkExtent2D) {
+			extent.width = vkExtent2D.width;
+			extent.height = vkExtent2D.height;
+			return *this;
+		}
+
 	};
 
 	class Image : public HandleWithOwner<VkImage, Device> {
@@ -1452,8 +1459,6 @@ namespace vkcpp {
 
 	};
 
-
-
 	class ImageViewCreateInfo : public VkImageViewCreateInfo {
 
 	public:
@@ -1478,7 +1483,6 @@ namespace vkcpp {
 
 
 	};
-
 
 	class ImageView : public HandleWithOwner<VkImageView> {
 
@@ -1520,10 +1524,9 @@ namespace vkcpp {
 
 	};
 
+	class Image_Memory {
 
-	class Image_DeviceMemory {
-
-		Image_DeviceMemory(Image&& image, DeviceMemory&& deviceMemory)
+		Image_Memory(Image&& image, DeviceMemory&& deviceMemory)
 			: m_image(std::move(image))
 			, m_deviceMemory(std::move(deviceMemory)) {
 		}
@@ -1533,27 +1536,27 @@ namespace vkcpp {
 		Image			m_image;
 		DeviceMemory	m_deviceMemory;
 
-		Image_DeviceMemory() {}
+		Image_Memory() {}
 
-		Image_DeviceMemory(const Image_DeviceMemory&) = delete;
-		Image_DeviceMemory& operator=(const Image_DeviceMemory&) = delete;
+		Image_Memory(const Image_Memory&) = delete;
+		Image_Memory& operator=(const Image_Memory&) = delete;
 
-		Image_DeviceMemory(Image_DeviceMemory&& other) noexcept
+		Image_Memory(Image_Memory&& other) noexcept
 			: m_image(std::move(other.m_image))
 			, m_deviceMemory(std::move(other.m_deviceMemory)) {
 		}
 
-		Image_DeviceMemory& operator=(Image_DeviceMemory&& other) noexcept {
+		Image_Memory& operator=(Image_Memory&& other) noexcept {
 			if (this == &other) {
 				return *this;
 			}
-			(*this).~Image_DeviceMemory();
-			new(this) Image_DeviceMemory(std::move(other));
+			(*this).~Image_Memory();
+			new(this) Image_Memory(std::move(other));
 			return *this;
 		}
 
 
-		Image_DeviceMemory(
+		Image_Memory(
 			const ImageCreateInfo& imageCreateInfo,
 			VkMemoryPropertyFlags properties,
 			Device device
@@ -1566,28 +1569,46 @@ namespace vkcpp {
 				throw Exception(vkResult);
 			}
 
-			new(this) Image_DeviceMemory(std::move(image), std::move(deviceMemory));
+			new(this) Image_Memory(std::move(image), std::move(deviceMemory));
 
 		}
 
-		Image_DeviceMemory(
-			uint32_t width,
-			uint32_t height,
+		Image_Memory(
+			VkExtent2D	vkExtent2D,
 			VkFormat format,
-			VkImageTiling tiling,
 			VkImageUsageFlags usage,
 			VkMemoryPropertyFlags properties,
 			Device device
 		) {
 			ImageCreateInfo imageCreateInfo(format, usage);
-			imageCreateInfo.extent.width = width;
-			imageCreateInfo.extent.height = height;
-			imageCreateInfo.tiling = tiling;
+			imageCreateInfo.setExtent(vkExtent2D);
 
-			new(this) Image_DeviceMemory(imageCreateInfo, properties, device);
+			new(this) Image_Memory(imageCreateInfo, properties, device);
 
 		}
 
+	};
+
+
+	class Image_Memory_View {
+
+
+	public:
+		Image			m_image;
+		DeviceMemory	m_deviceMemory;
+		ImageView		m_imageView;
+
+		Image_Memory_View() {}
+
+		Image_Memory_View(
+			Image&& image,
+			DeviceMemory&& deviceMemory,
+			ImageView&& imageView)
+			: m_image(std::move(image))
+			, m_deviceMemory(std::move(deviceMemory))
+			, m_imageView(std::move(imageView)) {
+
+		}
 
 	};
 
@@ -1853,11 +1874,9 @@ namespace vkcpp {
 			vkcpp::ImageCreateInfo image_info(
 				VK_FORMAT_D16_UNORM, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
 			image_info.imageType = VK_IMAGE_TYPE_2D;
+			image_info.setExtent(vkExtent2D);
 
-			image_info.extent.width = vkExtent2D.width;
-			image_info.extent.height = vkExtent2D.height;
-
-			vkcpp::Image_DeviceMemory image_deviceMemory(
+			vkcpp::Image_Memory image_deviceMemory(
 				image_info, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, device);
 
 			vkcpp::ImageViewCreateInfo view_info(
@@ -1873,7 +1892,6 @@ namespace vkcpp {
 
 
 	};
-
 
 
 	class DescriptorSetUpdater {
