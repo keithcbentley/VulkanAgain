@@ -1582,9 +1582,7 @@ namespace vkcpp {
 		) {
 			ImageCreateInfo imageCreateInfo(format, usage);
 			imageCreateInfo.setExtent(vkExtent2D);
-
 			new(this) Image_Memory(imageCreateInfo, properties, device);
-
 		}
 
 	};
@@ -1671,9 +1669,10 @@ namespace vkcpp {
 
 		RenderPass	m_renderPass;
 
-		Swapchain	m_swapchainOriginal;
+		Swapchain	m_swapchain;
 		std::vector<VkImageView>	m_swapchainImageViews;
 		std::vector<VkFramebuffer>	m_swapchainFrameBuffers;
+		Image_Memory_View			m_depthBuffer;
 
 	private:
 
@@ -1701,7 +1700,7 @@ namespace vkcpp {
 			if (!s_device) {
 				return;
 			}
-			if (m_swapchainOriginal) {
+			if (m_swapchain) {
 				vkDeviceWaitIdle(s_device);
 				destroyFrameBuffers();
 				destroyImageViews();
@@ -1792,7 +1791,7 @@ namespace vkcpp {
 			: m_vkSwapchainCreateInfo(std::move(other.m_vkSwapchainCreateInfo))
 			, m_surface(std::move(other.m_surface))
 			, m_renderPass(std::move(other.m_renderPass))
-			, m_swapchainOriginal(std::move(other.m_swapchainOriginal))
+			, m_swapchain(std::move(other.m_swapchain))
 			, m_swapchainImageViews(std::move(other.m_swapchainImageViews))
 			, m_swapchainFrameBuffers(std::move(other.m_swapchainFrameBuffers)) {
 			other.makeEmpty();
@@ -1815,21 +1814,20 @@ namespace vkcpp {
 
 
 		operator bool() {
-			return m_swapchainOriginal != nullptr;
+			return !!m_swapchain;
 		}
 
 		VkSwapchainKHR vkSwapchain() {
-			VkSwapchainKHR vkSwapchain = m_swapchainOriginal;
+			VkSwapchainKHR vkSwapchain = m_swapchain;	// Need to force a type conversion for return value.
 			return vkSwapchain;
 		}
 
 		bool canDraw() {
-			VkSwapchainKHR vkSwapchain = m_swapchainOriginal;
-			return vkSwapchain != nullptr;
+			return !!(*this);
 		}
 
 		VkExtent2D getImageExtent() const {
-			return m_swapchainOriginal.imageExtent();
+			return m_swapchain.imageExtent();
 		}
 
 		RenderPass getRenderPass() const {
@@ -1855,19 +1853,19 @@ namespace vkcpp {
 			destroyFrameBuffers();
 			destroyImageViews();
 
-			m_swapchainOriginal = std::move(createSwapchain(m_vkSwapchainCreateInfo, m_surface));
-			if (!m_swapchainOriginal) {
+			m_swapchain = std::move(createSwapchain(m_vkSwapchainCreateInfo, m_surface));
+			if (!m_swapchain) {
 				return;
 			}
-			m_swapchainImageViews = createSwapchainImageViews(m_swapchainOriginal, m_vkSwapchainCreateInfo.imageFormat);
+			m_swapchainImageViews = createSwapchainImageViews(m_swapchain, m_vkSwapchainCreateInfo.imageFormat);
 			m_swapchainFrameBuffers = createSwapchainFrameBuffers(
 				m_swapchainImageViews,
 				m_vkSwapchainCreateInfo.imageExtent,
 				m_renderPass);
-			createDepthBuffer(m_vkSwapchainCreateInfo.imageExtent, s_device);
+			m_depthBuffer = std::move(createDepthBuffer(m_vkSwapchainCreateInfo.imageExtent, s_device));
 		}
 
-		void createDepthBuffer(
+		Image_Memory_View createDepthBuffer(
 			VkExtent2D vkExtent2D,
 			vkcpp::Device device
 		) {
@@ -1876,16 +1874,21 @@ namespace vkcpp {
 			image_info.imageType = VK_IMAGE_TYPE_2D;
 			image_info.setExtent(vkExtent2D);
 
-			vkcpp::Image_Memory image_deviceMemory(
+			vkcpp::Image_Memory image_memory(
 				image_info, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, device);
 
 			vkcpp::ImageViewCreateInfo view_info(
 				VK_IMAGE_VIEW_TYPE_2D,
 				VK_FORMAT_D16_UNORM,
 				VK_IMAGE_ASPECT_DEPTH_BIT);
-			view_info.image = image_deviceMemory.m_image;
+			view_info.image = image_memory.m_image;
 
 			vkcpp::ImageView imageView(view_info, device);
+
+			return Image_Memory_View(
+				std::move(image_memory.m_image),
+				std::move(image_memory.m_deviceMemory),
+				std::move(imageView));
 
 		}
 
