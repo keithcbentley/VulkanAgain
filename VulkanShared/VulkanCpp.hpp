@@ -15,33 +15,8 @@ concept DefaultCopyConstructible = requires (T t) {
 };
 
 template<typename T>
-concept VirtualDestructor = requires{
-	std::has_virtual_destructor_v<T>;
-};
-
-template<typename T>
-concept DefaultCopyAssignable = requires (T t1, T t2) {
-	t1 = t2;
-};
-
-template<typename T>
-concept DefaultMoveConstructible = requires (T t) {
-	T(std::move(t));
-};
-
-template<typename T>
-concept DefaultMoveAssignable = requires (T t1, T t2) {
-	t1 = std::move(t2);
-};
-
-template<typename T>
 concept BoolConvertible = requires (T t) {
 	t.operator bool();
-};
-
-template<typename T>
-concept Cloneable = requires (T t) {
-	t.clone();
 };
 
 
@@ -806,9 +781,9 @@ namespace vkcpp {
 	};
 
 
-	class BufferAndDeviceMemoryMapped {
+	class Buffer_DeviceMemory {
 
-		BufferAndDeviceMemoryMapped(Buffer&& buffer, DeviceMemory&& deviceMemory, void* mappedMemory)
+		Buffer_DeviceMemory(Buffer&& buffer, DeviceMemory&& deviceMemory, void* mappedMemory)
 			: m_buffer(std::move(buffer))
 			, m_deviceMemory(std::move(deviceMemory))
 			, m_mappedMemory(mappedMemory) {
@@ -820,28 +795,28 @@ namespace vkcpp {
 		DeviceMemory	m_deviceMemory;
 		void* m_mappedMemory = nullptr;
 
-		BufferAndDeviceMemoryMapped() {}
+		Buffer_DeviceMemory() {}
 
-		BufferAndDeviceMemoryMapped(const BufferAndDeviceMemoryMapped&) = delete;
-		BufferAndDeviceMemoryMapped& operator=(const BufferAndDeviceMemoryMapped&) = delete;
+		Buffer_DeviceMemory(const Buffer_DeviceMemory&) = delete;
+		Buffer_DeviceMemory& operator=(const Buffer_DeviceMemory&) = delete;
 
-		BufferAndDeviceMemoryMapped(BufferAndDeviceMemoryMapped&& other) noexcept
+		Buffer_DeviceMemory(Buffer_DeviceMemory&& other) noexcept
 			: m_buffer(std::move(other.m_buffer))
 			, m_deviceMemory(std::move(other.m_deviceMemory))
 			, m_mappedMemory(other.m_mappedMemory) {
 		}
 
-		BufferAndDeviceMemoryMapped& operator=(BufferAndDeviceMemoryMapped&& other) noexcept {
+		Buffer_DeviceMemory& operator=(Buffer_DeviceMemory&& other) noexcept {
 			if (this == &other) {
 				return *this;
 			}
-			(*this).~BufferAndDeviceMemoryMapped();
-			new(this) BufferAndDeviceMemoryMapped(std::move(other));
+			(*this).~Buffer_DeviceMemory();
+			new(this) Buffer_DeviceMemory(std::move(other));
 			return *this;
 		}
 
 
-		BufferAndDeviceMemoryMapped(
+		Buffer_DeviceMemory(
 			VkBufferUsageFlags usage,
 			VkMemoryPropertyFlags properties,
 			int64_t size,
@@ -865,18 +840,18 @@ namespace vkcpp {
 			void* mappedMemory;
 			vkMapMemory(device, deviceMemory, 0, size, 0, &mappedMemory);
 
-			new(this) BufferAndDeviceMemoryMapped(std::move(buffer), std::move(deviceMemory), mappedMemory);
+			new(this) Buffer_DeviceMemory(std::move(buffer), std::move(deviceMemory), mappedMemory);
 
 		}
 
-		BufferAndDeviceMemoryMapped(
+		Buffer_DeviceMemory(
 			VkBufferUsageFlags usage,
 			VkMemoryPropertyFlags properties,
 			int64_t size,
 			void* pSrcMem,
 			Device device
 		) {
-			new(this)BufferAndDeviceMemoryMapped(
+			new(this)Buffer_DeviceMemory(
 				usage,
 				properties,
 				size,
@@ -1447,10 +1422,11 @@ namespace vkcpp {
 	class ImageViewCreateInfo : public VkImageViewCreateInfo {
 
 	public:
-		ImageViewCreateInfo()
-			: VkImageViewCreateInfo() {
+		ImageViewCreateInfo(VkImageViewType vkImageViewType)
+			: VkImageViewCreateInfo{} {
 			sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 			viewType = VK_IMAGE_VIEW_TYPE_2D;
+			viewType = vkImageViewType;
 			components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
 			components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 			components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -1506,9 +1482,9 @@ namespace vkcpp {
 	};
 
 
-	class ImageAndDeviceMemory {
+	class Image_DeviceMemory {
 
-		ImageAndDeviceMemory(Image&& image, DeviceMemory&& deviceMemory)
+		Image_DeviceMemory(Image&& image, DeviceMemory&& deviceMemory)
 			: m_image(std::move(image))
 			, m_deviceMemory(std::move(deviceMemory)) {
 		}
@@ -1518,27 +1494,27 @@ namespace vkcpp {
 		Image			m_image;
 		DeviceMemory	m_deviceMemory;
 
-		ImageAndDeviceMemory() {}
+		Image_DeviceMemory() {}
 
-		ImageAndDeviceMemory(const ImageAndDeviceMemory&) = delete;
-		ImageAndDeviceMemory& operator=(const ImageAndDeviceMemory&) = delete;
+		Image_DeviceMemory(const Image_DeviceMemory&) = delete;
+		Image_DeviceMemory& operator=(const Image_DeviceMemory&) = delete;
 
-		ImageAndDeviceMemory(ImageAndDeviceMemory&& other) noexcept
+		Image_DeviceMemory(Image_DeviceMemory&& other) noexcept
 			: m_image(std::move(other.m_image))
 			, m_deviceMemory(std::move(other.m_deviceMemory)) {
 		}
 
-		ImageAndDeviceMemory& operator=(ImageAndDeviceMemory&& other) noexcept {
+		Image_DeviceMemory& operator=(Image_DeviceMemory&& other) noexcept {
 			if (this == &other) {
 				return *this;
 			}
-			(*this).~ImageAndDeviceMemory();
-			new(this) ImageAndDeviceMemory(std::move(other));
+			(*this).~Image_DeviceMemory();
+			new(this) Image_DeviceMemory(std::move(other));
 			return *this;
 		}
 
 
-		ImageAndDeviceMemory(
+		Image_DeviceMemory(
 			const VkImageCreateInfo& vkImageCreateInfo,
 			VkMemoryPropertyFlags properties,
 			Device device
@@ -1551,7 +1527,7 @@ namespace vkcpp {
 				throw Exception(vkResult);
 			}
 
-			new(this) ImageAndDeviceMemory(std::move(image), std::move(deviceMemory));
+			new(this) Image_DeviceMemory(std::move(image), std::move(deviceMemory));
 
 		}
 
@@ -1606,7 +1582,7 @@ namespace vkcpp {
 
 	};
 
-	class SwapchainImageViewsFrameBuffers {
+	class Swapchain_ImageViews_FrameBuffers {
 
 	public:
 		static inline	Device		s_device;
@@ -1658,7 +1634,7 @@ namespace vkcpp {
 			VkFormat	swapchainImageFormat
 		) {
 			std::vector<VkImage> swapchainImages = swapchain.getImages();
-			ImageViewCreateInfo imageViewCreateInfo{};
+			ImageViewCreateInfo imageViewCreateInfo(VK_IMAGE_VIEW_TYPE_2D);
 			imageViewCreateInfo.format = swapchainImageFormat;
 			return ImageView::createVkImageViews(swapchainImages, imageViewCreateInfo, swapchain.getOwner());
 		}
@@ -1715,12 +1691,12 @@ namespace vkcpp {
 
 	public:
 
-		SwapchainImageViewsFrameBuffers() {}
-		~SwapchainImageViewsFrameBuffers() {
+		Swapchain_ImageViews_FrameBuffers() {}
+		~Swapchain_ImageViews_FrameBuffers() {
 			destroy();
 		}
 
-		SwapchainImageViewsFrameBuffers(
+		Swapchain_ImageViews_FrameBuffers(
 			const VkSwapchainCreateInfoKHR& vkSwapchainCreateInfo,
 			Surface surface)
 			: m_vkSwapchainCreateInfo(vkSwapchainCreateInfo)
@@ -1728,10 +1704,10 @@ namespace vkcpp {
 
 		}
 
-		SwapchainImageViewsFrameBuffers(const SwapchainImageViewsFrameBuffers&) = delete;
-		SwapchainImageViewsFrameBuffers& operator=(const SwapchainImageViewsFrameBuffers&) = delete;
+		Swapchain_ImageViews_FrameBuffers(const Swapchain_ImageViews_FrameBuffers&) = delete;
+		Swapchain_ImageViews_FrameBuffers& operator=(const Swapchain_ImageViews_FrameBuffers&) = delete;
 
-		SwapchainImageViewsFrameBuffers(SwapchainImageViewsFrameBuffers&& other) noexcept
+		Swapchain_ImageViews_FrameBuffers(Swapchain_ImageViews_FrameBuffers&& other) noexcept
 			: m_vkSwapchainCreateInfo(std::move(other.m_vkSwapchainCreateInfo))
 			, m_surface(std::move(other.m_surface))
 			, m_renderPass(std::move(other.m_renderPass))
@@ -1741,12 +1717,12 @@ namespace vkcpp {
 			other.makeEmpty();
 		}
 
-		SwapchainImageViewsFrameBuffers& operator=(SwapchainImageViewsFrameBuffers&& other) noexcept {
+		Swapchain_ImageViews_FrameBuffers& operator=(Swapchain_ImageViews_FrameBuffers&& other) noexcept {
 			if (this == &other) {
 				return *this;
 			}
-			(*this).~SwapchainImageViewsFrameBuffers();
-			new(this) SwapchainImageViewsFrameBuffers(std::move(other));
+			(*this).~Swapchain_ImageViews_FrameBuffers();
+			new(this) Swapchain_ImageViews_FrameBuffers(std::move(other));
 			other.makeEmpty();
 			return *this;
 		}

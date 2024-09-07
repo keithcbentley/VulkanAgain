@@ -112,7 +112,7 @@ public:
 	vkcpp::Semaphore m_imageAvailableSemaphore;
 	vkcpp::Semaphore m_renderFinishedSemaphore;
 	vkcpp::CommandBuffer	m_commandBuffer;;
-	vkcpp::BufferAndDeviceMemoryMapped	m_uniformBufferMemory;
+	vkcpp::Buffer_DeviceMemory	m_uniformBufferMemory;
 	vkcpp::DescriptorSet	m_descriptorSet;
 
 	DrawingFrame() {};
@@ -138,7 +138,7 @@ public:
 		m_commandBuffer = std::move(vkCommandBuffer);
 	}
 
-	void moveUniformMemoryBuffer(vkcpp::BufferAndDeviceMemoryMapped&& bufferAndDeviceMemoryMapped) {
+	void moveUniformMemoryBuffer(vkcpp::Buffer_DeviceMemory&& bufferAndDeviceMemoryMapped) {
 		m_uniformBufferMemory = std::move(bufferAndDeviceMemoryMapped);
 	}
 
@@ -203,7 +203,7 @@ vkcpp::VulkanInstance createVulkanInstance() {
 void recordCommandBuffer(
 	vkcpp::CommandBuffer		commandBuffer,
 	uint32_t			swapchainImageIndex,
-	vkcpp::SwapchainImageViewsFrameBuffers& swapchainImageViewsFrameBuffers,
+	vkcpp::Swapchain_ImageViews_FrameBuffers& swapchainImageViewsFrameBuffers,
 	vkcpp::Buffer			vertexBuffer,
 	vkcpp::Buffer			vertexIndexBuffer,
 	VkDescriptorSet		descriptorSet,
@@ -303,7 +303,7 @@ public:
 	vkcpp::RenderPass g_renderPassOriginal;
 
 	uint32_t						g_swapchainMinImageCount = SWAP_CHAIN_IMAGE_COUNT;
-	vkcpp::SwapchainImageViewsFrameBuffers	g_swapchainImageViewsFrameBuffers;
+	vkcpp::Swapchain_ImageViews_FrameBuffers	g_swapchainImageViewsFrameBuffers;
 
 	vkcpp::ShaderModule g_vertShaderModule;
 	vkcpp::ShaderModule g_fragShaderModule;
@@ -314,12 +314,12 @@ public:
 	vkcpp::PipelineLayout	g_pipelineLayout;
 	vkcpp::GraphicsPipeline	g_graphicsPipeline;
 
-	vkcpp::BufferAndDeviceMemoryMapped	g_vertexBufferAndDeviceMemory;
-	vkcpp::BufferAndDeviceMemoryMapped	g_vertexIndicesBufferAndDeviceMemory;
+	vkcpp::Buffer_DeviceMemory	g_vertexBufferAndDeviceMemory;
+	vkcpp::Buffer_DeviceMemory	g_vertexIndicesBufferAndDeviceMemory;
 
 	vkcpp::CommandPool		g_commandPoolOriginal;
 
-	vkcpp::ImageAndDeviceMemory	g_textureImageAndDeviceMemory;
+	vkcpp::Image_DeviceMemory	g_textureImageAndDeviceMemory;
 	vkcpp::ImageView g_textureImageView;
 	vkcpp::Sampler g_textureSampler;
 
@@ -766,7 +766,7 @@ void copyBufferToImage(
 
 
 
-vkcpp::ImageAndDeviceMemory createImageAndDeviceMemory(
+vkcpp::Image_DeviceMemory createImageAndDeviceMemory(
 	uint32_t width,
 	uint32_t height,
 	VkFormat format,
@@ -782,13 +782,13 @@ vkcpp::ImageAndDeviceMemory createImageAndDeviceMemory(
 	imageCreateInfo.tiling = tiling;
 	imageCreateInfo.usage = usage;
 
-	return vkcpp::ImageAndDeviceMemory(imageCreateInfo, properties, device);
+	return vkcpp::Image_DeviceMemory(imageCreateInfo, properties, device);
 
 }
 
 
 
-vkcpp::ImageAndDeviceMemory createTextureImage(
+vkcpp::Image_DeviceMemory createTextureImage(
 	vkcpp::Device device,
 	vkcpp::CommandPool commandPool,
 	VkQueue graphicsQueue
@@ -804,7 +804,7 @@ vkcpp::ImageAndDeviceMemory createTextureImage(
 
 	const VkDeviceSize imageSize = texWidth * texHeight * 4;
 
-	vkcpp::BufferAndDeviceMemoryMapped stagingBufferAndDeviceMemoryMapped(
+	vkcpp::Buffer_DeviceMemory stagingBufferAndDeviceMemoryMapped(
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		imageSize,
@@ -813,7 +813,7 @@ vkcpp::ImageAndDeviceMemory createTextureImage(
 
 	stbi_image_free(pixels);
 
-	vkcpp::ImageAndDeviceMemory textureImageAndDeviceMemory =
+	vkcpp::Image_DeviceMemory textureImageAndDeviceMemory =
 		createImageAndDeviceMemory(
 			texWidth,
 			texHeight,
@@ -927,7 +927,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::RenderPass renderPassOriginal(vkRenderPassCreateInfo, deviceOriginal);
 
-	vkcpp::SwapchainImageViewsFrameBuffers::setDevice(deviceOriginal);
+	vkcpp::Swapchain_ImageViews_FrameBuffers::setDevice(deviceOriginal);
 
 	const VkColorSpaceKHR swapchainImageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 	const VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
@@ -949,13 +949,13 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
 
 
-	vkcpp::SwapchainImageViewsFrameBuffers swapchainImageViewsFrameBuffers(swapchainCreateInfo, surfaceOriginal);
+	vkcpp::Swapchain_ImageViews_FrameBuffers swapchainImageViewsFrameBuffers(swapchainCreateInfo, surfaceOriginal);
 	swapchainImageViewsFrameBuffers.setRenderPass(renderPassOriginal);
 
 	swapchainImageViewsFrameBuffers.recreateSwapchainImageViewsFrameBuffers();
 
 	const int64_t vertexSize = sizeof(g_vertices[0]) * static_cast<int>(g_vertices.size());
-	vkcpp::BufferAndDeviceMemoryMapped vertexBufferAndDeviceMemory(
+	vkcpp::Buffer_DeviceMemory vertexBufferAndDeviceMemory(
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		vertexSize,
@@ -963,7 +963,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		deviceOriginal);
 
 	const int64_t vertexIndexSize = sizeof(g_vertexIndices[0]) * static_cast<int>(g_vertexIndices.size());
-	vkcpp::BufferAndDeviceMemoryMapped vertexIndicesBufferAndDeviceMemory(
+	vkcpp::Buffer_DeviceMemory vertexIndicesBufferAndDeviceMemory(
 		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		vertexIndexSize,
@@ -973,7 +973,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	{
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 			g_allDrawingFrames.drawingFrameAt(i).moveUniformMemoryBuffer(
-				vkcpp::BufferAndDeviceMemoryMapped(
+				vkcpp::Buffer_DeviceMemory(
 					VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 					sizeof(ModelViewProjTransform),
@@ -994,10 +994,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::CommandPool commandPoolOriginal(commandPoolCreateInfo, deviceOriginal);
 
 
-	vkcpp::ImageAndDeviceMemory textureImageAndDeviceMemory =
+	vkcpp::Image_DeviceMemory textureImageAndDeviceMemory =
 		createTextureImage(deviceOriginal, commandPoolOriginal, vkGraphicsQueue);
 
-	vkcpp::ImageViewCreateInfo textureImageViewCreateInfo;
+	vkcpp::ImageViewCreateInfo textureImageViewCreateInfo(VK_IMAGE_VIEW_TYPE_2D);
 	textureImageViewCreateInfo.image = textureImageAndDeviceMemory.m_image;
 	textureImageViewCreateInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
 	vkcpp::ImageView textureImageView(textureImageViewCreateInfo, deviceOriginal);
@@ -1104,7 +1104,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 }
 
 void updateUniformBuffer(
-	vkcpp::BufferAndDeviceMemoryMapped& uniformBufferMemory,
+	vkcpp::Buffer_DeviceMemory& uniformBufferMemory,
 	const VkExtent2D				swapchainImageExtent
 ) {
 	static auto startTime = std::chrono::high_resolution_clock::now();
