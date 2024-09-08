@@ -1135,7 +1135,6 @@ namespace vkcpp {
 			m_poolSizes.clear();
 			VkDescriptorPoolSize vkDescriptorPoolSize;
 			for (std::pair<VkDescriptorType, int> kv : m_poolSizesMap) {
-				std::cout << kv.first << " " << kv.second << "\n";
 				vkDescriptorPoolSize.type = kv.first;
 				vkDescriptorPoolSize.descriptorCount = kv.second;
 				m_poolSizes.push_back(vkDescriptorPoolSize);
@@ -1707,6 +1706,7 @@ namespace vkcpp {
 			}
 		}
 
+		// TODO: make these static functions non-static?
 		static 	std::vector<VkImageView> createSwapchainImageViews(
 			Swapchain	swapchain,
 			VkFormat	swapchainImageFormat
@@ -1723,20 +1723,22 @@ namespace vkcpp {
 		static std::vector<VkFramebuffer> createSwapchainFrameBuffers(
 			std::vector<VkImageView> swapchainImageViews,
 			VkExtent2D	swapchainExtent,
+			vkcpp::ImageView depthBufferImageView,
 			VkRenderPass	vkRenderPass) {
 			std::vector<VkFramebuffer>	swapchainFrameBuffers;
 
 			swapchainFrameBuffers.resize(swapchainImageViews.size());
 			for (size_t i = 0; i < swapchainImageViews.size(); i++) {
-				VkImageView attachments[] = {
-					swapchainImageViews[i]
+				std::array<VkImageView, 2> attachments = {
+					swapchainImageViews[i],
+					depthBufferImageView,
 				};
 
 				VkFramebufferCreateInfo framebufferInfo{};
 				framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 				framebufferInfo.renderPass = vkRenderPass;
-				framebufferInfo.attachmentCount = 1;
-				framebufferInfo.pAttachments = attachments;
+				framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+				framebufferInfo.pAttachments = attachments.data();
 				framebufferInfo.width = swapchainExtent.width;
 				framebufferInfo.height = swapchainExtent.height;
 				framebufferInfo.layers = 1;
@@ -1858,32 +1860,31 @@ namespace vkcpp {
 				return;
 			}
 			m_swapchainImageViews = createSwapchainImageViews(m_swapchain, m_vkSwapchainCreateInfo.imageFormat);
+			m_depthBuffer = std::move(createDepthBuffer(m_vkSwapchainCreateInfo.imageExtent, s_device));
 			m_swapchainFrameBuffers = createSwapchainFrameBuffers(
 				m_swapchainImageViews,
 				m_vkSwapchainCreateInfo.imageExtent,
+				m_depthBuffer.m_imageView,
 				m_renderPass);
-			m_depthBuffer = std::move(createDepthBuffer(m_vkSwapchainCreateInfo.imageExtent, s_device));
 		}
 
 		Image_Memory_View createDepthBuffer(
 			VkExtent2D vkExtent2D,
 			vkcpp::Device device
 		) {
-			vkcpp::ImageCreateInfo image_info(
-				VK_FORMAT_D16_UNORM, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
-			image_info.imageType = VK_IMAGE_TYPE_2D;
-			image_info.setExtent(vkExtent2D);
-
+			vkcpp::ImageCreateInfo imageCreateInfo(
+				VK_FORMAT_D32_SFLOAT, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+			imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+			imageCreateInfo.setExtent(vkExtent2D);
 			vkcpp::Image_Memory image_memory(
-				image_info, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, device);
+				imageCreateInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, device);
 
-			vkcpp::ImageViewCreateInfo view_info(
+			vkcpp::ImageViewCreateInfo imageViewCreateInfo(
 				VK_IMAGE_VIEW_TYPE_2D,
-				VK_FORMAT_D16_UNORM,
+				VK_FORMAT_D32_SFLOAT,
 				VK_IMAGE_ASPECT_DEPTH_BIT);
-			view_info.image = image_memory.m_image;
-
-			vkcpp::ImageView imageView(view_info, device);
+			imageViewCreateInfo.image = image_memory.m_image;
+			vkcpp::ImageView imageView(imageViewCreateInfo, device);
 
 			return Image_Memory_View(
 				std::move(image_memory.m_image),
@@ -1952,7 +1953,7 @@ namespace vkcpp {
 		}
 
 		void addWriteDescriptor(
-			int				bindingIndex,
+			int	bindingIndex,
 			VkDescriptorType vkDescriptorType,
 			ImageView imageView,
 			Sampler sampler) {

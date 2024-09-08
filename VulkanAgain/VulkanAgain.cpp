@@ -220,9 +220,13 @@ void recordCommandBuffer(
 	renderPassInfo.framebuffer = swapchainImageViewsFrameBuffers.getFrameBuffer(swapchainImageIndex);
 	renderPassInfo.renderArea.offset = { 0, 0 };
 	renderPassInfo.renderArea.extent = swapchainImageExtent;
-	VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
-	renderPassInfo.clearValueCount = 1;
-	renderPassInfo.pClearValues = &clearColor;
+
+	std::array<VkClearValue, 2> clearValues{};
+	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f } };
+	clearValues[1].depthStencil = { 1.0f, 0 };
+	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+	renderPassInfo.pClearValues = clearValues.data();
+
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
@@ -493,6 +497,9 @@ class GraphicsPipelineConfig {
 
 	PipelineColorBlendStateCreateInfo m_pipelineColorBlendStateCreateInfo{};
 
+	VkPipelineDepthStencilStateCreateInfo m_depthStencil{};
+
+
 
 public:
 
@@ -597,6 +604,15 @@ public:
 		m_dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 		m_dynamicState.dynamicStateCount = static_cast<uint32_t>(m_dynamicStates.size());
 		m_dynamicState.pDynamicStates = m_dynamicStates.data();
+
+		m_depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+		m_depthStencil.depthTestEnable = VK_TRUE;
+		m_depthStencil.depthWriteEnable = VK_TRUE;
+		m_depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+		m_depthStencil.depthBoundsTestEnable = VK_FALSE;
+		m_depthStencil.stencilTestEnable = VK_FALSE;
+		m_vkGraphicsPipelineCreateInfo.pDepthStencilState = &m_depthStencil;
+
 
 		m_vkGraphicsPipelineCreateInfo.pDynamicState = &m_dynamicState;
 		m_vkGraphicsPipelineCreateInfo.layout = m_pipelineLayout;
@@ -820,6 +836,83 @@ vkcpp::Image_Memory_View createTextureFromFile(
 }
 
 
+class RenderPassCreateInfo : public VkRenderPassCreateInfo {
+
+public:
+
+	RenderPassCreateInfo()
+		: VkRenderPassCreateInfo{} {
+	}
+
+};
+
+vkcpp::RenderPass createRenderPass(
+	VkFormat swapchainImageFormat,
+	vkcpp::Device device
+) {
+
+	std::vector<VkAttachmentDescription>	attachmentDescriptions;
+
+	VkAttachmentDescription colorAttachment{};
+	colorAttachment.format = swapchainImageFormat;
+	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	VkAttachmentReference colorAttachmentRef{};
+	colorAttachmentRef.attachment = static_cast<uint32_t>(attachmentDescriptions.size());	//	size before push is index
+	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	attachmentDescriptions.push_back(colorAttachment);
+
+
+	VkAttachmentDescription depthAttachment{};
+	depthAttachment.format = VK_FORMAT_D32_SFLOAT;
+	depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+	VkAttachmentReference depthAttachmentRef{};
+	depthAttachmentRef.attachment = static_cast<uint32_t>(attachmentDescriptions.size());
+	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	attachmentDescriptions.push_back(depthAttachment);
+
+
+	VkSubpassDescription vkSubpassDescription{};
+	vkSubpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	vkSubpassDescription.colorAttachmentCount = 1;
+	vkSubpassDescription.pColorAttachments = &colorAttachmentRef;
+	vkSubpassDescription.pDepthStencilAttachment = &depthAttachmentRef;
+
+	VkSubpassDependency vkSubpassDependency{};
+	vkSubpassDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	vkSubpassDependency.dstSubpass = 0;
+	vkSubpassDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	vkSubpassDependency.srcAccessMask = 0;
+	vkSubpassDependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	vkSubpassDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+	RenderPassCreateInfo RenderPassCreateInfo{};
+	RenderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	RenderPassCreateInfo.attachmentCount = static_cast<uint32_t>(attachmentDescriptions.size());
+	RenderPassCreateInfo.pAttachments = attachmentDescriptions.data();
+	RenderPassCreateInfo.subpassCount = 1;
+	RenderPassCreateInfo.pSubpasses = &vkSubpassDescription;
+	RenderPassCreateInfo.dependencyCount = 1;
+	RenderPassCreateInfo.pDependencies = &vkSubpassDependency;
+
+	return vkcpp::RenderPass(RenderPassCreateInfo, device);
+
+}
+
 
 void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
@@ -827,6 +920,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vulkanInstance.createDebugMessenger();
 
 	vkcpp::PhysicalDevice physicalDevice = vulkanInstance.getPhysicalDevice(0);
+
 	//auto allQueueFamilyProperties = physicalDevice.getAllQueueFamilyProperties();
 
 	vkcpp::DeviceCreateInfo deviceCreateInfo{};
@@ -859,42 +953,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	const VkFormat swapchainImageFormat = VK_FORMAT_B8G8R8A8_SRGB;
 
-	VkAttachmentDescription colorAttachment{};
-	colorAttachment.format = swapchainImageFormat;
-	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-	VkAttachmentReference colorAttachmentRef{};
-	colorAttachmentRef.attachment = 0;
-	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-	VkSubpassDescription vkSubpassDescription{};
-	vkSubpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	vkSubpassDescription.colorAttachmentCount = 1;
-	vkSubpassDescription.pColorAttachments = &colorAttachmentRef;
-
-	VkSubpassDependency vkSubpassDependency{};
-	vkSubpassDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-	vkSubpassDependency.dstSubpass = 0;
-	vkSubpassDependency.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-	vkSubpassDependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	vkSubpassDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-	VkRenderPassCreateInfo vkRenderPassCreateInfo{};
-	vkRenderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	vkRenderPassCreateInfo.attachmentCount = 1;
-	vkRenderPassCreateInfo.pAttachments = &colorAttachment;
-	vkRenderPassCreateInfo.subpassCount = 1;
-	vkRenderPassCreateInfo.pSubpasses = &vkSubpassDescription;
-	vkRenderPassCreateInfo.dependencyCount = 1;
-	vkRenderPassCreateInfo.pDependencies = &vkSubpassDependency;
-
-	vkcpp::RenderPass renderPassOriginal(vkRenderPassCreateInfo, deviceOriginal);
+	vkcpp::RenderPass renderPassOriginal(createRenderPass(swapchainImageFormat, deviceOriginal));
 
 	vkcpp::Swapchain_ImageViews_FrameBuffers::setDevice(deviceOriginal);
 
