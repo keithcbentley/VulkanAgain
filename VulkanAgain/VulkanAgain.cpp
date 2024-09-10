@@ -223,7 +223,8 @@ public:
 	vkcpp::Swapchain_ImageViews_FrameBuffers	g_swapchainImageViewsFrameBuffers;
 
 	vkcpp::ShaderModule g_vertShaderModule;
-	vkcpp::ShaderModule g_fragShaderModule;
+	vkcpp::ShaderModule g_textureFragShaderModule;
+	vkcpp::ShaderModule g_identityFragShaderModule;
 
 	vkcpp::DescriptorPool			g_descriptorPoolOriginal;
 	vkcpp::DescriptorSetLayout		g_descriptorSetLayoutOriginal;
@@ -914,8 +915,11 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::ShaderModule	vertShaderModule =
 		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert4.spv", deviceOriginal);
-	vkcpp::ShaderModule	fragShaderModule =
-		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/frag4.spv", deviceOriginal);
+	vkcpp::ShaderModule	textureFragShaderModule =
+		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/textureFrag.spv", deviceOriginal);
+	vkcpp::ShaderModule	identityFragShaderModule =
+		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/identityFrag.spv", deviceOriginal);
+
 
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};
 	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -941,16 +945,16 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		texture.m_imageView, textureSampler,
 		g_allDrawingFrames);
 
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	VkPipelineLayoutCreateInfo vkPipelineLayoutCreateInfo{};
 	std::vector<VkDescriptorSetLayout> descriptorSetLayouts{ descriptorSetLayoutOriginal };
 
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = (uint32_t)descriptorSetLayouts.size();
-	pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
-	pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
-	pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+	vkPipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	vkPipelineLayoutCreateInfo.setLayoutCount = (uint32_t)descriptorSetLayouts.size();
+	vkPipelineLayoutCreateInfo.pSetLayouts = descriptorSetLayouts.data();
+	vkPipelineLayoutCreateInfo.pushConstantRangeCount = 0; // Optional
+	vkPipelineLayoutCreateInfo.pPushConstantRanges = nullptr; // Optional
 
-	vkcpp::PipelineLayout pipelineLayout(pipelineLayoutInfo, deviceOriginal);
+	vkcpp::PipelineLayout pipelineLayout(vkPipelineLayoutCreateInfo, deviceOriginal);
 
 	GraphicsPipelineConfig graphicsPipelineConfig;
 	graphicsPipelineConfig.setInputAssemblyTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
@@ -958,7 +962,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	graphicsPipelineConfig.setPipelineLayout(pipelineLayout);
 	graphicsPipelineConfig.setRenderPass(renderPassOriginal);
 	graphicsPipelineConfig.addShaderModule(vertShaderModule, VK_SHADER_STAGE_VERTEX_BIT, "main");
-	graphicsPipelineConfig.addShaderModule(fragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+//	graphicsPipelineConfig.addShaderModule(textureFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+	graphicsPipelineConfig.addShaderModule(identityFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 
 	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineConfig.assemble(), deviceOriginal);
 
@@ -1023,7 +1028,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_swapchainImageViewsFrameBuffers = std::move(swapchainImageViewsFrameBuffers);
 
 	globals.g_vertShaderModule = std::move(vertShaderModule);
-	globals.g_fragShaderModule = std::move(fragShaderModule);
+	globals.g_textureFragShaderModule = std::move(textureFragShaderModule);
+	globals.g_identityFragShaderModule = std::move(identityFragShaderModule);
 
 	globals.g_texture = std::move(texture);
 	globals.g_textureSampler = std::move(textureSampler);
