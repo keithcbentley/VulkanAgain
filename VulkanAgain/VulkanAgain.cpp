@@ -385,6 +385,7 @@ class GraphicsPipelineConfig {
 
 	std::vector<VkPipelineShaderStageCreateInfo> m_shaderStageCreateInfos;
 
+
 	std::vector<VkDynamicState> m_dynamicStates = {
 		VK_DYNAMIC_STATE_VIEWPORT,
 		VK_DYNAMIC_STATE_SCISSOR
@@ -429,12 +430,17 @@ public:
 		return m_inputAssemblyStateCreateInfo.setTopology(topology);
 	}
 
-	void setVertexShaderModule(vkcpp::ShaderModule vertexShaderModule) {
-		m_vertexShaderModule = vertexShaderModule;
-	}
-
-	void setFragmentShaderModule(vkcpp::ShaderModule fragmentShaderModule) {
-		m_fragmentShaderModule = fragmentShaderModule;
+	void addShaderModule(
+		vkcpp::ShaderModule shaderModule,
+		VkShaderStageFlagBits	vkShaderStageFlagBits,
+		const char* entryPointName
+	) {
+		VkPipelineShaderStageCreateInfo vkPipelineShaderStageCreateInfo{};
+		vkPipelineShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		vkPipelineShaderStageCreateInfo.stage = vkShaderStageFlagBits;
+		vkPipelineShaderStageCreateInfo.module = shaderModule;
+		vkPipelineShaderStageCreateInfo.pName = entryPointName;
+		m_shaderStageCreateInfos.push_back(vkPipelineShaderStageCreateInfo);
 	}
 
 	void setViewportExtent(VkExtent2D extent) {
@@ -459,20 +465,6 @@ public:
 
 		//	Assemble pipeline create info
 		m_vkGraphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-
-		// TODO make shader module setup smarter
-		m_vertShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		m_vertShaderStageCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-		m_vertShaderStageCreateInfo.module = m_vertexShaderModule;
-		m_vertShaderStageCreateInfo.pName = "main";
-
-		m_fragShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		m_fragShaderStageCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-		m_fragShaderStageCreateInfo.module = m_fragmentShaderModule;
-		m_fragShaderStageCreateInfo.pName = "main";
-
-		m_shaderStageCreateInfos.push_back(m_vertShaderStageCreateInfo);
-		m_shaderStageCreateInfos.push_back(m_fragShaderStageCreateInfo);
 
 		m_vkGraphicsPipelineCreateInfo.stageCount = static_cast<uint32_t>(m_shaderStageCreateInfos.size());
 		m_vkGraphicsPipelineCreateInfo.pStages = m_shaderStageCreateInfos.data();
@@ -512,17 +504,18 @@ public:
 		m_dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 		m_dynamicState.dynamicStateCount = static_cast<uint32_t>(m_dynamicStates.size());
 		m_dynamicState.pDynamicStates = m_dynamicStates.data();
+		m_vkGraphicsPipelineCreateInfo.pDynamicState = &m_dynamicState;
+
 
 		m_depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 		m_depthStencil.depthTestEnable = VK_TRUE;
 		m_depthStencil.depthWriteEnable = VK_TRUE;
-		m_depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+		m_depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;	// Less depth means in front of
 		m_depthStencil.depthBoundsTestEnable = VK_FALSE;
 		m_depthStencil.stencilTestEnable = VK_FALSE;
 		m_vkGraphicsPipelineCreateInfo.pDepthStencilState = &m_depthStencil;
 
 
-		m_vkGraphicsPipelineCreateInfo.pDynamicState = &m_dynamicState;
 		m_vkGraphicsPipelineCreateInfo.layout = m_pipelineLayout;
 		m_vkGraphicsPipelineCreateInfo.renderPass = m_renderPass;
 		m_vkGraphicsPipelineCreateInfo.subpass = 0;
@@ -964,8 +957,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	graphicsPipelineConfig.setViewportExtent(vkSurfaceCapabilities.currentExtent);
 	graphicsPipelineConfig.setPipelineLayout(pipelineLayout);
 	graphicsPipelineConfig.setRenderPass(renderPassOriginal);
-	graphicsPipelineConfig.setVertexShaderModule(vertShaderModule);
-	graphicsPipelineConfig.setFragmentShaderModule(fragShaderModule);
+	graphicsPipelineConfig.addShaderModule(vertShaderModule, VK_SHADER_STAGE_VERTEX_BIT, "main");
+	graphicsPipelineConfig.addShaderModule(fragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 
 	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineConfig.assemble(), deviceOriginal);
 
