@@ -928,50 +928,6 @@ namespace vkcpp {
 	};
 
 
-	class Swapchain : public HandleWithOwner<VkSwapchainKHR, Device> {
-
-		Swapchain(VkSwapchainKHR vkSwapchain, Device device, DestroyFunc_t pfnDestroy, VkExtent2D vkSwapchainImageExtent)
-			: HandleWithOwner(vkSwapchain, device, pfnDestroy)
-			, m_vkSwapchainImageExtent(vkSwapchainImageExtent) {
-		}
-
-		static void destroy(VkSwapchainKHR vkSwapchain, Device device) {
-			vkDestroySwapchainKHR(device, vkSwapchain, nullptr);
-		}
-
-	public:
-
-		Swapchain() {}
-		Swapchain(VkSwapchainCreateInfoKHR* vkSwapchainCreateInfo, Device device) {
-			VkSwapchainKHR vkSwapchain;
-			VkResult vkResult = vkCreateSwapchainKHR(device, vkSwapchainCreateInfo, nullptr, &vkSwapchain);
-			if (vkResult != VK_SUCCESS) {
-				throw Exception(vkResult);
-			}
-			new(this)Swapchain(vkSwapchain, device, &destroy, vkSwapchainCreateInfo->imageExtent);
-		}
-
-		VkExtent2D		m_vkSwapchainImageExtent = { .width = 0, .height = 0 };
-
-		VkExtent2D imageExtent() const { return m_vkSwapchainImageExtent; }
-
-		std::vector<VkImage> getImages() const {
-			uint32_t swapchainImageCount;
-			VkResult vkResult = vkGetSwapchainImagesKHR(getVkDevice(), *this, &swapchainImageCount, nullptr);
-			if (vkResult != VK_SUCCESS) {
-				throw Exception(vkResult);
-			}
-			std::vector<VkImage> swapchainImages(swapchainImageCount);
-			vkResult = vkGetSwapchainImagesKHR(getVkDevice(), *this, &swapchainImageCount, swapchainImages.data());
-			if (vkResult != VK_SUCCESS) {
-				throw Exception(vkResult);
-			}
-			return swapchainImages;
-		}
-
-	};
-
-
 	class RenderPass : public HandleWithOwner<VkRenderPass> {
 
 		RenderPass(VkRenderPass vkRenderPass, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
@@ -1440,6 +1396,18 @@ namespace vkcpp {
 			new(this) Image(vkImage, device, &destroy);
 		}
 
+		//static Image fromExisting(VkImage vkImage, Device device) {
+		//	return Image(vkImage, device, nullptr);
+		//}
+
+		//static std::vector<Image> fromExisting(std::vector<VkImage>& vkImages, Device device) {
+		//	std::vector<Image> images;
+		//	for (VkImage vkImage : vkImages) {
+		//		images.push_back(fromExisting(vkImage, device));
+		//	}
+		//	return images;
+		//}
+
 		VkMemoryRequirements  getMemoryRequirements() {
 			VkMemoryRequirements vkMemoryRequirements;
 			vkGetImageMemoryRequirements(getVkDevice(), *this, &vkMemoryRequirements);
@@ -1507,21 +1475,67 @@ namespace vkcpp {
 		}
 
 
-		static std::vector<VkImageView> createVkImageViews(
+		static std::vector<ImageView> createImageViews(
 			std::vector<VkImage>& vkImages,
 			ImageViewCreateInfo& imageViewCreateInfo,
-			Device device) {
-			std::vector<VkImageView> vkImageViews;
+			Device device
+		) {
+			std::vector<ImageView> imageViews;
 			for (VkImage vkImage : vkImages) {
 				imageViewCreateInfo.image = vkImage;
-				VkImageView vkImageView;
-				vkCreateImageView(device, &imageViewCreateInfo, nullptr, &vkImageView);
-				vkImageViews.push_back(vkImageView);
+				imageViews.emplace_back(imageViewCreateInfo, device);
 			}
-			return vkImageViews;
+			return imageViews;
 		}
 
 	};
+
+
+	class Swapchain : public HandleWithOwner<VkSwapchainKHR, Device> {
+
+		Swapchain(VkSwapchainKHR vkSwapchain, Device device, DestroyFunc_t pfnDestroy, VkExtent2D vkSwapchainImageExtent)
+			: HandleWithOwner(vkSwapchain, device, pfnDestroy)
+			, m_vkSwapchainImageExtent(vkSwapchainImageExtent) {
+		}
+
+		static void destroy(VkSwapchainKHR vkSwapchain, Device device) {
+			vkDestroySwapchainKHR(device, vkSwapchain, nullptr);
+		}
+
+		VkExtent2D		m_vkSwapchainImageExtent = { .width = 0, .height = 0 };
+
+
+	public:
+
+		Swapchain() {}
+		Swapchain(const VkSwapchainCreateInfoKHR& vkSwapchainCreateInfo, Device device) {
+			VkSwapchainKHR vkSwapchain;
+			VkResult vkResult = vkCreateSwapchainKHR(device, &vkSwapchainCreateInfo, nullptr, &vkSwapchain);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			new(this)Swapchain(vkSwapchain, device, &destroy, vkSwapchainCreateInfo.imageExtent);
+		}
+
+		VkExtent2D imageExtent() const { return m_vkSwapchainImageExtent; }
+
+		std::vector<VkImage> getImages() const {
+			uint32_t swapchainImageCount;
+			VkResult vkResult = vkGetSwapchainImagesKHR(getVkDevice(), *this, &swapchainImageCount, nullptr);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			std::vector<VkImage> swapchainImages(swapchainImageCount);
+			vkResult = vkGetSwapchainImagesKHR(getVkDevice(), *this, &swapchainImageCount, swapchainImages.data());
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			return swapchainImages;
+		}
+
+	};
+
+
 
 	class Image_Memory {
 
@@ -1669,7 +1683,7 @@ namespace vkcpp {
 		RenderPass	m_renderPass;
 
 		Swapchain	m_swapchain;
-		std::vector<VkImageView>	m_swapchainImageViews;
+		std::vector<ImageView>	m_swapchainImageViews;
 		std::vector<VkFramebuffer>	m_swapchainFrameBuffers;
 		Image_Memory_View			m_depthBuffer;
 
@@ -1689,9 +1703,6 @@ namespace vkcpp {
 		}
 
 		void destroyImageViews() {
-			for (VkImageView vkImageView : m_swapchainImageViews) {
-				vkDestroyImageView(s_device, vkImageView, nullptr);
-			}
 			m_swapchainImageViews.clear();
 		}
 
@@ -1706,48 +1717,40 @@ namespace vkcpp {
 			}
 		}
 
-		// TODO: make these static functions non-static?
-		static 	std::vector<VkImageView> createSwapchainImageViews(
-			Swapchain	swapchain,
+		void createSwapchainImageViews(
 			VkFormat	swapchainImageFormat
 		) {
-			std::vector<VkImage> swapchainImages = swapchain.getImages();
+			std::vector<VkImage> swapchainImages = m_swapchain.getImages();
 			ImageViewCreateInfo imageViewCreateInfo(
 				VK_IMAGE_VIEW_TYPE_2D,
 				swapchainImageFormat,
 				VK_IMAGE_ASPECT_COLOR_BIT);
-			return ImageView::createVkImageViews(swapchainImages, imageViewCreateInfo, swapchain.getOwner());
+			m_swapchainImageViews = ImageView::createImageViews(swapchainImages, imageViewCreateInfo, m_swapchain.getOwner());
 		}
 
 
-		static std::vector<VkFramebuffer> createSwapchainFrameBuffers(
-			std::vector<VkImageView> swapchainImageViews,
-			VkExtent2D	swapchainExtent,
-			vkcpp::ImageView depthBufferImageView,
-			VkRenderPass	vkRenderPass) {
-			std::vector<VkFramebuffer>	swapchainFrameBuffers;
-
-			swapchainFrameBuffers.resize(swapchainImageViews.size());
-			for (size_t i = 0; i < swapchainImageViews.size(); i++) {
+		void createSwapchainFrameBuffers() {
+			m_swapchainFrameBuffers.resize(m_swapchainImageViews.size());
+			for (size_t i = 0; i < m_swapchainImageViews.size(); i++) {
 				std::array<VkImageView, 2> attachments = {
-					swapchainImageViews[i],
-					depthBufferImageView,
+					m_swapchainImageViews[i],
+					m_depthBuffer.m_imageView
 				};
 
 				VkFramebufferCreateInfo framebufferInfo{};
 				framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-				framebufferInfo.renderPass = vkRenderPass;
+				framebufferInfo.renderPass = m_renderPass;
 				framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
 				framebufferInfo.pAttachments = attachments.data();
-				framebufferInfo.width = swapchainExtent.width;
-				framebufferInfo.height = swapchainExtent.height;
+				framebufferInfo.width = m_swapchain.imageExtent().width;
+				framebufferInfo.height = m_swapchain.imageExtent().height;
 				framebufferInfo.layers = 1;
 
-				if (vkCreateFramebuffer(s_device, &framebufferInfo, nullptr, &swapchainFrameBuffers[i]) != VK_SUCCESS) {
-					throw std::runtime_error("failed to create framebuffer!");
+				VkResult vkResult = vkCreateFramebuffer(s_device, &framebufferInfo, nullptr, &m_swapchainFrameBuffers[i]);
+				if (vkResult != VK_SUCCESS) {
+					throw Exception(vkResult);
 				}
 			}
-			return swapchainFrameBuffers;
 		}
 
 
@@ -1765,7 +1768,7 @@ namespace vkcpp {
 			vkSwapchainCreateInfo.imageExtent = swapchainExtent;
 			vkSwapchainCreateInfo.preTransform = vkSurfaceCapabilities.currentTransform;
 
-			return Swapchain(&vkSwapchainCreateInfo, s_device);
+			return Swapchain(vkSwapchainCreateInfo, s_device);
 		}
 
 
@@ -1859,13 +1862,9 @@ namespace vkcpp {
 			if (!m_swapchain) {
 				return;
 			}
-			m_swapchainImageViews = createSwapchainImageViews(m_swapchain, m_vkSwapchainCreateInfo.imageFormat);
+			createSwapchainImageViews(m_vkSwapchainCreateInfo.imageFormat);
 			m_depthBuffer = std::move(createDepthBuffer(m_vkSwapchainCreateInfo.imageExtent, s_device));
-			m_swapchainFrameBuffers = createSwapchainFrameBuffers(
-				m_swapchainImageViews,
-				m_vkSwapchainCreateInfo.imageExtent,
-				m_depthBuffer.m_imageView,
-				m_renderPass);
+			createSwapchainFrameBuffers();
 		}
 
 		Image_Memory_View createDepthBuffer(
@@ -1981,7 +1980,7 @@ namespace vkcpp {
 
 
 
-		void construct() {
+		void assemble() {
 			int	index = 0;
 			for (VkWriteDescriptorSet& vkWriteDescriptorSet : m_vkWriteDescriptorSets) {
 				//	Update marked pointers to the proper address from the info array.
@@ -1996,7 +1995,7 @@ namespace vkcpp {
 		}
 
 		void updateDescriptorSets() {
-			construct();
+			assemble();
 			vkUpdateDescriptorSets(
 				m_descriptorSet.getOwner().getVkDevice(),
 				static_cast<uint32_t>(m_vkWriteDescriptorSets.size()),

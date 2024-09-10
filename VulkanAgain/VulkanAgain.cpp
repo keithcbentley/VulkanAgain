@@ -61,15 +61,15 @@ struct Vertex {
 
 
 const std::vector<Vertex> g_vertices = {
-	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+	{{-0.95f, -0.95f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.95f, -0.95f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.95f, 0.95f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{-0.95f, 0.95f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
 
-	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-	{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
+	{{-0.95f, -0.95f, -0.75f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.95f, -0.95f, -0.75f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.95f, 0.95f, -0.75f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{-0.95f, 0.95f, -0.75f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
 };
 
 const std::vector<uint16_t> g_vertexIndices = {
@@ -84,25 +84,6 @@ const int windowPositionX = 500;
 const int windowPositionY = 500;
 const int windowWidth = 800;
 const int windowHeight = 600;
-
-//uint32_t findMemoryTypeIndex(
-//	VkPhysicalDevice vkPhysicalDevice,
-//	uint32_t usableMemoryIndexBits,
-//	VkMemoryPropertyFlags requiredProperties
-//) {
-//
-//	VkPhysicalDeviceMemoryProperties memProperties;
-//	vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &memProperties);
-//
-//	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-//		if ( (usableMemoryIndexBits & (1 << i) )
-//			&& (memProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties) {
-//			return i;
-//		}
-//	}
-//	throw std::runtime_error("failed to find suitable memory type!");
-//}
-
 
 
 class DrawingFrame {
@@ -147,6 +128,8 @@ public:
 	}
 
 	VkDevice getVkDevice() const {
+		//	Everything should be using the same device,
+		//	so just pick any device.
 		return m_inFlightFence.getVkDevice();
 	}
 };
@@ -197,76 +180,6 @@ vkcpp::VulkanInstance createVulkanInstance() {
 	vulkanInstanceCreateInfo.pNext = &debugCreateInfo;
 
 	return vkcpp::VulkanInstance(vulkanInstanceCreateInfo);
-}
-
-
-void recordCommandBuffer(
-	vkcpp::CommandBuffer		commandBuffer,
-	uint32_t			swapchainImageIndex,
-	vkcpp::Swapchain_ImageViews_FrameBuffers& swapchainImageViewsFrameBuffers,
-	vkcpp::Buffer			vertexBuffer,
-	vkcpp::Buffer			vertexIndexBuffer,
-	VkDescriptorSet		descriptorSet,
-	VkPipelineLayout	vkPipelineLayout,
-	VkPipeline			graphicsPipeline
-) {
-	const VkExtent2D swapchainImageExtent = swapchainImageViewsFrameBuffers.getImageExtent();
-
-	commandBuffer.begin();
-
-	VkRenderPassBeginInfo renderPassInfo{};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassInfo.renderPass = swapchainImageViewsFrameBuffers.getRenderPass();
-	renderPassInfo.framebuffer = swapchainImageViewsFrameBuffers.getFrameBuffer(swapchainImageIndex);
-	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = swapchainImageExtent;
-
-	std::array<VkClearValue, 2> clearValues{};
-	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f } };
-	clearValues[1].depthStencil = { 1.0f, 0 };
-	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-	renderPassInfo.pClearValues = clearValues.data();
-
-	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-
-	VkViewport viewport{};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = static_cast<float>(swapchainImageExtent.width);
-	viewport.height = static_cast<float>(swapchainImageExtent.height);
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-	VkRect2D scissor{};
-	scissor.offset = { 0, 0 };
-	scissor.extent = swapchainImageExtent;
-	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-
-	VkBuffer vertexBuffers[] = { vertexBuffer };
-	VkDeviceSize offsets[] = { 0 };
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-
-	vkCmdBindIndexBuffer(commandBuffer, vertexIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
-
-	vkCmdBindDescriptorSets(
-		commandBuffer,
-		VK_PIPELINE_BIND_POINT_GRAPHICS,
-		vkPipelineLayout,
-		0, 1,
-		&descriptorSet,
-		0, nullptr);
-
-	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(g_vertexIndices.size()), 1, 0, 0, 0);
-
-	vkCmdEndRenderPass(commandBuffer);
-
-	commandBuffer.end();
-
 }
 
 
@@ -378,7 +291,6 @@ void createDescriptorSets(
 			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			textureImageView,
 			textureSampler);
-
 
 		descriptorSetUpdater.updateDescriptorSets();
 
@@ -499,16 +411,14 @@ class GraphicsPipelineConfig {
 
 	VkPipelineDepthStencilStateCreateInfo m_depthStencil{};
 
-
-
-public:
-
 	VkGraphicsPipelineCreateInfo m_vkGraphicsPipelineCreateInfo{};
 
 	vkcpp::PipelineLayout	m_pipelineLayout;
 	vkcpp::RenderPass		m_renderPass;
 	vkcpp::ShaderModule	m_vertexShaderModule;
 	vkcpp::ShaderModule	m_fragmentShaderModule;
+
+public:
 
 	// TODO needs to be smarter
 	VkVertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
@@ -528,8 +438,8 @@ public:
 	}
 
 	void setViewportExtent(VkExtent2D extent) {
-		m_viewport.width = (float)extent.width;
-		m_viewport.height = (float)extent.height;
+		m_viewport.width = static_cast<float>(extent.width);
+		m_viewport.height = static_cast<float>(extent.height);
 	}
 
 	void setScissorExtent(VkExtent2D extent) {
@@ -570,8 +480,6 @@ public:
 
 		// TODO tied to Vertex class.  Needs to be decoupled and smarter.
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		//VkVertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
-		//auto attributeDescriptions = Vertex::getAttributeDescriptions();
 		vertexInputInfo.vertexBindingDescriptionCount = 1;
 		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
 		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
@@ -1139,9 +1047,19 @@ void updateUniformBuffer(
 	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 	ModelViewProjTransform modelViewProjTransform{};
-	modelViewProjTransform.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	modelViewProjTransform.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	modelViewProjTransform.proj = glm::perspective(glm::radians(45.0f), (float)swapchainImageExtent.width / (float)swapchainImageExtent.height, 0.1f, 10.0f);
+	modelViewProjTransform.model = glm::rotate(
+		glm::mat4(1.0f),
+		time * glm::radians(22.5f),
+		glm::vec3(0.0f, 0.0f, 1.0f));
+	modelViewProjTransform.view = glm::lookAt(
+		glm::vec3(2.0f, 2.0f, 2.0f),
+		glm::vec3(0.0f, 0.0f, 0.0f),
+		glm::vec3(0.0f, 0.0f, 1.0f));
+	modelViewProjTransform.proj = glm::perspective(
+		glm::radians(45.0f),
+		(float)swapchainImageExtent.width / (float)swapchainImageExtent.height,
+		0.1f,
+		10.0f);
 	modelViewProjTransform.proj[1][1] *= -1;
 
 	memcpy(
@@ -1149,6 +1067,75 @@ void updateUniformBuffer(
 		&modelViewProjTransform,
 		sizeof(modelViewProjTransform));
 }
+
+
+
+void recordCommandBuffer(
+	vkcpp::CommandBuffer		commandBuffer,
+	vkcpp::Swapchain_ImageViews_FrameBuffers& swapchainImageViewsFrameBuffers,
+	uint32_t			swapchainImageIndex,
+	vkcpp::Buffer			vertexBuffer,
+	vkcpp::Buffer			vertexIndexBuffer,
+	VkDescriptorSet		vkDescriptorSet,
+	vkcpp::PipelineLayout	pipelineLayout,
+	vkcpp::GraphicsPipeline			graphicsPipeline
+) {
+	const VkExtent2D swapchainImageExtent = swapchainImageViewsFrameBuffers.getImageExtent();
+
+	commandBuffer.reset();
+	commandBuffer.begin();
+
+	VkRenderPassBeginInfo renderPassInfo{};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassInfo.renderPass = swapchainImageViewsFrameBuffers.getRenderPass();
+	renderPassInfo.framebuffer = swapchainImageViewsFrameBuffers.getFrameBuffer(swapchainImageIndex);
+	renderPassInfo.renderArea.offset = { 0, 0 };
+	renderPassInfo.renderArea.extent = swapchainImageExtent;
+
+	std::array<VkClearValue, 2> clearValues{};
+	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f } };
+	clearValues[1].depthStencil = { 1.0f, 0 };
+	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+	renderPassInfo.pClearValues = clearValues.data();
+
+	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	VkViewport viewport{};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = static_cast<float>(swapchainImageExtent.width);
+	viewport.height = static_cast<float>(swapchainImageExtent.height);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+	VkRect2D scissor{};
+	scissor.offset = { 0, 0 };
+	scissor.extent = swapchainImageExtent;
+	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+	vkCmdBindDescriptorSets(
+		commandBuffer,
+		VK_PIPELINE_BIND_POINT_GRAPHICS,
+		pipelineLayout,
+		0, 1,
+		&vkDescriptorSet,
+		0, nullptr);
+
+	VkBuffer vertexBuffers[] = { vertexBuffer };
+	VkDeviceSize offsets[] = { 0 };
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+	vkCmdBindIndexBuffer(commandBuffer, vertexIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(g_vertexIndices.size()), 1, 0, 0, 0);
+
+	vkCmdEndRenderPass(commandBuffer);
+
+	commandBuffer.end();
+
+}
+
 
 
 void drawFrame(Globals& globals)
@@ -1177,21 +1164,21 @@ void drawFrame(Globals& globals)
 		VK_NULL_HANDLE,
 		&swapchainImageIndex);
 
-	commandBuffer.reset();
+	updateUniformBuffer(
+		currentDrawingFrame.m_uniformBufferMemory,
+		globals.g_swapchainImageViewsFrameBuffers.getImageExtent()
+	);
+
 	recordCommandBuffer(
 		commandBuffer,
-		swapchainImageIndex,
 		globals.g_swapchainImageViewsFrameBuffers,
+		swapchainImageIndex,
 		globals.g_vertexBufferAndDeviceMemory.m_buffer,
 		globals.g_vertexIndicesBufferAndDeviceMemory.m_buffer,
 		currentDrawingFrame.m_descriptorSet,
 		globals.g_pipelineLayout,
 		globals.g_graphicsPipeline);
 
-	updateUniformBuffer(
-		currentDrawingFrame.m_uniformBufferMemory,
-		globals.g_swapchainImageViewsFrameBuffers.getImageExtent()
-	);
 
 
 	VkSubmitInfo submitInfo{};
