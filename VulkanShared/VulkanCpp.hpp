@@ -398,7 +398,7 @@ namespace vkcpp {
 			sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		}
 
-		VkInstanceCreateInfo* construct() {
+		VkInstanceCreateInfo* assemble() {
 			m_layerStrings.clear();
 			ppEnabledLayerNames = nullptr;
 			for (const std::string& layerName : m_layerNames) {
@@ -450,7 +450,7 @@ namespace vkcpp {
 		VulkanInstance() {}
 		VulkanInstance(VulkanInstanceCreateInfo& vulkanInstanceCreateInfo) {
 			VkInstance vkInstance;
-			VkResult vkResult = vkCreateInstance(vulkanInstanceCreateInfo.construct(), nullptr, &vkInstance);
+			VkResult vkResult = vkCreateInstance(vulkanInstanceCreateInfo.assemble(), nullptr, &vkInstance);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
@@ -654,7 +654,7 @@ namespace vkcpp {
 			sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 		}
 
-		VkDeviceCreateInfo* construct() {
+		VkDeviceCreateInfo* assemble() {
 
 			m_extensionStrings.clear();
 			ppEnabledExtensionNames = nullptr;
@@ -694,7 +694,7 @@ namespace vkcpp {
 		Device() {}
 		Device(DeviceCreateInfo& deviceCreateInfo, PhysicalDevice physicalDevice) {
 			VkDevice vkDevice;
-			VkResult vkResult = vkCreateDevice(physicalDevice, deviceCreateInfo.construct(), nullptr, &vkDevice);
+			VkResult vkResult = vkCreateDevice(physicalDevice, deviceCreateInfo.assemble(), nullptr, &vkDevice);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
@@ -1071,11 +1071,16 @@ namespace vkcpp {
 
 	class DescriptorPoolCreateInfo : public VkDescriptorPoolCreateInfo {
 
+		//	The map allows us to collect the size info in any order.
+		//	When it's time to assemble, we'll put the collected info
+		//	into the vector so that it's ready for the create call.
 		std::map<VkDescriptorType, int>	m_poolSizesMap;
 		std::vector<VkDescriptorPoolSize> m_poolSizes;
 
 	public:
 
+		//	Don't allow getting the pointer to the raw create info structure
+		//	since it may not be assembled.  Must call assemble to get the pointer.
 		VkDescriptorPoolCreateInfo* operator&() = delete;
 
 		DescriptorPoolCreateInfo()
@@ -1087,7 +1092,7 @@ namespace vkcpp {
 			m_poolSizesMap[vkDescriptorType] += count;
 		}
 
-		VkDescriptorPoolCreateInfo* construct() {
+		VkDescriptorPoolCreateInfo* assemble() {
 			m_poolSizes.clear();
 			VkDescriptorPoolSize vkDescriptorPoolSize;
 			for (std::pair<VkDescriptorType, int> kv : m_poolSizesMap) {
@@ -1120,7 +1125,7 @@ namespace vkcpp {
 		DescriptorPool() {}
 		DescriptorPool(DescriptorPoolCreateInfo& poolCreateInfo, VkDevice vkDevice) {
 			VkDescriptorPool vkDescriptorPool;
-			VkResult vkResult = vkCreateDescriptorPool(vkDevice, poolCreateInfo.construct(), nullptr, &vkDescriptorPool);
+			VkResult vkResult = vkCreateDescriptorPool(vkDevice, poolCreateInfo.assemble(), nullptr, &vkDescriptorPool);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
@@ -1160,7 +1165,7 @@ namespace vkcpp {
 			return *this;
 		}
 
-		VkDescriptorSetLayoutCreateInfo* construct() {
+		VkDescriptorSetLayoutCreateInfo* assemble() {
 			bindingCount = static_cast<uint32_t>(m_bindings.size());
 			pBindings = m_bindings.data();
 			return this;
@@ -1184,7 +1189,7 @@ namespace vkcpp {
 			VkDescriptorSetLayout vkDescriptorSetLayout;
 			VkResult vkResult = vkCreateDescriptorSetLayout(
 				vkDevice,
-				descriptorSetLayoutCreateInfo.construct(),
+				descriptorSetLayoutCreateInfo.assemble(),
 				nullptr,
 				&vkDescriptorSetLayout);
 			if (vkResult != VK_SUCCESS) {

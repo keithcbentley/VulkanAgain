@@ -27,10 +27,12 @@ struct Vertex {
 	glm::vec3	color;
 	glm::vec2 texCoord;
 
+	static const int s_bindingIndex = 0;
+
 	static VkVertexInputBindingDescription getBindingDescription() {
 		VkVertexInputBindingDescription bindingDescription{};
 
-		bindingDescription.binding = 0;
+		bindingDescription.binding = s_bindingIndex;
 		bindingDescription.stride = sizeof(Vertex);
 		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
@@ -40,17 +42,17 @@ struct Vertex {
 	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
 		std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
 
-		attributeDescriptions[0].binding = 0;
+		attributeDescriptions[0].binding = s_bindingIndex;
 		attributeDescriptions[0].location = 0;
 		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
 		attributeDescriptions[0].offset = offsetof(Vertex, pos);
 
-		attributeDescriptions[1].binding = 0;
+		attributeDescriptions[1].binding = s_bindingIndex;
 		attributeDescriptions[1].location = 1;
 		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 		attributeDescriptions[1].offset = offsetof(Vertex, color);
 
-		attributeDescriptions[2].binding = 0;
+		attributeDescriptions[2].binding = s_bindingIndex;
 		attributeDescriptions[2].location = 2;
 		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
 		attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
@@ -379,13 +381,7 @@ public:
 
 class GraphicsPipelineConfig {
 
-
-	VkPipelineShaderStageCreateInfo m_vertShaderStageCreateInfo{};
-
-	VkPipelineShaderStageCreateInfo m_fragShaderStageCreateInfo{};
-
 	std::vector<VkPipelineShaderStageCreateInfo> m_shaderStageCreateInfos;
-
 
 	std::vector<VkDynamicState> m_dynamicStates = {
 		VK_DYNAMIC_STATE_VIEWPORT,
@@ -394,7 +390,7 @@ class GraphicsPipelineConfig {
 
 	VkPipelineDynamicStateCreateInfo m_dynamicState{};
 
-	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+	VkPipelineVertexInputStateCreateInfo m_vkPipelineVertexInputStateCreateInfo{};
 
 	PipelineInputAssemblyStateCreateInfo m_inputAssemblyStateCreateInfo{};
 
@@ -422,9 +418,16 @@ class GraphicsPipelineConfig {
 
 public:
 
-	// TODO needs to be smarter
-	VkVertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
-	std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions = Vertex::getAttributeDescriptions();
+	std::vector<VkVertexInputBindingDescription>	m_vertexInputBindingDescriptions;
+
+	void addVertexInputBindingDescription(const VkVertexInputBindingDescription& vkVertexInputBindingDescription) {
+		m_vertexInputBindingDescriptions.push_back(vkVertexInputBindingDescription);
+	}
+
+	std::vector<VkVertexInputAttributeDescription> m_vertexInputAttributeDescriptions;
+	void addVertexInputAttributeDescription(const VkVertexInputAttributeDescription& vertexInputAttributeDescriptions) {
+		m_vertexInputAttributeDescriptions.push_back(vertexInputAttributeDescriptions);
+	}
 
 
 	PipelineInputAssemblyStateCreateInfo& setInputAssemblyTopology(VkPrimitiveTopology topology) {
@@ -471,13 +474,13 @@ public:
 		m_vkGraphicsPipelineCreateInfo.pStages = m_shaderStageCreateInfos.data();
 
 
-		// TODO tied to Vertex class.  Needs to be decoupled and smarter.
-		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		vertexInputInfo.vertexBindingDescriptionCount = 1;
-		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-		vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-		m_vkGraphicsPipelineCreateInfo.pVertexInputState = &vertexInputInfo;
+		m_vkPipelineVertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+		m_vkPipelineVertexInputStateCreateInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(m_vertexInputBindingDescriptions.size());
+		m_vkPipelineVertexInputStateCreateInfo.pVertexBindingDescriptions = m_vertexInputBindingDescriptions.data();
+		m_vkPipelineVertexInputStateCreateInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(m_vertexInputAttributeDescriptions.size());
+		m_vkPipelineVertexInputStateCreateInfo.pVertexAttributeDescriptions = m_vertexInputAttributeDescriptions.data();
+
+		m_vkGraphicsPipelineCreateInfo.pVertexInputState = &m_vkPipelineVertexInputStateCreateInfo;
 
 		m_vkGraphicsPipelineCreateInfo.pInputAssemblyState = &m_inputAssemblyStateCreateInfo;
 
@@ -939,9 +942,11 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::DescriptorSetLayout descriptorSetLayoutOriginal = createDrawingFrameDescriptorSetLayout(deviceOriginal);
 	vkcpp::DescriptorPool descriptorPoolOriginal = createDescriptorPool(deviceOriginal);
+
 	createDescriptorSets(
 		deviceOriginal,
-		descriptorPoolOriginal, descriptorSetLayoutOriginal,
+		descriptorPoolOriginal,
+		descriptorSetLayoutOriginal,
 		texture.m_imageView, textureSampler,
 		g_allDrawingFrames);
 
@@ -958,11 +963,15 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	GraphicsPipelineConfig graphicsPipelineConfig;
 	graphicsPipelineConfig.setInputAssemblyTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	graphicsPipelineConfig.addVertexInputBindingDescription(Vertex::getBindingDescription());
+	for (const VkVertexInputAttributeDescription& vkVertexInputAttributeDescription : Vertex::getAttributeDescriptions()) {
+		graphicsPipelineConfig.addVertexInputAttributeDescription(vkVertexInputAttributeDescription);
+	}
 	graphicsPipelineConfig.setViewportExtent(vkSurfaceCapabilities.currentExtent);
 	graphicsPipelineConfig.setPipelineLayout(pipelineLayout);
 	graphicsPipelineConfig.setRenderPass(renderPassOriginal);
 	graphicsPipelineConfig.addShaderModule(vertShaderModule, VK_SHADER_STAGE_VERTEX_BIT, "main");
-//	graphicsPipelineConfig.addShaderModule(textureFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+	//	graphicsPipelineConfig.addShaderModule(textureFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 	graphicsPipelineConfig.addShaderModule(identityFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 
 	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineConfig.assemble(), deviceOriginal);
