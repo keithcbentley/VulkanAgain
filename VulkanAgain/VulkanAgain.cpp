@@ -18,11 +18,13 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <conio.h>
+
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
 
-struct Vertex {
+struct Point {
 	glm::vec3	pos;
 	glm::vec3	color;
 	glm::vec2 texCoord;
@@ -33,7 +35,7 @@ struct Vertex {
 		VkVertexInputBindingDescription bindingDescription{};
 
 		bindingDescription.binding = s_bindingIndex;
-		bindingDescription.stride = sizeof(Vertex);
+		bindingDescription.stride = sizeof(Point);
 		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
 		return bindingDescription;
@@ -45,39 +47,183 @@ struct Vertex {
 		attributeDescriptions[0].binding = s_bindingIndex;
 		attributeDescriptions[0].location = 0;
 		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[0].offset = offsetof(Vertex, pos);
+		attributeDescriptions[0].offset = offsetof(Point, pos);
 
 		attributeDescriptions[1].binding = s_bindingIndex;
 		attributeDescriptions[1].location = 1;
 		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[1].offset = offsetof(Vertex, color);
+		attributeDescriptions[1].offset = offsetof(Point, color);
 
 		attributeDescriptions[2].binding = s_bindingIndex;
 		attributeDescriptions[2].location = 2;
 		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-		attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+		attributeDescriptions[2].offset = offsetof(Point, texCoord);
 
 		return attributeDescriptions;
 	}
 };
 
 
-const std::vector<Vertex> g_vertices = {
-	{{-0.95f, -0.95f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.95f, -0.95f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.95f, 0.95f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-	{{-0.95f, 0.95f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+//const std::vector<Vertex> g_vertices = {
+//	{{-0.95f, -0.95f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+//	{{0.95f, -0.95f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+//	{{0.95f, 0.95f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+//	{{-0.95f, 0.95f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+//
+//	{{-0.95f, -0.95f, -0.75f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+//	{{0.95f, -0.95f, -0.75f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+//	{{0.95f, 0.95f, -0.75f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+//	{{-0.95f, 0.95f, -0.75f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
+//};
+//
+//const std::vector<int16_t> g_vertexIndices = {
+//	0, 1, 2,
+//	2, 3, 0,
+//
+//	4, 5, 6,
+//	6, 7, 4
+//};
 
-	{{-0.95f, -0.95f, -0.75f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.95f, -0.95f, -0.75f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.95f, 0.95f, -0.75f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-	{{-0.95f, 0.95f, -0.75f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
+
+class Shape;
+
+
+//	IMPORTANT!!! READ THIS!!!
+//	The terminology is a bit more accurate but differs from Vulkan.
+//	Since we are using indexed drawing, what Vulkan calls a vertex is
+//	actually a point.  We call it a point.
+//	The point on a shape where two edges meet is a vertex.  When using
+//	indexed drawing, the vertex is an index into an array of points.
+//	Vulkan calls this a vertex index.  We call it a vertex.
+//	Using this terminology helps greatly when defining more complex
+//	shapes.  E.g., a square will have five points but have many
+//	more vertices since we have to draw it as multiple triangles.
+//	(The point at the center of the square has to be specified so that
+//	we can draw triangles around the center.)
+class PointVertexBuffer {
+
+	std::vector<Point>		m_points;
+	std::vector<int16_t>	m_vertices;
+
+public:
+
+
+	PointVertexBuffer() {}
+
+	PointVertexBuffer(
+		const std::vector<Point>& points,
+		const std::vector<int16_t>& vertices)
+		: m_points(points)
+		, m_vertices(vertices) {}
+
+
+	int64_t	pointsSizeof() {
+		return sizeof(Point) * m_points.size();
+	}
+
+	int64_t verticesSizeof() {
+		return sizeof(int16_t) * m_vertices.size();
+	}
+
+	int16_t pointCount() {
+		return static_cast<int16_t>(m_points.size());
+	}
+
+	int16_t vertexCount() {
+		return static_cast<int16_t>(m_vertices.size());
+	}
+
+	Point* pointData() {
+		return m_points.data();
+	}
+
+	int16_t* vertexData() {
+		return m_vertices.data();
+	}
+
+	Shape add(const Shape& shape);
+
 };
 
-const std::vector<uint16_t> g_vertexIndices = {
-	0, 1, 2, 2, 3, 0,
-	4, 5, 6, 6, 7, 4
+
+class Shape {
+
+public:
+	PointVertexBuffer& m_pointVertexBuffer;
+	int16_t	m_pointIndex;
+	int16_t m_pointCount;
+	int16_t	m_vertexIndex;
+	int16_t	m_vertexCount;
+
+	Shape(const Shape&) = delete;
+	Shape& operator=(const Shape&) = delete;
+	Shape(Shape&&) noexcept = delete;
+	Shape& operator=(Shape&&) noexcept = delete;
+
+	Shape(
+		PointVertexBuffer& pointVertexBuffer,
+		int16_t	pointIndex,
+		int16_t	pointCount,
+		int16_t	vertexIndex,
+		int16_t vertexCount)
+		: m_pointVertexBuffer(pointVertexBuffer)
+		, m_pointIndex(pointIndex)
+		, m_pointCount(pointCount)
+		, m_vertexIndex(vertexIndex)
+		, m_vertexCount(vertexCount) {
+	}
+
+	Shape(PointVertexBuffer& pointVertexBuffer)
+		: m_pointVertexBuffer(pointVertexBuffer)
+		, m_pointIndex(0)
+		, m_pointCount(pointVertexBuffer.pointCount())
+		, m_vertexIndex(0)
+		, m_vertexCount(pointVertexBuffer.vertexCount()) {
+	}
+
+
 };
+
+Shape PointVertexBuffer::add(const Shape& shape) {
+	const int16_t	thisPointIndex = static_cast<int16_t>(m_points.size());		//	remember where we started in this buffer
+	const int16_t	shapePointIndex = shape.m_pointIndex;
+	const int16_t	shapePointCount = shape.m_pointCount;
+	const int16_t	thisVertexIndex = static_cast<int16_t>(m_vertices.size());	//	remember where started in this buffer
+	const int16_t	shapeVertexIndex = shape.m_vertexIndex;
+	const int16_t	shapeVertexCount = shape.m_vertexCount;
+
+	for (int16_t i = 0; i < shapePointCount; i++) {
+		m_points.push_back(shape.m_pointVertexBuffer.m_points.at(shapePointIndex + i));
+	}
+	for (int16_t i = 0; i < shapeVertexCount; i++) {
+		//	Go through the shape point indices, subtract the (start) shape index
+		//	to normalize to a zero base, then add this vertex (start) index to rebase,
+		//	then add iterator to get the index in this buffer.
+		int16_t oldIndex = shape.m_pointVertexBuffer.m_vertices.at(shapeVertexIndex + i);
+		int16_t oldNormalIndex = oldIndex - shapeVertexIndex;
+		int16_t newIndex = oldNormalIndex + thisVertexIndex;
+
+		m_vertices.push_back(newIndex);
+	}
+	return Shape(*this, thisPointIndex, shapePointCount, thisVertexIndex, shapeVertexCount);
+}
+
+
+const std::vector<Point> g_rightTrianglePoints{
+	{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}} };
+
+const std::vector<int16_t> g_rightTriangleVertices{
+	0, 1, 2 };
+
+PointVertexBuffer g_rightTrianglePointVertexBuffer(g_rightTrianglePoints, g_rightTriangleVertices);
+Shape g_theRightTriangle(g_rightTrianglePointVertexBuffer);
+
+PointVertexBuffer g_pointVertexBuffer;
+
+
+
 
 const wchar_t* szTitle = TEXT("Vulkan Again");
 const wchar_t* szWindowClass = TEXT("Vulkan Again Class");
@@ -234,8 +380,8 @@ public:
 	vkcpp::PipelineLayout	g_pipelineLayout;
 	vkcpp::GraphicsPipeline	g_graphicsPipeline;
 
+	vkcpp::Buffer_DeviceMemory	g_pointBufferAndDeviceMemory;
 	vkcpp::Buffer_DeviceMemory	g_vertexBufferAndDeviceMemory;
-	vkcpp::Buffer_DeviceMemory	g_vertexIndicesBufferAndDeviceMemory;
 
 	vkcpp::CommandPool		g_commandPoolOriginal;
 
@@ -888,20 +1034,20 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	swapchainImageViewsFrameBuffers.recreateSwapchainImageViewsFrameBuffers();
 
-	const int64_t vertexSize = sizeof(g_vertices[0]) * static_cast<int>(g_vertices.size());
-	vkcpp::Buffer_DeviceMemory vertexBufferAndDeviceMemory(
+	//	Pay attention to the terminology change.
+	vkcpp::Buffer_DeviceMemory pointBufferAndDeviceMemory(
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		vertexSize,
-		(void*)g_vertices.data(),
+		g_pointVertexBuffer.pointsSizeof(),
+		g_pointVertexBuffer.pointData(),
 		deviceOriginal);
 
-	const int64_t vertexIndexSize = sizeof(g_vertexIndices[0]) * static_cast<int>(g_vertexIndices.size());
-	vkcpp::Buffer_DeviceMemory vertexIndicesBufferAndDeviceMemory(
+	//	Pay attention to the terminology change.
+	vkcpp::Buffer_DeviceMemory vertexBufferAndDeviceMemory(
 		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		vertexIndexSize,
-		(void*)g_vertexIndices.data(),
+		g_pointVertexBuffer.verticesSizeof(),
+		g_pointVertexBuffer.vertexData(),
 		deviceOriginal);
 
 	{
@@ -963,8 +1109,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	GraphicsPipelineConfig graphicsPipelineConfig;
 	graphicsPipelineConfig.setInputAssemblyTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	graphicsPipelineConfig.addVertexInputBindingDescription(Vertex::getBindingDescription());
-	for (const VkVertexInputAttributeDescription& vkVertexInputAttributeDescription : Vertex::getAttributeDescriptions()) {
+	graphicsPipelineConfig.addVertexInputBindingDescription(Point::getBindingDescription());
+	for (const VkVertexInputAttributeDescription& vkVertexInputAttributeDescription : Point::getAttributeDescriptions()) {
 		graphicsPipelineConfig.addVertexInputAttributeDescription(vkVertexInputAttributeDescription);
 	}
 	graphicsPipelineConfig.setViewportExtent(vkSurfaceCapabilities.currentExtent);
@@ -1018,8 +1164,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_surfaceOriginal = std::move(surfaceOriginal);
 
 
+	globals.g_pointBufferAndDeviceMemory = std::move(pointBufferAndDeviceMemory);
 	globals.g_vertexBufferAndDeviceMemory = std::move(vertexBufferAndDeviceMemory);
-	globals.g_vertexIndicesBufferAndDeviceMemory = std::move(vertexIndicesBufferAndDeviceMemory);
 
 	globals.g_descriptorSetLayoutOriginal = std::move(descriptorSetLayoutOriginal);
 	globals.g_descriptorPoolOriginal = std::move(descriptorPoolOriginal);
@@ -1082,8 +1228,8 @@ void recordCommandBuffer(
 	vkcpp::CommandBuffer		commandBuffer,
 	vkcpp::Swapchain_ImageViews_FrameBuffers& swapchainImageViewsFrameBuffers,
 	uint32_t			swapchainImageIndex,
+	vkcpp::Buffer			pointBuffer,
 	vkcpp::Buffer			vertexBuffer,
-	vkcpp::Buffer			vertexIndexBuffer,
 	VkDescriptorSet		vkDescriptorSet,
 	vkcpp::PipelineLayout	pipelineLayout,
 	vkcpp::GraphicsPipeline			graphicsPipeline
@@ -1093,20 +1239,20 @@ void recordCommandBuffer(
 	commandBuffer.reset();
 	commandBuffer.begin();
 
-	VkRenderPassBeginInfo renderPassInfo{};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassInfo.renderPass = swapchainImageViewsFrameBuffers.getRenderPass();
-	renderPassInfo.framebuffer = swapchainImageViewsFrameBuffers.getFrameBuffer(swapchainImageIndex);
-	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = swapchainImageExtent;
+	VkRenderPassBeginInfo vkRenderPassBeginInfo{};
+	vkRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	vkRenderPassBeginInfo.renderPass = swapchainImageViewsFrameBuffers.getRenderPass();
+	vkRenderPassBeginInfo.framebuffer = swapchainImageViewsFrameBuffers.getFrameBuffer(swapchainImageIndex);
+	vkRenderPassBeginInfo.renderArea.offset = { 0, 0 };
+	vkRenderPassBeginInfo.renderArea.extent = swapchainImageExtent;
 
 	std::array<VkClearValue, 2> clearValues{};
 	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f } };
 	clearValues[1].depthStencil = { 1.0f, 0 };
-	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-	renderPassInfo.pClearValues = clearValues.data();
+	vkRenderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+	vkRenderPassBeginInfo.pClearValues = clearValues.data();
 
-	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBeginRenderPass(commandBuffer, &vkRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 	VkViewport viewport{};
 	viewport.x = 0.0f;
@@ -1132,11 +1278,11 @@ void recordCommandBuffer(
 		&vkDescriptorSet,
 		0, nullptr);
 
-	VkBuffer vertexBuffers[] = { vertexBuffer };
+	VkBuffer pointBuffers[] = { pointBuffer };
 	VkDeviceSize offsets[] = { 0 };
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-	vkCmdBindIndexBuffer(commandBuffer, vertexIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
-	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(g_vertexIndices.size()), 1, 0, 0, 0);
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
+	vkCmdBindIndexBuffer(commandBuffer, vertexBuffer, 0, VK_INDEX_TYPE_UINT16);
+	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer.vertexCount(), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -1181,8 +1327,8 @@ void drawFrame(Globals& globals)
 		commandBuffer,
 		globals.g_swapchainImageViewsFrameBuffers,
 		swapchainImageIndex,
+		globals.g_pointBufferAndDeviceMemory.m_buffer,
 		globals.g_vertexBufferAndDeviceMemory.m_buffer,
-		globals.g_vertexIndicesBufferAndDeviceMemory.m_buffer,
 		currentDrawingFrame.m_descriptorSet,
 		globals.g_pipelineLayout,
 		globals.g_graphicsPipeline);
@@ -1324,6 +1470,9 @@ HWND CreateFirstWindow(HINSTANCE hInstance)
 	return hWnd;
 }
 
+
+
+
 void MessageLoop(Globals& globals) {
 
 	MSG msg;
@@ -1366,108 +1515,22 @@ void MessageLoop(Globals& globals) {
 	return;
 }
 
-void vectorTest() {
-
-	class Obj {
-		int	m_data;
-		int m_cc = 0;
-
-	public:
-
-		//Obj() {
-		//	std::cout << "Obj(): " << m_data << " " << m_cc << "\n";
-		//}
-
-		~Obj() {
-			std::cout << "~Obj: " << m_data << " " << m_cc << "\n";
-		}
-
-		Obj(int data)
-			: m_data(data) {
-			std::cout << "Obj(int): " << m_data << " " << m_cc << "\n";
-		}
-
-
-		Obj(const Obj& other)
-			: m_data(other.m_data)
-			, m_cc(other.m_cc + 1) {
-			std::cout << "Obj(const Obj&): " << m_data << " " << m_cc << "\n";
-		}
-
-		Obj& operator=(const Obj& other) {
-			m_data = other.m_data;
-			m_cc = other.m_cc + 1;
-			std::cout << "Obj& =(const Obj&): " << m_data << " " << m_cc << "\n";
-			return *this;
-		}
-
-		Obj(Obj&& other) noexcept
-			: m_data(other.m_data)
-			, m_cc(other.m_cc) {
-			other.m_cc = -1;
-			std::cout << "Obj(Obj&&): " << m_data << " " << m_cc << "\n";
-		}
-
-		Obj& operator=(Obj&& other) noexcept {
-			m_data = other.m_data;
-			m_cc = other.m_cc + 1;
-			other.m_cc = -1;
-			std::cout << "Obj& =(Obj&&): " << m_data << " " << m_cc << "\n";
-			return *this;
-		}
-
-	};
-	if constexpr (std::is_trivially_copyable_v<Obj>) {
-		std::cout << "is is_trivially_copyable\n";
-	}
-	else {
-		std::cout << "is is_trivially_copyable\n";
-	}
-
-
-	Obj obj1(1);
-	Obj obj2(2);
-	Obj obj3(3);
-	Obj obj4(4);
-	obj3 = obj4;
-
-	{
-		std::vector<Obj>	objvec;
-		objvec.emplace_back(5);
-		objvec.push_back(obj1);
-	}
-
-	{
-		std::vector<Obj>	objvec;
-		objvec.emplace_back(5);
-		objvec.push_back(obj1);
-		std::cout << "Before clear\n";
-		objvec.clear();
-		std::cout << "After clear\n";
-	}
-
-	return;
-
-
-}
 
 int main()
 {
 	std::cout << "Hello World!\n";
 
-
-	//vectorTest();
-
-
 	HINSTANCE hInstance = GetModuleHandle(NULL);
 	RegisterMyWindowClass(hInstance);
 	HWND hWnd = CreateFirstWindow(hInstance);
+
+	g_pointVertexBuffer.add(g_theRightTriangle);
 
 	VulkanStuff(hInstance, hWnd, g_globals);
 
 	MessageLoop(g_globals);
 
-	//	Wait for device before exiting and cleaning up globals.
+	//	Wait for device to be idle before exiting and cleaning up globals.
 	vkDeviceWaitIdle(g_globals.g_deviceOriginal);
 
 
