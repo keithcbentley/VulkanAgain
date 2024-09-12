@@ -107,7 +107,6 @@ class PointVertexBuffer {
 
 public:
 
-
 	PointVertexBuffer() {}
 
 	PointVertexBuffer(
@@ -219,6 +218,25 @@ const std::vector<int16_t> g_rightTriangleVertices{
 
 PointVertexBuffer g_rightTrianglePointVertexBuffer(g_rightTrianglePoints, g_rightTriangleVertices);
 Shape g_theRightTriangle(g_rightTrianglePointVertexBuffer);
+
+
+const std::vector<Point> g_squarePoints{
+	{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{1.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+	{{0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+	{{0.5f, 0.5f, 0.0f }, {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f}}
+};
+
+const std::vector<int16_t> g_squareVertices{
+	0, 1, 4,
+	1, 2, 4,
+	2, 3, 4,
+	3, 0, 4 };
+
+PointVertexBuffer g_squarePointVertexBuffer(g_squarePoints, g_squareVertices);
+Shape g_theSquare(g_squarePointVertexBuffer);
+
 
 PointVertexBuffer g_pointVertexBuffer;
 
@@ -1117,8 +1135,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	graphicsPipelineConfig.setPipelineLayout(pipelineLayout);
 	graphicsPipelineConfig.setRenderPass(renderPassOriginal);
 	graphicsPipelineConfig.addShaderModule(vertShaderModule, VK_SHADER_STAGE_VERTEX_BIT, "main");
-	//	graphicsPipelineConfig.addShaderModule(textureFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
-	graphicsPipelineConfig.addShaderModule(identityFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+	graphicsPipelineConfig.addShaderModule(textureFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+	//graphicsPipelineConfig.addShaderModule(identityFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 
 	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineConfig.assemble(), deviceOriginal);
 
@@ -1524,7 +1542,8 @@ int main()
 	RegisterMyWindowClass(hInstance);
 	HWND hWnd = CreateFirstWindow(hInstance);
 
-	g_pointVertexBuffer.add(g_theRightTriangle);
+	//	g_pointVertexBuffer.add(g_theRightTriangle);
+	g_pointVertexBuffer.add(g_theSquare);
 
 	VulkanStuff(hInstance, hWnd, g_globals);
 
