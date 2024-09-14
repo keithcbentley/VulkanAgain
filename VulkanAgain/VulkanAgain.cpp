@@ -64,26 +64,6 @@ struct Point {
 };
 
 
-//const std::vector<Vertex> g_vertices = {
-//	{{-0.95f, -0.95f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-//	{{0.95f, -0.95f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-//	{{0.95f, 0.95f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-//	{{-0.95f, 0.95f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-//
-//	{{-0.95f, -0.95f, -0.75f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-//	{{0.95f, -0.95f, -0.75f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-//	{{0.95f, 0.95f, -0.75f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-//	{{-0.95f, 0.95f, -0.75f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-//};
-//
-//const std::vector<int16_t> g_vertexIndices = {
-//	0, 1, 2,
-//	2, 3, 0,
-//
-//	4, 5, 6,
-//	6, 7, 4
-//};
-
 
 class Shape;
 
@@ -102,10 +82,19 @@ class Shape;
 //	we can draw triangles around the center.)
 class PointVertexBuffer {
 
+public:
+
 	std::vector<Point>		m_points;
 	std::vector<int16_t>	m_vertices;
 
-public:
+	void dump() {
+		int vertexIndex = 0;
+		for (int16_t pointIndex : m_vertices) {
+			std::cout << "vertexIndex: " << vertexIndex << " pointIndex: " << pointIndex << "\n";
+			vertexIndex++;
+		}
+	}
+
 
 	PointVertexBuffer() {}
 
@@ -142,6 +131,25 @@ public:
 
 	Shape add(const Shape& shape);
 
+	void addOffset(double x, double y, double z, int16_t pointStartIndex, int16_t pointCount) {
+		for (int i = pointStartIndex; i < pointStartIndex + pointCount; i++) {
+			Point& p = m_points.at(i);
+			p.pos.x += x;
+			p.pos.y += y;
+			p.pos.z += z;
+		}
+	}
+
+	void scale(double x, double y, double z, int16_t pointStartIndex, int16_t pointCount) {
+		for (int i = pointStartIndex; i < pointStartIndex + pointCount; i++) {
+			Point& p = m_points.at(i);
+			p.pos.x *= x;
+			p.pos.y *= y;
+			p.pos.z *= z;
+		}
+	}
+
+
 };
 
 
@@ -149,9 +157,9 @@ class Shape {
 
 public:
 	PointVertexBuffer& m_pointVertexBuffer;
-	int16_t	m_pointIndex;
+	int16_t	m_pointStartIndex;
 	int16_t m_pointCount;
-	int16_t	m_vertexIndex;
+	int16_t	m_vertexStartIndex;
 	int16_t	m_vertexCount;
 
 	Shape(const Shape&) = delete;
@@ -161,50 +169,63 @@ public:
 
 	Shape(
 		PointVertexBuffer& pointVertexBuffer,
-		int16_t	pointIndex,
+		int16_t	pointStartIndex,
 		int16_t	pointCount,
-		int16_t	vertexIndex,
+		int16_t	vertexStartIndex,
 		int16_t vertexCount)
 		: m_pointVertexBuffer(pointVertexBuffer)
-		, m_pointIndex(pointIndex)
+		, m_pointStartIndex(pointStartIndex)
 		, m_pointCount(pointCount)
-		, m_vertexIndex(vertexIndex)
+		, m_vertexStartIndex(vertexStartIndex)
 		, m_vertexCount(vertexCount) {
 	}
 
 	Shape(PointVertexBuffer& pointVertexBuffer)
 		: m_pointVertexBuffer(pointVertexBuffer)
-		, m_pointIndex(0)
+		, m_pointStartIndex(0)
 		, m_pointCount(pointVertexBuffer.pointCount())
-		, m_vertexIndex(0)
+		, m_vertexStartIndex(0)
 		, m_vertexCount(pointVertexBuffer.vertexCount()) {
+	}
+
+	void addOffset(double x, double y, double z) {
+		m_pointVertexBuffer.addOffset(x, y, z, m_pointStartIndex, m_pointCount);
+	}
+
+	void scale(double x, double y, double z) {
+		m_pointVertexBuffer.scale(x, y, z, m_pointStartIndex, m_pointCount);
 	}
 
 
 };
 
 Shape PointVertexBuffer::add(const Shape& shape) {
-	const int16_t	thisPointIndex = static_cast<int16_t>(m_points.size());		//	remember where we started in this buffer
-	const int16_t	shapePointIndex = shape.m_pointIndex;
+	const int16_t	thisPointStartIndex = static_cast<int16_t>(m_points.size());		//	remember where we started in this buffer
+	const int16_t	shapePointStartIndex = shape.m_pointStartIndex;
 	const int16_t	shapePointCount = shape.m_pointCount;
-	const int16_t	thisVertexIndex = static_cast<int16_t>(m_vertices.size());	//	remember where started in this buffer
-	const int16_t	shapeVertexIndex = shape.m_vertexIndex;
+	const int16_t	thisVertexStartIndex = static_cast<int16_t>(m_vertices.size());	//	remember where started in this buffer
+	const int16_t	shapeVertexStartIndex = shape.m_vertexStartIndex;
 	const int16_t	shapeVertexCount = shape.m_vertexCount;
 
+
+
+
+	//	The point information doesn't change when moved to a new
+	//	buffer, so just copy it over.
 	for (int16_t i = 0; i < shapePointCount; i++) {
-		m_points.push_back(shape.m_pointVertexBuffer.m_points.at(shapePointIndex + i));
+		m_points.push_back(shape.m_pointVertexBuffer.m_points.at(shapePointStartIndex + i));
 	}
 	for (int16_t i = 0; i < shapeVertexCount; i++) {
 		//	Go through the shape point indices, subtract the (start) shape index
-		//	to normalize to a zero base, then add this vertex (start) index to rebase,
-		//	then add iterator to get the index in this buffer.
-		int16_t oldIndex = shape.m_pointVertexBuffer.m_vertices.at(shapeVertexIndex + i);
-		int16_t oldNormalIndex = oldIndex - shapeVertexIndex;
-		int16_t newIndex = oldNormalIndex + thisVertexIndex;
-
+		//	to normalize to a zero base, then add this vertex (start) index to rebase.
+		int16_t oldPointIndex = shape.m_pointVertexBuffer.m_vertices.at(shapeVertexStartIndex + i);
+		int16_t oldNormalIndex = oldPointIndex - shapePointStartIndex;
+		int16_t newIndex = oldNormalIndex + thisPointStartIndex;
 		m_vertices.push_back(newIndex);
 	}
-	return Shape(*this, thisPointIndex, shapePointCount, thisVertexIndex, shapeVertexCount);
+	//this->dump();
+	//std::cout << "\n";
+	return Shape(*this, thisPointStartIndex, shapePointCount, thisVertexStartIndex, shapeVertexCount);
 }
 
 
@@ -225,7 +246,7 @@ const std::vector<Point> g_squarePoints{
 	{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
 	{{1.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
 	{{0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-	{{0.5f, 0.5f, 0.0f }, {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f}}
+	{{0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f}}
 };
 
 const std::vector<int16_t> g_squareVertices{
@@ -1296,7 +1317,8 @@ void recordCommandBuffer(
 		&vkDescriptorSet,
 		0, nullptr);
 
-	VkBuffer pointBuffers[] = { pointBuffer };
+	VkBuffer vkPointBuffer = pointBuffer;
+	VkBuffer pointBuffers[] = { vkPointBuffer };
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
 	vkCmdBindIndexBuffer(commandBuffer, vertexBuffer, 0, VK_INDEX_TYPE_UINT16);
@@ -1316,7 +1338,6 @@ void drawFrame(Globals& globals)
 	if (!globals.g_swapchainImageViewsFrameBuffers.canDraw()) {
 		return;
 	}
-
 
 	const int	currentFrameToDrawIndex = g_nextFrameToDrawIndex;
 	DrawingFrame& currentDrawingFrame = g_allDrawingFrames.drawingFrameAt(currentFrameToDrawIndex);
@@ -1538,12 +1559,51 @@ int main()
 {
 	std::cout << "Hello World!\n";
 
+	VkRect2D	vkRect2D;
+	vkRect2D.extent.width = 640;
+	vkRect2D.extent.height = 480;
+	vkcpp::Rect2D& rect2D = vkcpp::wrapToRef<VkRect2D, vkcpp::Rect2D>(vkRect2D);
+	std::cout << rect2D.extent.width << "\n";
+	std::cout << rect2D.extent.height << "\n";
+	rect2D.extent.width = 512;
+	rect2D.extent.height = 513;
+	std::cout << vkRect2D.extent.width << "\n";
+	std::cout << vkRect2D.extent.height << "\n";
+
+
 	HINSTANCE hInstance = GetModuleHandle(NULL);
 	RegisterMyWindowClass(hInstance);
 	HWND hWnd = CreateFirstWindow(hInstance);
 
-	//	g_pointVertexBuffer.add(g_theRightTriangle);
-	g_pointVertexBuffer.add(g_theSquare);
+	Shape shape1 = g_pointVertexBuffer.add(g_theSquare);
+	//	shape1.scale(1.5, 1.5, 0.0);
+
+	Shape shape2 = g_pointVertexBuffer.add(g_theRightTriangle);
+	shape2.addOffset(0.0, 0.0, 0.5);
+
+	//Shape shape3 = g_pointVertexBuffer.add(g_theRightTriangle);
+	//shape3.addOffset(0.5, 0.5, 0.2);
+
+	//Shape shape4 = g_pointVertexBuffer.add(g_theRightTriangle);
+	//shape4.addOffset(0.75, 0.75, 0.3);
+
+	//Shape shape5 = g_pointVertexBuffer.add(g_theRightTriangle);
+	//shape5.addOffset(1.0, 1.0, 0.4);
+
+	//Shape shape6 = g_pointVertexBuffer.add(g_theRightTriangle);
+	//shape6.addOffset(1.0, 1.0, 0.5);
+
+	//Shape shape7 = g_pointVertexBuffer.add(g_theRightTriangle);
+	//shape7.addOffset(1.0, 1.0, 0.6);
+
+	//Shape shape8 = g_pointVertexBuffer.add(g_theRightTriangle);
+	//shape8.addOffset(1.0, 1.0, 0.7);
+
+	//Shape shape9 = g_pointVertexBuffer.add(g_theRightTriangle);
+	//shape9.addOffset(1.0, 1.0, 0.8);
+
+	//Shape shape10 = g_pointVertexBuffer.add(g_theRightTriangle);
+	//shape10.addOffset(1.0, 1.0, 0.9);
 
 	VulkanStuff(hInstance, hWnd, g_globals);
 

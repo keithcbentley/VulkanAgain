@@ -50,6 +50,63 @@ namespace vkcpp {
 	};
 
 
+	template<typename Real_t, typename ActsLike_t>
+		requires (sizeof(Real_t) == sizeof(ActsLike_t))
+	ActsLike_t& wrapToRef(Real_t& real)
+	{
+		ActsLike_t* p = static_cast<ActsLike_t*>(&real);
+		return *p;
+	}
+
+	class Extent2D : public VkExtent2D {};
+	//	uint32_t    width;
+	//	uint32_t    height;
+	//} VkExtent2D;
+
+	class Extent3D : public VkExtent3D {};
+	//	uint32_t    width;
+	//	uint32_t    height;
+	//	uint32_t    depth;
+	//} VkExtent3D;
+
+	class Offset2D : public VkOffset2D {};
+	//	int32_t    x;
+	//	int32_t    y;
+	//} VkOffset2D;
+
+	class Offset3D : public VkOffset3D {};
+	//	int32_t    x;
+	//	int32_t    y;
+	//	int32_t    z;
+	//} VkOffset3D;
+
+	class Rect2D : public VkRect2D {
+
+	public:
+
+		Rect2D()
+			: VkRect2D{} {
+		}
+
+		Rect2D(VkOffset2D vkOffset2D, VkExtent2D vkExtent2D) {
+			offset = vkOffset2D;
+			extent = vkExtent2D;
+		}
+
+		Rect2D(VkExtent2D vkExtent2D) {
+			offset.x = 0;
+			offset.y = 0;
+			extent = vkExtent2D;
+		}
+
+
+
+	};
+	static_assert(sizeof(Rect2D) == sizeof(VkRect2D));
+	template Rect2D& wrapToRef<VkRect2D, Rect2D>(VkRect2D&);
+
+
+
 	class Device;
 
 	template<typename HandleArg_t, typename OwnerArg_t = VkDevice>
@@ -153,14 +210,6 @@ namespace vkcpp {
 			}
 			return m_owner;
 		}
-
-		//Device getDevice() const
-		//	requires std::same_as<Owner_t, Device> {
-		//	if (!m_owner) {
-		//		throw NullHandleException();
-		//	}
-		//	return m_owner;
-		//}
 
 	};
 
@@ -867,7 +916,7 @@ namespace vkcpp {
 				device
 			);
 			memcpy(m_mappedMemory, pSrcMem, size);
-			unmapMemory();
+			//unmapMemory();
 		}
 
 
@@ -1688,9 +1737,9 @@ namespace vkcpp {
 		RenderPass	m_renderPass;
 
 		Swapchain	m_swapchain;
-		std::vector<ImageView>	m_swapchainImageViews;
+		std::vector<ImageView>		m_swapchainImageViews;
 		std::vector<VkFramebuffer>	m_swapchainFrameBuffers;
-		Image_Memory_View			m_depthBuffer;
+		Image_Memory_View	m_depthBuffer;
 
 	private:
 
@@ -2009,8 +2058,6 @@ namespace vkcpp {
 		}
 
 	};
-
-
 
 
 }
