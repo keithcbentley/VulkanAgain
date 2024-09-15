@@ -278,6 +278,14 @@ const int windowWidth = 800;
 const int windowHeight = 600;
 
 
+struct ModelViewProjTransform {
+	alignas(16) glm::mat4 model;
+	alignas(16) glm::mat4 view;
+	alignas(16) glm::mat4 proj;
+};
+
+
+
 class DrawingFrame {
 
 public:
@@ -295,24 +303,25 @@ public:
 	DrawingFrame(DrawingFrame&&) = delete;
 	DrawingFrame& operator=(DrawingFrame&&) = delete;
 
-	void moveInFlightFence(vkcpp::Fence&& fence) {
-		m_inFlightFence = std::move(fence);
+
+	void createCommandBuffer(vkcpp::CommandPool commandPool) {
+		m_commandBuffer = std::move(vkcpp::CommandBuffer(commandPool));
 	}
 
-	void moveImageAvailableSemaphore(vkcpp::Semaphore&& semaphore) {
-		m_imageAvailableSemaphore = std::move(semaphore);
+	void createUniformBuffer(vkcpp::Device device) {
+		m_uniformBufferMemory = std::move(
+			vkcpp::Buffer_DeviceMemory(
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				sizeof(ModelViewProjTransform),
+				device
+			));
 	}
 
-	void moveRenderFinishedSemaphore(vkcpp::Semaphore&& semaphore) {
-		m_renderFinishedSemaphore = std::move(semaphore);
-	}
-
-	void moveCommandBuffer(vkcpp::CommandBuffer&& vkCommandBuffer) {
-		m_commandBuffer = std::move(vkCommandBuffer);
-	}
-
-	void moveUniformMemoryBuffer(vkcpp::Buffer_DeviceMemory&& bufferAndDeviceMemoryMapped) {
-		m_uniformBufferMemory = std::move(bufferAndDeviceMemoryMapped);
+	void createSyncObjects(vkcpp::Device device) {
+		m_imageAvailableSemaphore = std::move(vkcpp::Semaphore(device));
+		m_renderFinishedSemaphore = std::move(vkcpp::Semaphore(device));
+		m_inFlightFence = std::move(vkcpp::Fence(VK_FENCE_CREATE_SIGNALED_BIT, device));
 	}
 
 	void moveDescriptorSet(vkcpp::DescriptorSet&& descriptorSet) {
@@ -335,9 +344,7 @@ private:
 public:
 
 	AllDrawingFrames() {}
-	~AllDrawingFrames() {
-		return;
-	}
+	~AllDrawingFrames() = default;
 
 	AllDrawingFrames(const AllDrawingFrames&) = delete;
 	AllDrawingFrames& operator=(const AllDrawingFrames&) = delete;
@@ -349,6 +356,24 @@ public:
 	}
 
 	int	frameCount() { return static_cast<int>(m_drawingFrames.size()); }
+
+	void createUniformBuffers(vkcpp::Device device) {
+		for (DrawingFrame& drawingFrame : m_drawingFrames) {
+			drawingFrame.createUniformBuffer(device);
+		}
+	}
+
+	void createCommandBuffers(vkcpp::CommandPool commandPool) {
+		for (DrawingFrame& drawingFrame : m_drawingFrames) {
+			drawingFrame.createCommandBuffer(commandPool);
+		}
+	}
+
+	void createSyncObjects(vkcpp::Device device) {
+		for (DrawingFrame& drawingFrame : m_drawingFrames) {
+			drawingFrame.createSyncObjects(device);
+		}
+	}
 
 };
 
@@ -373,13 +398,6 @@ vkcpp::VulkanInstance createVulkanInstance() {
 
 	return vkcpp::VulkanInstance(vulkanInstanceCreateInfo);
 }
-
-
-struct ModelViewProjTransform {
-	alignas(16) glm::mat4 model;
-	alignas(16) glm::mat4 view;
-	alignas(16) glm::mat4 proj;
-};
 
 
 
@@ -433,7 +451,9 @@ public:
 	vkcpp::Sampler g_textureSampler;
 
 };
+
 Globals g_globals;
+
 AllDrawingFrames g_allDrawingFrames(MAX_FRAMES_IN_FLIGHT);
 
 
@@ -923,6 +943,7 @@ vkcpp::Image_Memory_View createTextureFromFile(
 
 class RenderPassCreateInfo : public VkRenderPassCreateInfo {
 
+	//	TODO: doesn't really need to use inheritance.
 public:
 
 	VkFormat								m_vkFormat;
@@ -1100,17 +1121,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		g_pointVertexBuffer.vertexData(),
 		deviceOriginal);
 
-	{
-		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-			g_allDrawingFrames.drawingFrameAt(i).moveUniformMemoryBuffer(
-				vkcpp::Buffer_DeviceMemory(
-					VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-					sizeof(ModelViewProjTransform),
-					deviceOriginal
-				));
-		}
-	}
+	g_allDrawingFrames.createUniformBuffers(deviceOriginal);
 
 	vkcpp::ShaderModule	vertShaderModule =
 		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert4.spv", deviceOriginal);
@@ -1171,35 +1182,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineConfig.assemble(), deviceOriginal);
 
-
-	{
-		VkCommandBufferAllocateInfo commandBufferAllocateInfo{};
-		commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		commandBufferAllocateInfo.commandPool = commandPoolOriginal;
-		commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		commandBufferAllocateInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
-		std::vector<vkcpp::CommandBuffer> commandBuffers =
-			vkcpp::CommandBuffer::allocateCommandBuffers(commandBufferAllocateInfo, commandPoolOriginal);
-		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-			g_allDrawingFrames.drawingFrameAt(i).moveCommandBuffer(std::move(commandBuffers[i]));
-		}
-	}
-
-	VkSemaphoreCreateInfo semaphoreInfo{};
-	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-	VkFenceCreateInfo fenceInfo{};
-	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-		g_allDrawingFrames.drawingFrameAt(i).moveImageAvailableSemaphore(
-			vkcpp::Semaphore(semaphoreInfo, deviceOriginal));
-		g_allDrawingFrames.drawingFrameAt(i).moveRenderFinishedSemaphore(
-			vkcpp::Semaphore(semaphoreInfo, deviceOriginal));
-		g_allDrawingFrames.drawingFrameAt(i).moveInFlightFence(
-			vkcpp::Fence(fenceInfo, deviceOriginal));
-	}
+	g_allDrawingFrames.createCommandBuffers(commandPoolOriginal);
+	g_allDrawingFrames.createSyncObjects(deviceOriginal);
 
 
 #undef globals

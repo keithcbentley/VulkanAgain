@@ -1064,23 +1064,6 @@ namespace vkcpp {
 			new(this) CommandBuffer(vkCommandBuffer, commandPool, &destroy);
 		}
 
-		static std::vector<CommandBuffer> allocateCommandBuffers(
-			VkCommandBufferAllocateInfo& vkCommandBufferAllocateInfo,
-			CommandPool	commandPool
-		) {
-			std::vector<VkCommandBuffer> vkCommandBuffers(vkCommandBufferAllocateInfo.commandBufferCount);
-			VkResult vkResult = vkAllocateCommandBuffers(
-				commandPool.getVkDevice(), &vkCommandBufferAllocateInfo, vkCommandBuffers.data());
-			if (vkResult != VK_SUCCESS) {
-				throw Exception(vkResult);
-			}
-			std::vector<CommandBuffer> commandBuffers;
-			for (VkCommandBuffer vkCommandBuffer : vkCommandBuffers) {
-				//	Can't use emplace_back since full constructor is private.
-				commandBuffers.push_back(std::move(CommandBuffer(vkCommandBuffer, commandPool, &destroy)));
-			}
-			return commandBuffers;
-		}
 
 		void reset() {
 			VkResult vkResult = vkResetCommandBuffer(*this, 0);
@@ -1300,6 +1283,7 @@ namespace vkcpp {
 	public:
 
 		Semaphore() {}
+
 		Semaphore(const VkSemaphoreCreateInfo& vkSemaphoreCreateInfo, VkDevice vkDevice) {
 			VkSemaphore vkSemaphore;
 			VkResult vkResult = vkCreateSemaphore(vkDevice, &vkSemaphoreCreateInfo, nullptr, &vkSemaphore);
@@ -1308,6 +1292,14 @@ namespace vkcpp {
 			}
 			new(this)Semaphore(vkSemaphore, vkDevice, &destroy);
 		}
+
+		Semaphore(VkDevice vkDevice) {
+			VkSemaphoreCreateInfo vkSemaphoreCreateInfo{};
+			vkSemaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+			new(this)Semaphore(vkSemaphoreCreateInfo, vkDevice);
+		}
+
+
 	};
 
 
@@ -1331,6 +1323,13 @@ namespace vkcpp {
 				throw Exception(vkResult);
 			}
 			new(this) Fence(vkFence, vkDevice, &destroy);
+		}
+
+		Fence(VkFenceCreateFlags vkFenceCreateFlags, VkDevice vkDevice) {
+			VkFenceCreateInfo vkFenceCreateInfo{};
+			vkFenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+			vkFenceCreateInfo.flags = vkFenceCreateFlags;
+			new(this) Fence(vkFenceCreateInfo, vkDevice);
 		}
 
 		void reset() {
