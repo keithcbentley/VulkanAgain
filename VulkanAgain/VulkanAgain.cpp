@@ -65,8 +65,6 @@ struct Point {
 
 
 
-class Shape;
-
 
 //	IMPORTANT!!! READ THIS!!!
 //	The terminology is a bit more accurate but differs from Vulkan.
@@ -82,10 +80,13 @@ class Shape;
 //	we can draw triangles around the center.)
 class PointVertexBuffer {
 
-public:
-
 	std::vector<Point>		m_points;
 	std::vector<int16_t>	m_vertices;
+
+public:
+
+	friend class Shape;
+
 
 	void dump() {
 		int vertexIndex = 0;
@@ -149,18 +150,21 @@ public:
 		}
 	}
 
-
 };
 
 
 class Shape {
 
-public:
 	PointVertexBuffer& m_pointVertexBuffer;
 	int16_t	m_pointStartIndex;
 	int16_t m_pointCount;
 	int16_t	m_vertexStartIndex;
 	int16_t	m_vertexCount;
+
+
+public:
+
+	friend class PointVertexBuffer;
 
 	Shape(const Shape&) = delete;
 	Shape& operator=(const Shape&) = delete;
@@ -201,13 +205,12 @@ public:
 
 Shape PointVertexBuffer::add(const Shape& shape) {
 	const int16_t	thisPointStartIndex = static_cast<int16_t>(m_points.size());		//	remember where we started in this buffer
+	const int16_t	thisVertexStartIndex = static_cast<int16_t>(m_vertices.size());	//	remember where started in this buffer
+
 	const int16_t	shapePointStartIndex = shape.m_pointStartIndex;
 	const int16_t	shapePointCount = shape.m_pointCount;
-	const int16_t	thisVertexStartIndex = static_cast<int16_t>(m_vertices.size());	//	remember where started in this buffer
 	const int16_t	shapeVertexStartIndex = shape.m_vertexStartIndex;
 	const int16_t	shapeVertexCount = shape.m_vertexCount;
-
-
 
 
 	//	The point information doesn't change when moved to a new
@@ -215,6 +218,7 @@ Shape PointVertexBuffer::add(const Shape& shape) {
 	for (int16_t i = 0; i < shapePointCount; i++) {
 		m_points.push_back(shape.m_pointVertexBuffer.m_points.at(shapePointStartIndex + i));
 	}
+
 	for (int16_t i = 0; i < shapeVertexCount; i++) {
 		//	Go through the shape point indices, subtract the (start) shape index
 		//	to normalize to a zero base, then add this vertex (start) index to rebase.
@@ -253,7 +257,8 @@ const std::vector<int16_t> g_squareVertices{
 	0, 1, 4,
 	1, 2, 4,
 	2, 3, 4,
-	3, 0, 4 };
+	3, 0, 4
+};
 
 PointVertexBuffer g_squarePointVertexBuffer(g_squarePoints, g_squareVertices);
 Shape g_theSquare(g_squarePointVertexBuffer);
@@ -490,14 +495,10 @@ void createDescriptorSets(
 class  PipelineInputAssemblyStateCreateInfo : public VkPipelineInputAssemblyStateCreateInfo {
 
 public:
-	PipelineInputAssemblyStateCreateInfo()
+	PipelineInputAssemblyStateCreateInfo(VkPrimitiveTopology vkPrimitiveTopology)
 		: VkPipelineInputAssemblyStateCreateInfo{} {
 		sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	}
-
-	PipelineInputAssemblyStateCreateInfo& setTopology(VkPrimitiveTopology vkPrimitiveTopology) {
 		topology = vkPrimitiveTopology;
-		return *this;
 	}
 
 };
@@ -566,8 +567,6 @@ public:
 
 class GraphicsPipelineConfig {
 
-	std::vector<VkPipelineShaderStageCreateInfo> m_shaderStageCreateInfos;
-
 	std::vector<VkDynamicState> m_dynamicStates = {
 		VK_DYNAMIC_STATE_VIEWPORT,
 		VK_DYNAMIC_STATE_SCISSOR
@@ -575,14 +574,18 @@ class GraphicsPipelineConfig {
 
 	VkPipelineDynamicStateCreateInfo m_dynamicState{};
 
-	VkPipelineVertexInputStateCreateInfo m_vkPipelineVertexInputStateCreateInfo{};
-
-	PipelineInputAssemblyStateCreateInfo m_inputAssemblyStateCreateInfo{};
-
 	VkViewport m_viewport{};
 	VkRect2D m_scissor{};
 
 	VkPipelineViewportStateCreateInfo m_viewportState{};
+
+
+	PipelineInputAssemblyStateCreateInfo m_inputAssemblyStateCreateInfo{ VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST };
+	std::vector<VkVertexInputBindingDescription>	m_vertexInputBindingDescriptions;
+	VkPipelineVertexInputStateCreateInfo m_vkPipelineVertexInputStateCreateInfo{};
+
+	std::vector<VkPipelineShaderStageCreateInfo> m_shaderStageCreateInfos;
+
 
 	PipelineRasterizationStateCreateInfo m_pipelineRasterizationStateCreateInfo{};
 
@@ -598,12 +601,9 @@ class GraphicsPipelineConfig {
 
 	vkcpp::PipelineLayout	m_pipelineLayout;
 	vkcpp::RenderPass		m_renderPass;
-	vkcpp::ShaderModule	m_vertexShaderModule;
-	vkcpp::ShaderModule	m_fragmentShaderModule;
 
 public:
 
-	std::vector<VkVertexInputBindingDescription>	m_vertexInputBindingDescriptions;
 
 	void addVertexInputBindingDescription(const VkVertexInputBindingDescription& vkVertexInputBindingDescription) {
 		m_vertexInputBindingDescriptions.push_back(vkVertexInputBindingDescription);
@@ -612,11 +612,6 @@ public:
 	std::vector<VkVertexInputAttributeDescription> m_vertexInputAttributeDescriptions;
 	void addVertexInputAttributeDescription(const VkVertexInputAttributeDescription& vertexInputAttributeDescriptions) {
 		m_vertexInputAttributeDescriptions.push_back(vertexInputAttributeDescriptions);
-	}
-
-
-	PipelineInputAssemblyStateCreateInfo& setInputAssemblyTopology(VkPrimitiveTopology topology) {
-		return m_inputAssemblyStateCreateInfo.setTopology(topology);
 	}
 
 	void addShaderModule(
@@ -930,77 +925,93 @@ class RenderPassCreateInfo : public VkRenderPassCreateInfo {
 
 public:
 
-	RenderPassCreateInfo()
-		: VkRenderPassCreateInfo{} {
+	VkFormat								m_vkFormat;
+
+	std::vector<VkAttachmentDescription>	m_attachmentDescriptions;
+
+	VkAttachmentDescription m_colorAttachment{};
+	VkAttachmentReference m_colorAttachmentRef{};
+
+	VkAttachmentDescription m_depthAttachment{};
+	VkAttachmentReference m_depthAttachmentRef{};
+
+	VkSubpassDescription m_vkSubpassDescription{};
+	VkSubpassDependency m_vkSubpassDependency{};
+
+	RenderPassCreateInfo(VkFormat vkFormat)
+		: VkRenderPassCreateInfo{}
+		, m_vkFormat(vkFormat) {
 	}
 
+
+	RenderPassCreateInfo& assemble() {
+
+		//	TODO: split into configure operations, a simple default, and an assemble/build
+		m_colorAttachment.format = m_vkFormat;
+		m_colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+		m_colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		m_colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		m_colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		m_colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		m_colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		m_colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+		m_colorAttachmentRef.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size());	//	size before push is index
+		m_colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+		m_attachmentDescriptions.push_back(m_colorAttachment);
+
+		m_depthAttachment.format = VK_FORMAT_D32_SFLOAT;
+		m_depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+		m_depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		m_depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		m_depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		m_depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		m_depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		m_depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+		m_depthAttachmentRef.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size());
+		m_depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		m_attachmentDescriptions.push_back(m_depthAttachment);
+
+		m_vkSubpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+		m_vkSubpassDescription.colorAttachmentCount = 1;
+		m_vkSubpassDescription.pColorAttachments = &m_colorAttachmentRef;
+		m_vkSubpassDescription.pDepthStencilAttachment = &m_depthAttachmentRef;
+
+		m_vkSubpassDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+		m_vkSubpassDependency.dstSubpass = 0;
+		m_vkSubpassDependency.srcStageMask
+			= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+		m_vkSubpassDependency.srcAccessMask = 0;
+		m_vkSubpassDependency.dstStageMask
+			= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+		m_vkSubpassDependency.dstAccessMask
+			= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+
+		sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+		attachmentCount = static_cast<uint32_t>(m_attachmentDescriptions.size());
+		pAttachments = m_attachmentDescriptions.data();
+		subpassCount = 1;
+		pSubpasses = &m_vkSubpassDescription;
+		dependencyCount = 1;
+		pDependencies = &m_vkSubpassDependency;
+
+		return *this;
+
+	}
+
+
 };
+
 
 vkcpp::RenderPass createRenderPass(
 	VkFormat swapchainImageFormat,
 	vkcpp::Device device
 ) {
-
-	std::vector<VkAttachmentDescription>	attachmentDescriptions;
-
-	VkAttachmentDescription colorAttachment{};
-	colorAttachment.format = swapchainImageFormat;
-	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-	VkAttachmentReference colorAttachmentRef{};
-	colorAttachmentRef.attachment = static_cast<uint32_t>(attachmentDescriptions.size());	//	size before push is index
-	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-	attachmentDescriptions.push_back(colorAttachment);
-
-
-	VkAttachmentDescription depthAttachment{};
-	depthAttachment.format = VK_FORMAT_D32_SFLOAT;
-	depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-	depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-	VkAttachmentReference depthAttachmentRef{};
-	depthAttachmentRef.attachment = static_cast<uint32_t>(attachmentDescriptions.size());
-	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	attachmentDescriptions.push_back(depthAttachment);
-
-
-	VkSubpassDescription vkSubpassDescription{};
-	vkSubpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	vkSubpassDescription.colorAttachmentCount = 1;
-	vkSubpassDescription.pColorAttachments = &colorAttachmentRef;
-	vkSubpassDescription.pDepthStencilAttachment = &depthAttachmentRef;
-
-	VkSubpassDependency vkSubpassDependency{};
-	vkSubpassDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-	vkSubpassDependency.dstSubpass = 0;
-	vkSubpassDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	vkSubpassDependency.srcAccessMask = 0;
-	vkSubpassDependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	vkSubpassDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-	RenderPassCreateInfo RenderPassCreateInfo{};
-	RenderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	RenderPassCreateInfo.attachmentCount = static_cast<uint32_t>(attachmentDescriptions.size());
-	RenderPassCreateInfo.pAttachments = attachmentDescriptions.data();
-	RenderPassCreateInfo.subpassCount = 1;
-	RenderPassCreateInfo.pSubpasses = &vkSubpassDescription;
-	RenderPassCreateInfo.dependencyCount = 1;
-	RenderPassCreateInfo.pDependencies = &vkSubpassDependency;
-
-	return vkcpp::RenderPass(RenderPassCreateInfo, device);
-
+	RenderPassCreateInfo RenderPassCreateInfo(swapchainImageFormat);
+	return vkcpp::RenderPass(RenderPassCreateInfo.assemble(), device);
 }
 
 
@@ -1147,7 +1158,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::PipelineLayout pipelineLayout(vkPipelineLayoutCreateInfo, deviceOriginal);
 
 	GraphicsPipelineConfig graphicsPipelineConfig;
-	graphicsPipelineConfig.setInputAssemblyTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	graphicsPipelineConfig.addVertexInputBindingDescription(Point::getBindingDescription());
 	for (const VkVertexInputAttributeDescription& vkVertexInputAttributeDescription : Point::getAttributeDescriptions()) {
 		graphicsPipelineConfig.addVertexInputAttributeDescription(vkVertexInputAttributeDescription);
