@@ -230,6 +230,13 @@ namespace vkcpp {
 			vkEnumerateInstanceVersion(&version);
 			return VersionNumber(version);
 		}
+
+		static uint32_t getVersionNumberUint32() {
+			uint32_t	version;
+			vkEnumerateInstanceVersion(&version);
+			return version;
+		}
+
 	};
 
 
@@ -397,6 +404,15 @@ namespace vkcpp {
 
 		operator VkPhysicalDevice() const { return m_vkPhysicalDevice; }
 
+		VkPhysicalDeviceFeatures2 getPhysicalDeviceFeatures2() {
+			VkPhysicalDeviceFeatures2	vkPhysicalDeviceFeatures2{};
+			vkPhysicalDeviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+			vkGetPhysicalDeviceFeatures2(m_vkPhysicalDevice, &vkPhysicalDeviceFeatures2);
+			return vkPhysicalDeviceFeatures2;
+		}
+
+
+
 		uint32_t findMemoryTypeIndex(
 			uint32_t usableMemoryIndexBits,
 			VkMemoryPropertyFlags requiredProperties
@@ -433,7 +449,7 @@ namespace vkcpp {
 		std::vector<const char*>	m_layerStrings{};
 		std::vector<const char*>	m_extensionStrings{};
 
-
+		VkApplicationInfo	m_vkApplicationInfo{};
 
 	public:
 		VulkanInstanceCreateInfo(const VulkanInstanceCreateInfo&) = delete;
@@ -468,6 +484,9 @@ namespace vkcpp {
 				ppEnabledExtensionNames = m_extensionStrings.data();
 			}
 
+			m_vkApplicationInfo.apiVersion = VersionNumber::getVersionNumberUint32();
+			pApplicationInfo = &m_vkApplicationInfo;
+
 			return this;
 
 		}
@@ -497,6 +516,9 @@ namespace vkcpp {
 	public:
 
 		VulkanInstance() {}
+		VulkanInstance(const VulkanInstance&) = delete;
+		VulkanInstance& operator=(const VulkanInstance&) = delete;
+
 		VulkanInstance(VulkanInstanceCreateInfo& vulkanInstanceCreateInfo) {
 			VkInstance vkInstance;
 			VkResult vkResult = vkCreateInstance(vulkanInstanceCreateInfo.assemble(), nullptr, &vkInstance);
@@ -519,8 +541,6 @@ namespace vkcpp {
 			}
 		}
 
-		VulkanInstance(const VulkanInstance&) = delete;
-		VulkanInstance& operator=(const VulkanInstance&) = delete;
 
 		VulkanInstance(VulkanInstance&& other) noexcept
 			: HandleWithOwner(std::move(other)) {
@@ -690,6 +710,8 @@ namespace vkcpp {
 
 		std::vector<const char*>	m_extensionStrings{};
 
+		VkPhysicalDeviceSynchronization2Features m_sync2Features;
+
 	public:
 
 		DeviceCreateInfo(const DeviceCreateInfo&) = delete;
@@ -714,6 +736,11 @@ namespace vkcpp {
 			if (enabledExtensionCount > 0) {
 				ppEnabledExtensionNames = m_extensionStrings.data();
 			}
+
+
+			m_sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
+			m_sync2Features.synchronization2 = TRUE;
+			pNext = &m_sync2Features;
 
 			return this;
 		}

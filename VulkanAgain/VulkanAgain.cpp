@@ -23,6 +23,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include "VulkanSynchronization2Only.h"
+
 
 struct Point {
 	glm::vec3	pos;
@@ -731,12 +733,14 @@ public:
 };
 
 
-class ImageMemoryBarrier : public VkImageMemoryBarrier {
+
+class ImageMemoryBarrier2 : public VkImageMemoryBarrier2 {
 
 public:
-	ImageMemoryBarrier(VkImageLayout oldLayoutArg, VkImageLayout newLayoutArg, VkImage imageArg)
-		:VkImageMemoryBarrier{} {
-		sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	ImageMemoryBarrier2(VkImageLayout oldLayoutArg, VkImageLayout newLayoutArg, VkImage imageArg)
+		:VkImageMemoryBarrier2{} {
+		sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+
 		oldLayout = oldLayoutArg;
 		newLayout = newLayoutArg;
 		srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -750,11 +754,15 @@ public:
 
 		//	Note that this grabs oldLayout and newLayout from the structure, not the args.
 		if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+			srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
 			srcAccessMask = 0;
+			dstStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
 			dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 		}
 		else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+			srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
 			srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			dstStageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
 			dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 		}
 		else {
@@ -784,9 +792,35 @@ public:
 		throw std::invalid_argument("unsupported layout transition!");
 	}
 
+};
+static_assert(sizeof(ImageMemoryBarrier2) == sizeof(VkImageMemoryBarrier2));
+
+
+class DependencyInfo : public VkDependencyInfo {
+
+	std::vector<ImageMemoryBarrier2>	m_imageMemoryBarriers;
+
+
+public:
+
+	operator VkDependencyInfo* () = delete;
+
+	DependencyInfo()
+		: VkDependencyInfo{} {
+		sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	}
+
+	void addImageMemoryBarrier(ImageMemoryBarrier2 imageMemoryBarrier) {
+		m_imageMemoryBarriers.push_back(imageMemoryBarrier);
+	}
+
+	VkDependencyInfo* assemble() {
+		imageMemoryBarrierCount = m_imageMemoryBarriers.size();
+		pImageMemoryBarriers = m_imageMemoryBarriers.data();
+		return this;
+	}
 
 };
-
 
 void transitionImageLayout(
 	VkImage image,
@@ -799,16 +833,11 @@ void transitionImageLayout(
 	vkcpp::CommandBuffer commandBuffer(commandPool);
 	commandBuffer.beginOneTimeSubmit();
 
-	ImageMemoryBarrier barrier(oldLayout, newLayout, image);
-	vkCmdPipelineBarrier(
-		commandBuffer,
-		barrier.getSourcePipelineStageFlags(),
-		barrier.getDestinationPipelineStageFlags(),
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, &barrier
-	);
+	ImageMemoryBarrier2 imageMemoryBarrier(oldLayout, newLayout, image);
+	DependencyInfo dependencyInfo{};
+	dependencyInfo.addImageMemoryBarrier(imageMemoryBarrier);
+	auto a = dependencyInfo.assemble();
+	vkCmdPipelineBarrier2(commandBuffer, dependencyInfo.assemble());
 
 	commandBuffer.end();
 
@@ -1038,10 +1067,13 @@ vkcpp::RenderPass createRenderPass(
 
 void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
+
+
 	vkcpp::VulkanInstance vulkanInstance = createVulkanInstance();
 	vulkanInstance.createDebugMessenger();
 
 	vkcpp::PhysicalDevice physicalDevice = vulkanInstance.getPhysicalDevice(0);
+	VkPhysicalDeviceFeatures2 vkPhysicalDeviceFeatures2 = physicalDevice.getPhysicalDeviceFeatures2();
 
 	//auto allQueueFamilyProperties = physicalDevice.getAllQueueFamilyProperties();
 
@@ -1050,9 +1082,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::DeviceQueueCreateInfo deviceQueueCreateInfo{};
 	deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
 	deviceCreateInfo.queueCreateInfoCount = 1;
-
-	VkPhysicalDeviceFeatures vkPhysicalDeviceFeatures{};
-	deviceCreateInfo.pEnabledFeatures = &vkPhysicalDeviceFeatures;
+	deviceCreateInfo.pNext = &vkPhysicalDeviceFeatures2;
+	deviceCreateInfo.pEnabledFeatures = nullptr;
 
 	vkcpp::Device deviceOriginal(deviceCreateInfo, physicalDevice);
 
