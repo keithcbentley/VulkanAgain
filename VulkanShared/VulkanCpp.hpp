@@ -825,6 +825,82 @@ namespace vkcpp {
 
 
 
+	class Semaphore : public HandleWithOwner<VkSemaphore> {
+
+		Semaphore(VkSemaphore vkSemaphore, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkSemaphore, vkDevice, pfnDestroy) {
+		}
+
+		static void destroy(VkSemaphore vkSemaphore, VkDevice vkDevice) {
+			vkDestroySemaphore(vkDevice, vkSemaphore, nullptr);
+		}
+
+	public:
+
+		Semaphore() {}
+
+		Semaphore(const VkSemaphoreCreateInfo& vkSemaphoreCreateInfo, VkDevice vkDevice) {
+			VkSemaphore vkSemaphore;
+			VkResult vkResult = vkCreateSemaphore(vkDevice, &vkSemaphoreCreateInfo, nullptr, &vkSemaphore);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			new(this)Semaphore(vkSemaphore, vkDevice, &destroy);
+		}
+
+		Semaphore(VkDevice vkDevice) {
+			VkSemaphoreCreateInfo vkSemaphoreCreateInfo{};
+			vkSemaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+			new(this)Semaphore(vkSemaphoreCreateInfo, vkDevice);
+		}
+
+
+	};
+
+
+	class Fence : public HandleWithOwner<VkFence> {
+
+		Fence(VkFence vkFence, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkFence, vkDevice, pfnDestroy) {
+		}
+
+		static void destroy(VkFence vkFence, VkDevice vkDevice) {
+			vkDestroyFence(vkDevice, vkFence, nullptr);
+		}
+
+	public:
+
+		Fence() {}
+		Fence(const VkFenceCreateInfo& vkFenceCreateInfo, VkDevice vkDevice) {
+			VkFence vkFence;
+			VkResult vkResult = vkCreateFence(vkDevice, &vkFenceCreateInfo, nullptr, &vkFence);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			new(this) Fence(vkFence, vkDevice, &destroy);
+		}
+
+		Fence(VkFenceCreateFlags vkFenceCreateFlags, VkDevice vkDevice) {
+			VkFenceCreateInfo vkFenceCreateInfo{};
+			vkFenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+			vkFenceCreateInfo.flags = vkFenceCreateFlags;
+			new(this) Fence(vkFenceCreateInfo, vkDevice);
+		}
+
+		void reset() {
+			VkFence vkFence = *this;
+			vkResetFences(m_owner, 1, &vkFence);
+		}
+
+		void wait() {
+			VkFence vkFence = *this;
+			vkWaitForFences(m_owner, 1, &vkFence, VK_TRUE, UINT64_MAX);
+		}
+
+	};
+
+
+
 	class DeviceMemory : public HandleWithOwner<VkDeviceMemory> {
 
 		DeviceMemory(VkDeviceMemory vkDeviceMemory, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
@@ -1339,6 +1415,105 @@ namespace vkcpp {
 	};
 
 
+	class SubmitInfo : public VkSubmitInfo {
+
+		//	TODO: modify to handle more semaphores and command buffers?
+		//	TODO: error checking? e.g., no command buffer?
+		VkSemaphore	m_vkSemaphoreWait = nullptr;
+		VkPipelineStageFlags	m_waitPipelineStageFlags{};
+		VkCommandBuffer	m_commandBuffer = nullptr;
+		VkSemaphore m_vkSemaphoreSignal = nullptr;
+
+
+	public:
+		SubmitInfo()
+			: VkSubmitInfo{} {
+			sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		}
+
+		void addWaitSemaphore(
+			Semaphore	semaphore,
+			VkPipelineStageFlags waitPipelineStateFlags) {
+			m_vkSemaphoreWait = semaphore;
+			m_waitPipelineStageFlags = waitPipelineStateFlags;
+		}
+
+		void addCommandBuffer(vkcpp::CommandBuffer commandBuffer) {
+			m_commandBuffer = commandBuffer;
+		}
+
+		void addSignalSemaphore(vkcpp::Semaphore semaphore) {
+			m_vkSemaphoreSignal = semaphore;
+		}
+
+		VkSubmitInfo* assemble() {
+			if (m_vkSemaphoreWait) {
+				waitSemaphoreCount = 1;
+				pWaitSemaphores = &m_vkSemaphoreWait;
+				pWaitDstStageMask = &m_waitPipelineStageFlags;
+			}
+
+			if (m_commandBuffer) {
+				commandBufferCount = 1;
+				pCommandBuffers = &m_commandBuffer;
+			}
+
+			if (m_vkSemaphoreSignal) {
+				signalSemaphoreCount = 1;
+				pSignalSemaphores = &m_vkSemaphoreSignal;
+			}
+
+			return this;
+
+		}
+
+	};
+
+	class PresentInfo : public VkPresentInfoKHR {
+
+		//	TODO: modify to handle more semaphores?
+		VkSemaphore	m_vkSemaphoreWait = nullptr;
+		VkSwapchainKHR	m_vkSwapchain = nullptr;
+		uint32_t		m_swapchainImageIndex = 0;
+
+	public:
+
+		PresentInfo()
+			: VkPresentInfoKHR{} {
+			sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		}
+
+		void addWaitSemaphore(vkcpp::Semaphore semaphore) {
+			m_vkSemaphoreWait = semaphore;
+		}
+
+		void addSwapchain(
+			VkSwapchainKHR vkSwapchain,
+			int	swapchainImageIndex
+		) {
+			m_vkSwapchain = vkSwapchain;
+			m_swapchainImageIndex = swapchainImageIndex;
+		}
+
+		VkPresentInfoKHR* assemble() {
+			if (m_vkSemaphoreWait) {
+				waitSemaphoreCount = 1;
+				pWaitSemaphores = &m_vkSemaphoreWait;
+			}
+
+			if (m_vkSwapchain) {
+				swapchainCount = 1;
+				pSwapchains = &m_vkSwapchain;
+				pImageIndices = &m_swapchainImageIndex;
+			}
+
+			return this;
+		}
+
+	};
+
+
+
 	class Queue : public HandleWithOwner<VkQueue, Device> {
 
 	public:
@@ -1365,15 +1540,27 @@ namespace vkcpp {
 		}
 
 		void submit(CommandBuffer commandBuffer) {
-			VkSubmitInfo submitInfo{};
-			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-			submitInfo.commandBufferCount = 1;
-			VkCommandBuffer vkCommandBuffer = commandBuffer;
-			submitInfo.pCommandBuffers = &vkCommandBuffer;
-			vkQueueSubmit(*this, 1, &submitInfo, VK_NULL_HANDLE);
+			SubmitInfo submitInfo;
+			submitInfo.addCommandBuffer(commandBuffer);
+			VkResult vkResult = vkQueueSubmit(*this, 1, submitInfo.assemble(), VK_NULL_HANDLE);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
 		}
 
+		void submit(SubmitInfo& submitInfo, Fence fence) {
+			VkResult vkResult = vkQueueSubmit(*this, 1, submitInfo.assemble(), fence);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+		}
 
+		void present(PresentInfo& presentInfo) {
+			VkResult vkResult = vkQueuePresentKHR(*this, presentInfo.assemble());
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+		}
 	};
 
 	Queue Device::getDeviceQueue(int deviceQueueFamily, int deviceQueueIndex) const {
@@ -1553,82 +1740,6 @@ namespace vkcpp {
 		}
 
 	};
-
-
-	class Semaphore : public HandleWithOwner<VkSemaphore> {
-
-		Semaphore(VkSemaphore vkSemaphore, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(vkSemaphore, vkDevice, pfnDestroy) {
-		}
-
-		static void destroy(VkSemaphore vkSemaphore, VkDevice vkDevice) {
-			vkDestroySemaphore(vkDevice, vkSemaphore, nullptr);
-		}
-
-	public:
-
-		Semaphore() {}
-
-		Semaphore(const VkSemaphoreCreateInfo& vkSemaphoreCreateInfo, VkDevice vkDevice) {
-			VkSemaphore vkSemaphore;
-			VkResult vkResult = vkCreateSemaphore(vkDevice, &vkSemaphoreCreateInfo, nullptr, &vkSemaphore);
-			if (vkResult != VK_SUCCESS) {
-				throw Exception(vkResult);
-			}
-			new(this)Semaphore(vkSemaphore, vkDevice, &destroy);
-		}
-
-		Semaphore(VkDevice vkDevice) {
-			VkSemaphoreCreateInfo vkSemaphoreCreateInfo{};
-			vkSemaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-			new(this)Semaphore(vkSemaphoreCreateInfo, vkDevice);
-		}
-
-
-	};
-
-
-	class Fence : public HandleWithOwner<VkFence> {
-
-		Fence(VkFence vkFence, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(vkFence, vkDevice, pfnDestroy) {
-		}
-
-		static void destroy(VkFence vkFence, VkDevice vkDevice) {
-			vkDestroyFence(vkDevice, vkFence, nullptr);
-		}
-
-	public:
-
-		Fence() {}
-		Fence(const VkFenceCreateInfo& vkFenceCreateInfo, VkDevice vkDevice) {
-			VkFence vkFence;
-			VkResult vkResult = vkCreateFence(vkDevice, &vkFenceCreateInfo, nullptr, &vkFence);
-			if (vkResult != VK_SUCCESS) {
-				throw Exception(vkResult);
-			}
-			new(this) Fence(vkFence, vkDevice, &destroy);
-		}
-
-		Fence(VkFenceCreateFlags vkFenceCreateFlags, VkDevice vkDevice) {
-			VkFenceCreateInfo vkFenceCreateInfo{};
-			vkFenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-			vkFenceCreateInfo.flags = vkFenceCreateFlags;
-			new(this) Fence(vkFenceCreateInfo, vkDevice);
-		}
-
-		void reset() {
-			VkFence vkFence = *this;
-			vkResetFences(m_owner, 1, &vkFence);
-		}
-
-		void wait() {
-			VkFence vkFence = *this;
-			vkWaitForFences(m_owner, 1, &vkFence, VK_TRUE, UINT64_MAX);
-		}
-
-	};
-
 
 	class PipelineLayout : public HandleWithOwner<VkPipelineLayout> {
 

@@ -1247,7 +1247,6 @@ void recordCommandBuffer(
 }
 
 
-
 void drawFrame(Globals& globals)
 {
 	//std::cout << "--->>>drawFrame\n";
@@ -1289,45 +1288,28 @@ void drawFrame(Globals& globals)
 		globals.g_graphicsPipeline);
 
 
+	vkcpp::SubmitInfo submitInfo;
+	submitInfo.addWaitSemaphore(
+		currentDrawingFrame.m_imageAvailableSemaphore,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+	);
+	submitInfo.addCommandBuffer(commandBuffer);
+	submitInfo.addSignalSemaphore(currentDrawingFrame.m_renderFinishedSemaphore);
 
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-	VkSemaphore imageAvailableSemaphores[] = { currentDrawingFrame.m_imageAvailableSemaphore };
-	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = imageAvailableSemaphores;
-	submitInfo.pWaitDstStageMask = waitStages;
-
-	submitInfo.commandBufferCount = 1;
-	VkCommandBuffer commandBuffers[] = { commandBuffer };
-	submitInfo.pCommandBuffers = commandBuffers;
-
-	VkSemaphore renderFinishedSemaphores[] = { currentDrawingFrame.m_renderFinishedSemaphore };
-	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = renderFinishedSemaphores;
 
 	//	Show that this drawing frame is now in use ..
 	//	Fence will be signaled when graphics queue is finished.
 	currentDrawingFrame.m_inFlightFence.reset();
 
-	if (vkQueueSubmit(
-		globals.g_graphicsQueue,
-		1, &submitInfo,
-		currentDrawingFrame.m_inFlightFence) != VK_SUCCESS) {
-		throw std::runtime_error("failed to submit draw command buffer!");
-	}
+	globals.g_graphicsQueue.submit(submitInfo, currentDrawingFrame.m_inFlightFence);
 
-	VkPresentInfoKHR presentInfo{};
-	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = renderFinishedSemaphores;
-	VkSwapchainKHR swapchains[] = { globals.g_swapchainImageViewsFrameBuffers.vkSwapchain() };
-	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = swapchains;
-	presentInfo.pImageIndices = &swapchainImageIndex;
-	presentInfo.pResults = nullptr; // Optional
-	vkQueuePresentKHR(globals.g_presentationQueue, &presentInfo);
+	vkcpp::PresentInfo presentInfo;
+	presentInfo.addWaitSemaphore(currentDrawingFrame.m_renderFinishedSemaphore);
+	presentInfo.addSwapchain(
+		globals.g_swapchainImageViewsFrameBuffers.vkSwapchain(),
+		swapchainImageIndex
+	);
+	globals.g_presentationQueue.present(presentInfo);
 
 	g_nextFrameToDrawIndex = (g_nextFrameToDrawIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 
