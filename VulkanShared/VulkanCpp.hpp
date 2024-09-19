@@ -216,7 +216,7 @@ namespace vkcpp {
 
 	class VersionNumber {
 
-		uint32_t	m_vkVersionNumber;
+		uint32_t	m_vkVersionNumber{};
 
 	public:
 
@@ -730,7 +730,6 @@ namespace vkcpp {
 
 	};
 
-
 	class DeviceCreateInfo : public VkDeviceCreateInfo {
 
 		std::vector<std::string>	m_extensionNames{};
@@ -782,6 +781,7 @@ namespace vkcpp {
 
 	};
 
+	class Queue;
 	class Device : public HandleWithOwner<VkDevice, VkPhysicalDevice> {
 
 
@@ -810,22 +810,19 @@ namespace vkcpp {
 			return PhysicalDevice(getOwner());
 		}
 
-		VkQueue getDeviceQueue(int deviceQueueFamily, int deviceQueueIndex) const {
-			VkQueue vkQueue;
-			vkGetDeviceQueue(m_handle, deviceQueueFamily, deviceQueueIndex, &vkQueue);
-			if (vkQueue == nullptr) {
-				throw Exception(VK_ERROR_UNKNOWN);
-			}
-			return vkQueue;
-		}
 
+		Queue getDeviceQueue(int deviceQueueFamily, int deviceQueueIndex) const;
 
 		uint32_t findMemoryTypeIndex(uint32_t usableMemoryIndexBits, VkMemoryPropertyFlags requiredProperties) {
 			return getPhysicalDevice().findMemoryTypeIndex(usableMemoryIndexBits, requiredProperties);
 		}
 
+		void waitIdle() {
+			vkDeviceWaitIdle(*this);
+		}
 
 	};
+
 
 
 	class DeviceMemory : public HandleWithOwner<VkDeviceMemory> {
@@ -1312,7 +1309,6 @@ namespace vkcpp {
 		void copyBufferToImage(
 			Buffer buffer,
 			Image image,
-			VkImageLayout dstImageLayout,
 			uint32_t	width,
 			uint32_t	height
 		) {
@@ -1341,6 +1337,53 @@ namespace vkcpp {
 		}
 
 	};
+
+
+	class Queue : public HandleWithOwner<VkQueue, Device> {
+
+	public:
+
+		Queue()
+			: HandleWithOwner{} {
+		}
+
+		Queue(VkQueue vkQueue, Device device)
+			: HandleWithOwner(vkQueue, device, nullptr) {
+		}
+
+		Queue(const Queue& other)
+			: HandleWithOwner(other) {
+		}
+
+		Queue& operator=(const Queue& other) {
+			HandleWithOwner::operator=(other);
+			return *this;
+		}
+
+		void waitIdle() {
+			vkQueueWaitIdle(*this);
+		}
+
+		void submit(CommandBuffer commandBuffer) {
+			VkSubmitInfo submitInfo{};
+			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			submitInfo.commandBufferCount = 1;
+			VkCommandBuffer vkCommandBuffer = commandBuffer;
+			submitInfo.pCommandBuffers = &vkCommandBuffer;
+			vkQueueSubmit(*this, 1, &submitInfo, VK_NULL_HANDLE);
+		}
+
+
+	};
+
+	Queue Device::getDeviceQueue(int deviceQueueFamily, int deviceQueueIndex) const {
+		VkQueue vkQueue;
+		vkGetDeviceQueue(m_handle, deviceQueueFamily, deviceQueueIndex, &vkQueue);
+		if (vkQueue == nullptr) {
+			throw Exception(VK_ERROR_UNKNOWN);
+		}
+		return Queue(vkQueue, *this);
+	}
 
 
 	class DescriptorPoolCreateInfo : public VkDescriptorPoolCreateInfo {

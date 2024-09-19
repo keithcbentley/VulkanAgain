@@ -426,8 +426,8 @@ public:
 	vkcpp::PhysicalDevice	g_physicalDevice;
 	vkcpp::Device			g_deviceOriginal;
 
-	VkQueue				g_vkGraphicsQueue = nullptr;
-	VkQueue				g_vkPresentationQueue = nullptr;
+	vkcpp::Queue				g_graphicsQueue;
+	vkcpp::Queue				g_presentationQueue;
 
 	vkcpp::RenderPass g_renderPassOriginal;
 
@@ -740,7 +740,7 @@ void transitionImageLayout(
 	VkImageLayout oldLayout,
 	VkImageLayout newLayout,
 	vkcpp::CommandPool commandPool,
-	VkQueue graphicsQueue) {
+	vkcpp::Queue graphicsQueue) {
 
 	vkcpp::CommandBuffer commandBuffer(commandPool);
 	commandBuffer.beginOneTimeSubmit();
@@ -752,14 +752,8 @@ void transitionImageLayout(
 
 	commandBuffer.end();
 
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	VkCommandBuffer vkCommandBuffer = commandBuffer;
-	submitInfo.pCommandBuffers = &vkCommandBuffer;
-
-	vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(graphicsQueue);
+	graphicsQueue.submit(commandBuffer);
+	graphicsQueue.waitIdle();
 
 }
 
@@ -770,22 +764,16 @@ void copyBufferToImage(
 	int width,
 	int height,
 	vkcpp::CommandPool commandPool,
-	VkQueue graphicsQueue) {
+	vkcpp::Queue graphicsQueue) {
 
 	vkcpp::CommandBuffer commandBuffer(commandPool);
 	commandBuffer.beginOneTimeSubmit();
 
-	commandBuffer.copyBufferToImage(buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, width, height);
+	commandBuffer.copyBufferToImage(buffer, image, width, height);
 	commandBuffer.end();
 
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	VkCommandBuffer vkCommandBuffer = commandBuffer;
-	submitInfo.pCommandBuffers = &vkCommandBuffer;
-
-	vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(graphicsQueue);
+	graphicsQueue.submit(commandBuffer);
+	graphicsQueue.waitIdle();
 }
 
 
@@ -794,7 +782,7 @@ vkcpp::Image_Memory_View createTextureFromFile(
 	const char* fileName,
 	vkcpp::Device device,
 	vkcpp::CommandPool commandPool,
-	VkQueue graphicsQueue
+	vkcpp::Queue graphicsQueue
 ) {
 	const VkFormat targetFormat = VK_FORMAT_R8G8B8A8_SRGB;
 
@@ -984,6 +972,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::DeviceQueueCreateInfo deviceQueueCreateInfo{};
 	deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
 	deviceCreateInfo.queueCreateInfoCount = 1;
+
 	deviceCreateInfo.pNext = &vkPhysicalDeviceFeatures2;
 	deviceCreateInfo.pEnabledFeatures = nullptr;
 
@@ -991,8 +980,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	const int queueFamilyIndex = 0;
 	const int queueIndex = 0;
-	VkQueue vkGraphicsQueue = deviceOriginal.getDeviceQueue(queueFamilyIndex, queueIndex);
-	VkQueue vkPresentationQueue = vkGraphicsQueue;
+	vkcpp::Queue graphicsQueue = deviceOriginal.getDeviceQueue(queueFamilyIndex, queueIndex);
+	vkcpp::Queue presentationQueue = graphicsQueue;
 
 
 	VkWin32SurfaceCreateInfoKHR vkWin32SurfaceCreateInfo{};
@@ -1073,7 +1062,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::Image_Memory_View texture =
 		createTextureFromFile(
-			"c:/vulkan/texture.jpg", deviceOriginal, commandPoolOriginal, vkGraphicsQueue);
+			"c:/vulkan/texture.jpg", deviceOriginal, commandPoolOriginal, graphicsQueue);
 
 
 	vkcpp::SamplerCreateInfo textureSamplerCreateInfo;
@@ -1142,8 +1131,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	globals.g_commandPoolOriginal = std::move(commandPoolOriginal);
 
-	globals.g_vkGraphicsQueue = vkGraphicsQueue;
-	globals.g_vkPresentationQueue = vkPresentationQueue;
+	globals.g_graphicsQueue = graphicsQueue;
+	globals.g_presentationQueue = presentationQueue;
 
 	globals.g_renderPassOriginal = std::move(renderPassOriginal);
 	globals.g_swapchainImageViewsFrameBuffers = std::move(swapchainImageViewsFrameBuffers);
@@ -1323,7 +1312,7 @@ void drawFrame(Globals& globals)
 	currentDrawingFrame.m_inFlightFence.reset();
 
 	if (vkQueueSubmit(
-		globals.g_vkGraphicsQueue,
+		globals.g_graphicsQueue,
 		1, &submitInfo,
 		currentDrawingFrame.m_inFlightFence) != VK_SUCCESS) {
 		throw std::runtime_error("failed to submit draw command buffer!");
@@ -1338,7 +1327,7 @@ void drawFrame(Globals& globals)
 	presentInfo.pSwapchains = swapchains;
 	presentInfo.pImageIndices = &swapchainImageIndex;
 	presentInfo.pResults = nullptr; // Optional
-	vkQueuePresentKHR(globals.g_vkPresentationQueue, &presentInfo);
+	vkQueuePresentKHR(globals.g_presentationQueue, &presentInfo);
 
 	g_nextFrameToDrawIndex = (g_nextFrameToDrawIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 
@@ -1537,7 +1526,7 @@ int main()
 	MessageLoop(g_globals);
 
 	//	Wait for device to be idle before exiting and cleaning up globals.
-	vkDeviceWaitIdle(g_globals.g_deviceOriginal);
+	g_globals.g_deviceOriginal.waitIdle();
 
 
 }
