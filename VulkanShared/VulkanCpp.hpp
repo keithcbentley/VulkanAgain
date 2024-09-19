@@ -215,27 +215,47 @@ namespace vkcpp {
 
 
 	class VersionNumber {
+
+		uint32_t	m_vkVersionNumber;
+
 	public:
-		uint32_t	m_version;
 
-		VersionNumber(uint32_t version) :m_version(version) {}
+		VersionNumber() : m_vkVersionNumber(0) {}
+		VersionNumber(uint32_t vkVersionNumber) : m_vkVersionNumber(vkVersionNumber) {}
+		VersionNumber(uint32_t major, uint32_t minor, uint32_t patch)
+			: m_vkVersionNumber(VK_MAKE_API_VERSION(0, major, minor, patch)) {
+		}
 
-		uint32_t	major() const { return VK_API_VERSION_MAJOR(m_version); }
-		uint32_t	minor() const { return VK_API_VERSION_MINOR(m_version); }
-		uint32_t	patch() const { return VK_API_VERSION_PATCH(m_version); }
-		uint32_t	variant() const { return VK_API_VERSION_VARIANT(m_version); }
+		uint32_t	major() const { return VK_API_VERSION_MAJOR(m_vkVersionNumber); }
+		uint32_t	minor() const { return VK_API_VERSION_MINOR(m_vkVersionNumber); }
+		uint32_t	patch() const { return VK_API_VERSION_PATCH(m_vkVersionNumber); }
+		uint32_t	variant() const { return VK_API_VERSION_VARIANT(m_vkVersionNumber); }
 
 		static VersionNumber getVersionNumber() {
-			uint32_t	version;
-			vkEnumerateInstanceVersion(&version);
-			return VersionNumber(version);
+			uint32_t	vkVersionNumberersion;
+			vkEnumerateInstanceVersion(&vkVersionNumberersion);
+			return VersionNumber(vkVersionNumberersion);
 		}
 
-		static uint32_t getVersionNumberUint32() {
-			uint32_t	version;
-			vkEnumerateInstanceVersion(&version);
-			return version;
+		operator uint32_t() const {
+			return m_vkVersionNumber;
 		}
+
+		operator bool() const {
+			return m_vkVersionNumber != 0;
+		}
+
+		int y;
+		auto operator<=>(const VersionNumber& other) const {
+			if (auto cmp = major() <=> other.major(); cmp != 0) {
+				return cmp;
+			}
+			if (auto cmp = minor() <=> other.minor(); cmp != 0) {
+				return cmp;
+			}
+			return patch() <=> other.patch();
+		}
+
 
 	};
 
@@ -446,8 +466,8 @@ namespace vkcpp {
 		std::unordered_set<std::string>	m_layerNames{};
 		std::unordered_set<std::string>	m_extensionNames{};
 
-		std::vector<const char*>	m_layerStrings{};
-		std::vector<const char*>	m_extensionStrings{};
+		std::vector<const char*>	m_layerNamesVector{};
+		std::vector<const char*>	m_extensionNamesVector{};
 
 		VkApplicationInfo	m_vkApplicationInfo{};
 
@@ -459,32 +479,39 @@ namespace vkcpp {
 
 		VkInstanceCreateInfo* operator& () = delete;
 
-		VulkanInstanceCreateInfo() : VkInstanceCreateInfo{} {
+		VulkanInstanceCreateInfo(VersionNumber versionNumber) : VkInstanceCreateInfo{} {
 			sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+			m_vkApplicationInfo.apiVersion = versionNumber;
 		}
 
+		VulkanInstanceCreateInfo()
+			: VulkanInstanceCreateInfo(VersionNumber::getVersionNumber()) {
+		}
+
+
 		VkInstanceCreateInfo* assemble() {
-			m_layerStrings.clear();
+			//	Need to convert from sets of layer names and extensions
+			//	to vectors so that they can be used by the Vulkan api.
+			m_layerNamesVector.clear();		// hygiene in case we are called twice
 			ppEnabledLayerNames = nullptr;
 			for (const std::string& layerName : m_layerNames) {
-				m_layerStrings.push_back(layerName.c_str());
+				m_layerNamesVector.push_back(layerName.c_str());
 			}
 			enabledLayerCount = static_cast<uint32_t>(m_layerNames.size());
 			if (enabledLayerCount > 0) {
-				ppEnabledLayerNames = m_layerStrings.data();
+				ppEnabledLayerNames = m_layerNamesVector.data();
 			}
 
-			m_extensionStrings.clear();
+			m_extensionNamesVector.clear();	// hygiene in case we are called twice
 			ppEnabledExtensionNames = nullptr;
 			for (const std::string& extensionName : m_extensionNames) {
-				m_extensionStrings.push_back(extensionName.c_str());
+				m_extensionNamesVector.push_back(extensionName.c_str());
 			}
 			enabledExtensionCount = static_cast<uint32_t>(m_extensionNames.size());
 			if (enabledExtensionCount > 0) {
-				ppEnabledExtensionNames = m_extensionStrings.data();
+				ppEnabledExtensionNames = m_extensionNamesVector.data();
 			}
 
-			m_vkApplicationInfo.apiVersion = VersionNumber::getVersionNumberUint32();
 			pApplicationInfo = &m_vkApplicationInfo;
 
 			return this;
@@ -712,6 +739,8 @@ namespace vkcpp {
 
 		VkPhysicalDeviceSynchronization2Features m_sync2Features;
 
+
+
 	public:
 
 		DeviceCreateInfo(const DeviceCreateInfo&) = delete;
@@ -737,7 +766,7 @@ namespace vkcpp {
 				ppEnabledExtensionNames = m_extensionStrings.data();
 			}
 
-
+			// For some reason, this needs to be enabled through this structure.
 			m_sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
 			m_sync2Features.synchronization2 = TRUE;
 			pNext = &m_sync2Features;
@@ -1028,6 +1057,163 @@ namespace vkcpp {
 
 	};
 
+	class ImageCreateInfo : public VkImageCreateInfo {
+
+	public:
+
+		ImageCreateInfo(
+			VkFormat vkFormat,
+			VkImageUsageFlags vkUsage)
+			: VkImageCreateInfo{} {
+			sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+			format = vkFormat;
+			usage = vkUsage;
+
+			imageType = VK_IMAGE_TYPE_2D;
+
+			extent.depth = 1;
+			mipLevels = 1;
+			arrayLayers = 1;
+			initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+			samples = VK_SAMPLE_COUNT_1_BIT;
+			sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		}
+
+		ImageCreateInfo& setExtent(VkExtent2D  vkExtent2D) {
+			extent.width = vkExtent2D.width;
+			extent.height = vkExtent2D.height;
+			return *this;
+		}
+
+	};
+
+	class Image : public HandleWithOwner<VkImage, Device> {
+
+		Image(VkImage vkImage, Device device, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkImage, device, pfnDestroy) {
+		}
+
+		static void destroy(VkImage vkImage, Device device) {
+			vkDestroyImage(device, vkImage, nullptr);
+		}
+
+	public:
+		Image() {}
+
+		Image(const ImageCreateInfo& imageCreateInfo, Device device) {
+			VkImage vkImage;
+			VkResult vkResult = vkCreateImage(device, &imageCreateInfo, nullptr, &vkImage);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			new(this) Image(vkImage, device, &destroy);
+		}
+
+		//static Image fromExisting(VkImage vkImage, Device device) {
+		//	return Image(vkImage, device, nullptr);
+		//}
+
+		//static std::vector<Image> fromExisting(std::vector<VkImage>& vkImages, Device device) {
+		//	std::vector<Image> images;
+		//	for (VkImage vkImage : vkImages) {
+		//		images.push_back(fromExisting(vkImage, device));
+		//	}
+		//	return images;
+		//}
+
+		VkMemoryRequirements  getMemoryRequirements() {
+			VkMemoryRequirements vkMemoryRequirements;
+			vkGetImageMemoryRequirements(getVkDevice(), *this, &vkMemoryRequirements);
+			return vkMemoryRequirements;
+		}
+
+		DeviceMemory allocateDeviceMemory(VkMemoryPropertyFlags vkRequiredProperties) {
+			VkMemoryRequirements vkMemoryRequirements = getMemoryRequirements();
+			VkMemoryAllocateInfo vkMemoryAllocateInfo{};
+			vkMemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			vkMemoryAllocateInfo.allocationSize = vkMemoryRequirements.size;
+			vkMemoryAllocateInfo.memoryTypeIndex =
+				getOwner().findMemoryTypeIndex(vkMemoryRequirements.memoryTypeBits, vkRequiredProperties);
+			return vkcpp::DeviceMemory(vkMemoryAllocateInfo, getOwner());
+		}
+
+	};
+
+
+
+	class ImageMemoryBarrier2 : public VkImageMemoryBarrier2 {
+
+	public:
+		ImageMemoryBarrier2(VkImageLayout oldLayoutArg, VkImageLayout newLayoutArg, VkImage imageArg)
+			:VkImageMemoryBarrier2{} {
+			sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+
+			oldLayout = oldLayoutArg;
+			newLayout = newLayoutArg;
+			srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			image = imageArg;
+			subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			subresourceRange.baseMipLevel = 0;
+			subresourceRange.levelCount = 1;
+			subresourceRange.baseArrayLayer = 0;
+			subresourceRange.layerCount = 1;
+
+			//	TODO: do we need a more general way to do this?
+			//	Note that this grabs oldLayout and newLayout from the structure, not the args.
+			if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+				srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+				srcAccessMask = 0;
+				dstStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+				dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			}
+			else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+				srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+				srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+				dstStageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
+				dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			}
+			else {
+				throw std::invalid_argument("unsupported layout transition!");
+			}
+		}
+
+
+	};
+	static_assert(sizeof(ImageMemoryBarrier2) == sizeof(VkImageMemoryBarrier2));
+
+
+	class DependencyInfo : public VkDependencyInfo {
+
+		std::vector<ImageMemoryBarrier2>	m_imageMemoryBarriers;
+
+
+	public:
+		DependencyInfo(const DependencyInfo&) = delete;
+		DependencyInfo& operator=(const DependencyInfo&) = delete;
+		DependencyInfo(DependencyInfo&&) noexcept = delete;
+		DependencyInfo& operator=(DependencyInfo&&) noexcept = delete;
+
+		VkDependencyInfo* operator& () = delete;
+
+		DependencyInfo()
+			: VkDependencyInfo{} {
+			sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+		}
+
+		void addImageMemoryBarrier(ImageMemoryBarrier2 imageMemoryBarrier) {
+			m_imageMemoryBarriers.push_back(imageMemoryBarrier);
+		}
+
+		VkDependencyInfo* assemble() {
+			imageMemoryBarrierCount = m_imageMemoryBarriers.size();
+			pImageMemoryBarriers = m_imageMemoryBarriers.data();
+			return this;
+		}
+
+	};
 
 	class CommandPool : public HandleWithOwner<VkCommandPool> {
 
@@ -1073,8 +1259,6 @@ namespace vkcpp {
 			DestroyFunc_t pfnDestroy)
 			: HandleWithOwner(vkCommandBuffer, commandPool, pfnDestroy) {
 		}
-
-
 
 	public:
 
@@ -1123,6 +1307,37 @@ namespace vkcpp {
 				throw Exception(vkResult);
 			}
 
+		}
+
+		void copyBufferToImage(
+			Buffer buffer,
+			Image image,
+			VkImageLayout dstImageLayout,
+			uint32_t	width,
+			uint32_t	height
+		) {
+			VkBufferImageCopy region{};
+			region.bufferOffset = 0;
+			region.bufferRowLength = 0;
+			region.bufferImageHeight = 0;
+			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.imageSubresource.mipLevel = 0;
+			region.imageSubresource.baseArrayLayer = 0;
+			region.imageSubresource.layerCount = 1;
+			region.imageOffset = { 0, 0, 0 };
+			region.imageExtent = {
+				width,
+				height,
+				1
+			};
+
+			vkCmdCopyBufferToImage(*this, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		}
+
+		void pipelineBarrier2(
+			DependencyInfo& dependencyInfo
+		) {
+			vkCmdPipelineBarrier2(*this, dependencyInfo.assemble());
 		}
 
 	};
@@ -1422,89 +1637,6 @@ namespace vkcpp {
 
 	};
 
-	class ImageCreateInfo : public VkImageCreateInfo {
-
-	public:
-
-		ImageCreateInfo(
-			VkFormat vkFormat,
-			VkImageUsageFlags vkUsage)
-			: VkImageCreateInfo{} {
-			sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-			format = vkFormat;
-			usage = vkUsage;
-
-			imageType = VK_IMAGE_TYPE_2D;
-
-			extent.depth = 1;
-			mipLevels = 1;
-			arrayLayers = 1;
-			initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-			samples = VK_SAMPLE_COUNT_1_BIT;
-			sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-		}
-
-		ImageCreateInfo& setExtent(VkExtent2D  vkExtent2D) {
-			extent.width = vkExtent2D.width;
-			extent.height = vkExtent2D.height;
-			return *this;
-		}
-
-	};
-
-	class Image : public HandleWithOwner<VkImage, Device> {
-
-		Image(VkImage vkImage, Device device, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(vkImage, device, pfnDestroy) {
-		}
-
-		static void destroy(VkImage vkImage, Device device) {
-			vkDestroyImage(device, vkImage, nullptr);
-		}
-
-	public:
-		Image() {}
-
-		Image(const ImageCreateInfo& imageCreateInfo, Device device) {
-			VkImage vkImage;
-			VkResult vkResult = vkCreateImage(device, &imageCreateInfo, nullptr, &vkImage);
-			if (vkResult != VK_SUCCESS) {
-				throw Exception(vkResult);
-			}
-			new(this) Image(vkImage, device, &destroy);
-		}
-
-		//static Image fromExisting(VkImage vkImage, Device device) {
-		//	return Image(vkImage, device, nullptr);
-		//}
-
-		//static std::vector<Image> fromExisting(std::vector<VkImage>& vkImages, Device device) {
-		//	std::vector<Image> images;
-		//	for (VkImage vkImage : vkImages) {
-		//		images.push_back(fromExisting(vkImage, device));
-		//	}
-		//	return images;
-		//}
-
-		VkMemoryRequirements  getMemoryRequirements() {
-			VkMemoryRequirements vkMemoryRequirements;
-			vkGetImageMemoryRequirements(getVkDevice(), *this, &vkMemoryRequirements);
-			return vkMemoryRequirements;
-		}
-
-		DeviceMemory allocateDeviceMemory(VkMemoryPropertyFlags vkRequiredProperties) {
-			VkMemoryRequirements vkMemoryRequirements = getMemoryRequirements();
-			VkMemoryAllocateInfo vkMemoryAllocateInfo{};
-			vkMemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			vkMemoryAllocateInfo.allocationSize = vkMemoryRequirements.size;
-			vkMemoryAllocateInfo.memoryTypeIndex =
-				getOwner().findMemoryTypeIndex(vkMemoryRequirements.memoryTypeBits, vkRequiredProperties);
-			return vkcpp::DeviceMemory(vkMemoryAllocateInfo, getOwner());
-		}
-
-	};
 
 	class ImageViewCreateInfo : public VkImageViewCreateInfo {
 

@@ -734,96 +734,8 @@ public:
 
 
 
-class ImageMemoryBarrier2 : public VkImageMemoryBarrier2 {
-
-public:
-	ImageMemoryBarrier2(VkImageLayout oldLayoutArg, VkImageLayout newLayoutArg, VkImage imageArg)
-		:VkImageMemoryBarrier2{} {
-		sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-
-		oldLayout = oldLayoutArg;
-		newLayout = newLayoutArg;
-		srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		image = imageArg;
-		subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		subresourceRange.baseMipLevel = 0;
-		subresourceRange.levelCount = 1;
-		subresourceRange.baseArrayLayer = 0;
-		subresourceRange.layerCount = 1;
-
-		//	Note that this grabs oldLayout and newLayout from the structure, not the args.
-		if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-			srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
-			srcAccessMask = 0;
-			dstStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
-			dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		}
-		else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-			srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
-			srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			dstStageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
-			dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		}
-		else {
-			throw std::invalid_argument("unsupported layout transition!");
-		}
-	}
-
-	VkPipelineStageFlags getSourcePipelineStageFlags() {
-		if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-			return VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		}
-		if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-			return VK_PIPELINE_STAGE_TRANSFER_BIT;
-		}
-		throw std::invalid_argument("unsupported layout transition!");
-	}
-
-	VkPipelineStageFlags getDestinationPipelineStageFlags() {
-		if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-			return VK_PIPELINE_STAGE_TRANSFER_BIT;
-		}
-
-		if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-			return VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		}
-
-		throw std::invalid_argument("unsupported layout transition!");
-	}
-
-};
-static_assert(sizeof(ImageMemoryBarrier2) == sizeof(VkImageMemoryBarrier2));
-
-
-class DependencyInfo : public VkDependencyInfo {
-
-	std::vector<ImageMemoryBarrier2>	m_imageMemoryBarriers;
-
-
-public:
-
-	operator VkDependencyInfo* () = delete;
-
-	DependencyInfo()
-		: VkDependencyInfo{} {
-		sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-	}
-
-	void addImageMemoryBarrier(ImageMemoryBarrier2 imageMemoryBarrier) {
-		m_imageMemoryBarriers.push_back(imageMemoryBarrier);
-	}
-
-	VkDependencyInfo* assemble() {
-		imageMemoryBarrierCount = m_imageMemoryBarriers.size();
-		pImageMemoryBarriers = m_imageMemoryBarriers.data();
-		return this;
-	}
-
-};
-
 void transitionImageLayout(
-	VkImage image,
+	vkcpp::Image image,
 	VkFormat format,
 	VkImageLayout oldLayout,
 	VkImageLayout newLayout,
@@ -833,11 +745,10 @@ void transitionImageLayout(
 	vkcpp::CommandBuffer commandBuffer(commandPool);
 	commandBuffer.beginOneTimeSubmit();
 
-	ImageMemoryBarrier2 imageMemoryBarrier(oldLayout, newLayout, image);
-	DependencyInfo dependencyInfo{};
+	vkcpp::ImageMemoryBarrier2 imageMemoryBarrier(oldLayout, newLayout, image);
+	vkcpp::DependencyInfo dependencyInfo;
 	dependencyInfo.addImageMemoryBarrier(imageMemoryBarrier);
-	auto a = dependencyInfo.assemble();
-	vkCmdPipelineBarrier2(commandBuffer, dependencyInfo.assemble());
+	commandBuffer.pipelineBarrier2(dependencyInfo);
 
 	commandBuffer.end();
 
@@ -854,33 +765,18 @@ void transitionImageLayout(
 
 
 void copyBufferToImage(
-	VkBuffer buffer,
-	VkImage image,
-	uint32_t width,
-	uint32_t height,
+	vkcpp::Buffer buffer,
+	vkcpp::Image image,
+	int width,
+	int height,
 	vkcpp::CommandPool commandPool,
 	VkQueue graphicsQueue) {
 
 	vkcpp::CommandBuffer commandBuffer(commandPool);
 	commandBuffer.beginOneTimeSubmit();
 
-	VkBufferImageCopy region{};
-	region.bufferOffset = 0;
-	region.bufferRowLength = 0;
-	region.bufferImageHeight = 0;
-	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	region.imageSubresource.mipLevel = 0;
-	region.imageSubresource.baseArrayLayer = 0;
-	region.imageSubresource.layerCount = 1;
-	region.imageOffset = { 0, 0, 0 };
-	region.imageExtent = {
-		width,
-		height,
-		1
-	};
-
-	vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-	vkEndCommandBuffer(commandBuffer);
+	commandBuffer.copyBufferToImage(buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, width, height);
+	commandBuffer.end();
 
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -894,14 +790,14 @@ void copyBufferToImage(
 
 
 
-
-
 vkcpp::Image_Memory_View createTextureFromFile(
 	const char* fileName,
 	vkcpp::Device device,
 	vkcpp::CommandPool commandPool,
 	VkQueue graphicsQueue
 ) {
+	const VkFormat targetFormat = VK_FORMAT_R8G8B8A8_SRGB;
+
 	int texWidth;
 	int texHeight;
 	int texChannels;
@@ -913,56 +809,63 @@ vkcpp::Image_Memory_View createTextureFromFile(
 
 	const VkDeviceSize imageSize = texWidth * texHeight * 4;
 
-	vkcpp::Buffer_DeviceMemory stagingBufferAndDeviceMemoryMapped(
+	//	Make a device (gpu) staging buffer and copy the pixels into it.
+	vkcpp::Buffer_DeviceMemory stagingBuffer_DeviceMemoryMapped(
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		imageSize,
 		pixels,
 		device);
 
-	stbi_image_free(pixels);
+	stbi_image_free(pixels);	//	Don't need these anymore.  Pixels are on gpu now.
 
+	//	Make our target image and memory.
 	VkExtent2D texExtent;
 	texExtent.width = texWidth;
 	texExtent.height = texHeight;
 	vkcpp::Image_Memory textureImage_DeviceMemory(
 		texExtent,
-		VK_FORMAT_R8G8B8A8_SRGB,
+		targetFormat,
 		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		device);
 
+	//	Change image format to be best target for transfer into.
 	transitionImageLayout(
 		textureImage_DeviceMemory.m_image,
-		VK_FORMAT_R8G8B8A8_SRGB,
+		targetFormat,
 		VK_IMAGE_LAYOUT_UNDEFINED,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		commandPool,
 		graphicsQueue);
 
+	//	Copy image pixels from staging buffer into image memory.
 	copyBufferToImage(
-		stagingBufferAndDeviceMemoryMapped.m_buffer,
+		stagingBuffer_DeviceMemoryMapped.m_buffer,
 		textureImage_DeviceMemory.m_image,
-		static_cast<uint32_t>(texWidth),
-		static_cast<uint32_t>(texHeight),
+		texWidth,
+		texHeight,
 		commandPool,
 		graphicsQueue);
 
+	//	Now transition the image layout to best for shader images.
 	transitionImageLayout(
 		textureImage_DeviceMemory.m_image,
-		VK_FORMAT_R8G8B8A8_SRGB,
+		targetFormat,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		commandPool,
 		graphicsQueue);
 
+	//	Shaders are accessed through image views, not directly from images.
 	vkcpp::ImageViewCreateInfo textureImageViewCreateInfo(
 		VK_IMAGE_VIEW_TYPE_2D,
-		VK_FORMAT_R8G8B8A8_SRGB,
+		targetFormat,
 		VK_IMAGE_ASPECT_COLOR_BIT);
 	textureImageViewCreateInfo.image = textureImage_DeviceMemory.m_image;
 	vkcpp::ImageView textureImageView(textureImageViewCreateInfo, device);
 
+	//	Package everything up for use as a shader.
 	return vkcpp::Image_Memory_View(
 		std::move(textureImage_DeviceMemory.m_image),
 		std::move(textureImage_DeviceMemory.m_deviceMemory),
@@ -1067,8 +970,6 @@ vkcpp::RenderPass createRenderPass(
 
 void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
-
-
 	vkcpp::VulkanInstance vulkanInstance = createVulkanInstance();
 	vulkanInstance.createDebugMessenger();
 
@@ -1079,6 +980,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::DeviceCreateInfo deviceCreateInfo{};
 	deviceCreateInfo.addExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
 	vkcpp::DeviceQueueCreateInfo deviceQueueCreateInfo{};
 	deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
 	deviceCreateInfo.queueCreateInfoCount = 1;
