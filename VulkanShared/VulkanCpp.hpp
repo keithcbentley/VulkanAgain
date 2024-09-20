@@ -1555,11 +1555,16 @@ namespace vkcpp {
 			}
 		}
 
-		void present(PresentInfo& presentInfo) {
+		VkResult present(PresentInfo& presentInfo) {
 			VkResult vkResult = vkQueuePresentKHR(*this, presentInfo.assemble());
-			if (vkResult != VK_SUCCESS) {
-				throw Exception(vkResult);
+			if (vkResult == VK_SUCCESS) {
+				return vkResult;
 			}
+			if (vkResult == VK_SUBOPTIMAL_KHR) {
+				return vkResult;
+			}
+
+			throw Exception(vkResult);
 		}
 	};
 
@@ -2049,6 +2054,7 @@ namespace vkcpp {
 		RenderPass	m_renderPass;
 
 		Swapchain	m_swapchain;
+		bool m_swapchainUpToDate{};
 		std::vector<ImageView>		m_swapchainImageViews;
 		std::vector<VkFramebuffer>	m_swapchainFrameBuffers;
 		Image_Memory_View	m_depthBuffer;
@@ -2184,17 +2190,17 @@ namespace vkcpp {
 		}
 
 
-		operator bool() {
-			return !!m_swapchain;
-		}
-
 		VkSwapchainKHR vkSwapchain() {
 			VkSwapchainKHR vkSwapchain = m_swapchain;	// Need to force a type conversion for return value.
 			return vkSwapchain;
 		}
 
 		bool canDraw() {
-			return !!(*this);
+			if (m_swapchain && m_swapchainUpToDate) {
+				return true;
+			}
+			recreateSwapchainImageViewsFrameBuffers();
+			return m_swapchain;
 		}
 
 		VkExtent2D getImageExtent() const {
@@ -2215,7 +2221,7 @@ namespace vkcpp {
 		}
 
 		void recreateSwapchainImageViewsFrameBuffers() {
-
+			m_swapchainUpToDate = false;
 			if (!s_device) {
 				return;
 			}
@@ -2231,7 +2237,20 @@ namespace vkcpp {
 			createSwapchainImageViews(m_vkSwapchainCreateInfo.imageFormat);
 			m_depthBuffer = std::move(createDepthBuffer(m_vkSwapchainCreateInfo.imageExtent, s_device));
 			createSwapchainFrameBuffers();
+			m_swapchainUpToDate = true;
 		}
+
+		void stale() {
+			m_swapchainUpToDate = false;
+		}
+
+		//void recreateIfStale() {
+		//	if (!m_stale) {
+		//		return;
+		//	}
+		//	recreateSwapchainImageViewsFrameBuffers();
+		//	m_stale = false;
+		//}
 
 		Image_Memory_View createDepthBuffer(
 			VkExtent2D vkExtent2D,

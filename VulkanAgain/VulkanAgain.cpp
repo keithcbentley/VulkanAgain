@@ -1246,9 +1246,13 @@ void recordCommandBuffer(
 
 }
 
+int64_t	g_drawFrameCalls;
+int64_t g_drawFrameDraws;
 
 void drawFrame(Globals& globals)
 {
+	g_drawFrameCalls++;
+
 	//std::cout << "--->>>drawFrame\n";
 	if (!globals.g_swapchainImageViewsFrameBuffers.canDraw()) {
 		return;
@@ -1264,18 +1268,26 @@ void drawFrame(Globals& globals)
 	currentDrawingFrame.m_inFlightFence.wait();
 
 	uint32_t	swapchainImageIndex;
-	vkAcquireNextImageKHR(
+	VkResult vkResult = vkAcquireNextImageKHR(
 		vkDevice,
 		globals.g_swapchainImageViewsFrameBuffers.vkSwapchain(),
-		UINT64_MAX,
+		0,
+		//		UINT64_MAX,
 		currentDrawingFrame.m_imageAvailableSemaphore,
 		VK_NULL_HANDLE,
 		&swapchainImageIndex);
+	if (vkResult == VK_NOT_READY) {
+		return;
+		//		std::cout << vkResult << "\n";
+	}
+
+
 
 	updateUniformBuffer(
 		currentDrawingFrame.m_uniformBufferMemory,
 		globals.g_swapchainImageViewsFrameBuffers.getImageExtent()
 	);
+
 
 	recordCommandBuffer(
 		commandBuffer,
@@ -1286,6 +1298,8 @@ void drawFrame(Globals& globals)
 		currentDrawingFrame.m_descriptorSet,
 		globals.g_pipelineLayout,
 		globals.g_graphicsPipeline);
+
+
 
 
 	vkcpp::SubmitInfo submitInfo;
@@ -1301,6 +1315,8 @@ void drawFrame(Globals& globals)
 	//	Fence will be signaled when graphics queue is finished.
 	currentDrawingFrame.m_inFlightFence.reset();
 
+	g_drawFrameDraws++;
+
 	globals.g_graphicsQueue.submit(submitInfo, currentDrawingFrame.m_inFlightFence);
 
 	vkcpp::PresentInfo presentInfo;
@@ -1309,7 +1325,10 @@ void drawFrame(Globals& globals)
 		globals.g_swapchainImageViewsFrameBuffers.vkSwapchain(),
 		swapchainImageIndex
 	);
-	globals.g_presentationQueue.present(presentInfo);
+	vkResult = globals.g_presentationQueue.present(presentInfo);
+	if (vkResult == VK_SUBOPTIMAL_KHR) {
+		globals.g_swapchainImageViewsFrameBuffers.stale();
+	}
 
 	g_nextFrameToDrawIndex = (g_nextFrameToDrawIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 
@@ -1319,7 +1338,7 @@ void drawFrame(Globals& globals)
 
 
 //TODO: need a better way to do this
-bool g_windowPosChanged = false;
+//bool g_windowPosChanged = false;
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -1344,7 +1363,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	case WM_WINDOWPOSCHANGED:
 		std::cout << "WM_WINDOWPOSCHANGED\n";
-		g_windowPosChanged = true;
+		g_globals.g_swapchainImageViewsFrameBuffers.stale();
+		//		g_windowPosChanged = true;
 		break;
 
 	default:
@@ -1407,15 +1427,31 @@ HWND CreateFirstWindow(HINSTANCE hInstance)
 	return hWnd;
 }
 
+auto g_statStart = std::chrono::high_resolution_clock::now();
 
+void showStats() {
 
+	auto statEnd = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> statDiff = statEnd - g_statStart;
+	if (statDiff >= std::chrono::seconds{ 10 }) {
+		g_statStart = std::chrono::high_resolution_clock::now();
+		std::cout << "stats:\n";
+		std::cout << "  time: " << statDiff << "  " << statDiff.count() << "\n";
+		std::cout << "  drawFrameCalls: " << g_drawFrameCalls << "\n";
+		std::cout << "  drawFrameDraws: " << g_drawFrameDraws << "\n";
+
+		g_drawFrameCalls = 0;
+		g_drawFrameDraws = 0;
+
+	}
+
+}
 
 void MessageLoop(Globals& globals) {
 
 	MSG msg;
 
 	bool	done = false;
-	bool	graphicsValid = true;
 
 	while (!done) {
 		while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
@@ -1423,20 +1459,6 @@ void MessageLoop(Globals& globals) {
 			if (msg.message == WM_QUIT) {
 				done = true;
 				break;
-			}
-
-			if (g_windowPosChanged) {
-				if (graphicsValid) {
-					try {
-						globals.g_swapchainImageViewsFrameBuffers.recreateSwapchainImageViewsFrameBuffers();
-					}
-					catch (vkcpp::ShutdownException&)
-					{
-						std::cout << "Yikes\n";
-						graphicsValid = false;
-					}
-				}
-				g_windowPosChanged = false;
 			}
 
 			if (msg.message == WM_KEYDOWN) {
@@ -1447,7 +1469,14 @@ void MessageLoop(Globals& globals) {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
-		drawFrame(globals);
+
+		try {
+			drawFrame(globals);
+		}
+		catch (vkcpp::ShutdownException&) {
+			done = true;
+		}
+		showStats();
 	}
 	return;
 }
