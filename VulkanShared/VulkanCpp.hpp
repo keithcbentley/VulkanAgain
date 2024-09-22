@@ -671,6 +671,10 @@ namespace vkcpp {
 			if (vkResult == VK_ERROR_UNKNOWN) {
 				throw ShutdownException();
 			}
+
+			if (vkResult == VK_ERROR_SURFACE_LOST_KHR) {
+				throw ShutdownException();
+			}
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
@@ -2229,6 +2233,10 @@ namespace vkcpp {
 			vkDeviceWaitIdle(s_device);
 			destroyFrameBuffers();
 			destroyImageViews();
+
+			//	TODO: can we set the old swapchain to avoid this?
+			//	Explicitly destroy the old swapchain for now.
+			m_swapchain = std::move(vkcpp::Swapchain());
 
 			m_swapchain = std::move(createSwapchain(m_vkSwapchainCreateInfo, m_surface));
 			if (!m_swapchain) {

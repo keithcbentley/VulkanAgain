@@ -863,7 +863,6 @@ vkcpp::Image_Memory_View createTextureFromFile(
 
 class RenderPassCreateInfo : public VkRenderPassCreateInfo {
 
-	//	TODO: doesn't really need to use inheritance.
 public:
 
 	VkFormat								m_vkFormat;
@@ -994,9 +993,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	//std::vector<VkSurfaceFormatKHR> surfaceFormats = surfaceOriginal.getSurfaceFormats();
 	//std::vector<VkPresentModeKHR> presentModes = surfaceOriginal.getSurfacePresentModes();
 
-
 	const VkFormat swapchainImageFormat = VK_FORMAT_B8G8R8A8_SRGB;
-
 
 	vkcpp::RenderPass renderPassOriginal(createRenderPass(swapchainImageFormat, deviceOriginal));
 
@@ -1253,7 +1250,6 @@ void drawFrame(Globals& globals)
 {
 	g_drawFrameCalls++;
 
-	//std::cout << "--->>>drawFrame\n";
 	if (!globals.g_swapchainImageViewsFrameBuffers.canDraw()) {
 		return;
 	}
@@ -1272,22 +1268,17 @@ void drawFrame(Globals& globals)
 		vkDevice,
 		globals.g_swapchainImageViewsFrameBuffers.vkSwapchain(),
 		0,
-		//		UINT64_MAX,
 		currentDrawingFrame.m_imageAvailableSemaphore,
 		VK_NULL_HANDLE,
 		&swapchainImageIndex);
 	if (vkResult == VK_NOT_READY) {
 		return;
-		//		std::cout << vkResult << "\n";
 	}
-
-
 
 	updateUniformBuffer(
 		currentDrawingFrame.m_uniformBufferMemory,
 		globals.g_swapchainImageViewsFrameBuffers.getImageExtent()
 	);
-
 
 	recordCommandBuffer(
 		commandBuffer,
@@ -1298,9 +1289,6 @@ void drawFrame(Globals& globals)
 		currentDrawingFrame.m_descriptorSet,
 		globals.g_pipelineLayout,
 		globals.g_graphicsPipeline);
-
-
-
 
 	vkcpp::SubmitInfo submitInfo;
 	submitInfo.addWaitSemaphore(
@@ -1332,13 +1320,7 @@ void drawFrame(Globals& globals)
 
 	g_nextFrameToDrawIndex = (g_nextFrameToDrawIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 
-
-	//std::cout << "<<<---drawFrame\n";
 }
-
-
-//TODO: need a better way to do this
-//bool g_windowPosChanged = false;
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
