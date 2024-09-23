@@ -1000,7 +1000,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::Swapchain_ImageViews_FrameBuffers::setDevice(deviceOriginal);
 
 	const VkColorSpaceKHR swapchainImageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-	const VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+	const VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
 
 	VkSwapchainCreateInfoKHR swapchainCreateInfo{};
 	swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -1246,9 +1246,46 @@ void recordCommandBuffer(
 int64_t	g_drawFrameCalls;
 int64_t g_drawFrameDraws;
 
+
+//class DurationTimer {
+//
+//public:
+//
+//
+//	std::chrono::high_resolution_clock::time_point m_start = std::chrono::high_resolution_clock::now();
+//
+//	DurationTimer() {}
+//
+//	void finish(int limit, const char* msg) {
+//		auto end = std::chrono::high_resolution_clock::now();
+//		std::chrono::duration<double> diff = end - m_start;
+//		if (diff >= std::chrono::milliseconds{ limit }) {
+//			std::cout << msg << ": " << diff << "\n";
+//		}
+//
+//	}
+//
+//};
+
+
+std::chrono::high_resolution_clock::time_point g_nextFrameTime = std::chrono::high_resolution_clock::now();
+
+
 void drawFrame(Globals& globals)
 {
 	g_drawFrameCalls++;
+
+	//	nvidia driver blocks when presenting.
+	//	Time the calls ourselves instead of just blasting
+	//	thousands of frames.
+	std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
+	if (now < g_nextFrameTime) {
+		return;
+	}
+	double frameInterval = (1.0 / 60.0);
+	long long frameIntervalMicro = frameInterval * 1'000'000.0;
+	g_nextFrameTime = std::chrono::high_resolution_clock::now() + std::chrono::microseconds(frameIntervalMicro);
+
 
 	if (!globals.g_swapchainImageViewsFrameBuffers.canDraw()) {
 		return;
@@ -1259,6 +1296,7 @@ void drawFrame(Globals& globals)
 
 	VkDevice vkDevice = currentDrawingFrame.getVkDevice();
 	vkcpp::CommandBuffer commandBuffer = currentDrawingFrame.m_commandBuffer;
+
 
 	//	Wait for this drawing frame to be free
 	currentDrawingFrame.m_inFlightFence.wait();
@@ -1280,6 +1318,7 @@ void drawFrame(Globals& globals)
 		globals.g_swapchainImageViewsFrameBuffers.getImageExtent()
 	);
 
+
 	recordCommandBuffer(
 		commandBuffer,
 		globals.g_swapchainImageViewsFrameBuffers,
@@ -1289,6 +1328,7 @@ void drawFrame(Globals& globals)
 		currentDrawingFrame.m_descriptorSet,
 		globals.g_pipelineLayout,
 		globals.g_graphicsPipeline);
+
 
 	vkcpp::SubmitInfo submitInfo;
 	submitInfo.addWaitSemaphore(
@@ -1313,6 +1353,7 @@ void drawFrame(Globals& globals)
 		globals.g_swapchainImageViewsFrameBuffers.vkSwapchain(),
 		swapchainImageIndex
 	);
+
 	vkResult = globals.g_presentationQueue.present(presentInfo);
 	if (vkResult == VK_SUBOPTIMAL_KHR) {
 		globals.g_swapchainImageViewsFrameBuffers.stale();
