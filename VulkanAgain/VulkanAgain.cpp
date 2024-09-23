@@ -1000,7 +1000,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::Swapchain_ImageViews_FrameBuffers::setDevice(deviceOriginal);
 
 	const VkColorSpaceKHR swapchainImageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-	const VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+	const VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
 
 	VkSwapchainCreateInfoKHR swapchainCreateInfo{};
 	swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -1342,7 +1342,6 @@ void drawFrame(Globals& globals)
 	//	Show that this drawing frame is now in use ..
 	//	Fence will be signaled when graphics queue is finished.
 	currentDrawingFrame.m_inFlightFence.reset();
-
 	g_drawFrameDraws++;
 
 	globals.g_graphicsQueue.submit(submitInfo, currentDrawingFrame.m_inFlightFence);
@@ -1354,6 +1353,7 @@ void drawFrame(Globals& globals)
 		swapchainImageIndex
 	);
 
+	//	TODO: add timer to check for blocking call?
 	vkResult = globals.g_presentationQueue.present(presentInfo);
 	if (vkResult == VK_SUBOPTIMAL_KHR) {
 		globals.g_swapchainImageViewsFrameBuffers.stale();
