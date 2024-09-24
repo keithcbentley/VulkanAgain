@@ -883,6 +883,7 @@ vkcpp::RenderPass createRenderPass(
 }
 
 
+
 void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::VulkanInstance vulkanInstance = createVulkanInstance();
@@ -996,16 +997,9 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::DescriptorSetLayout descriptorSetLayoutOriginal = createDrawingFrameDescriptorSetLayout(deviceOriginal);
 	vkcpp::DescriptorPool descriptorPoolOriginal = createDescriptorPool(deviceOriginal);
 
-	VkPipelineLayoutCreateInfo vkPipelineLayoutCreateInfo{};
-	std::vector<VkDescriptorSetLayout> descriptorSetLayouts{ descriptorSetLayoutOriginal };
-
-	vkPipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	vkPipelineLayoutCreateInfo.setLayoutCount = (uint32_t)descriptorSetLayouts.size();
-	vkPipelineLayoutCreateInfo.pSetLayouts = descriptorSetLayouts.data();
-	vkPipelineLayoutCreateInfo.pushConstantRangeCount = 0; // Optional
-	vkPipelineLayoutCreateInfo.pPushConstantRanges = nullptr; // Optional
-
-	vkcpp::PipelineLayout pipelineLayout(vkPipelineLayoutCreateInfo, deviceOriginal);
+	vkcpp::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
+	pipelineLayoutCreateInfo.addDescriptorSetLayout(descriptorSetLayoutOriginal);
+	vkcpp::PipelineLayout pipelineLayout(pipelineLayoutCreateInfo, deviceOriginal);
 
 	GraphicsPipelineCreateInfo graphicsPipelineCreateInfo;
 	graphicsPipelineCreateInfo.addVertexInputBindingDescription(Point::getBindingDescription());
@@ -1205,6 +1199,7 @@ void drawFrame(Globals& globals)
 	//	nvidia driver blocks when presenting.
 	//	Time the calls ourselves instead of just blasting
 	//	thousands of frames.
+	//	TODO: do timing outside of call to give time back to OS?
 	std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
 	if (now < g_nextFrameTime) {
 		return;

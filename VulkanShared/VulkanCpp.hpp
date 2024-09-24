@@ -1842,6 +1842,34 @@ namespace vkcpp {
 
 	};
 
+	class PipelineLayoutCreateInfo : public VkPipelineLayoutCreateInfo {
+
+		std::vector<VkDescriptorSetLayout> m_descriptorSetLayouts;
+
+	public:
+
+		PipelineLayoutCreateInfo()
+			: VkPipelineLayoutCreateInfo() {
+			sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		}
+
+		void addDescriptorSetLayout(
+			vkcpp::DescriptorSetLayout descriptorSetLayout
+		) {
+			m_descriptorSetLayouts.push_back(descriptorSetLayout);
+		}
+
+		VkPipelineLayoutCreateInfo* assemble() {
+			if (m_descriptorSetLayouts.size() > 0) {
+				setLayoutCount = (uint32_t)m_descriptorSetLayouts.size();
+				pSetLayouts = m_descriptorSetLayouts.data();
+			}
+			return this;
+
+		}
+	};
+
+
 	class PipelineLayout : public HandleWithOwner<VkPipelineLayout> {
 
 		PipelineLayout(VkPipelineLayout vkPipelineLayout, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
@@ -1855,9 +1883,9 @@ namespace vkcpp {
 	public:
 
 		PipelineLayout() {}
-		PipelineLayout(VkPipelineLayoutCreateInfo& pipelineLayoutCreateInfo, VkDevice vkDevice) {
+		PipelineLayout(PipelineLayoutCreateInfo& pipelineLayoutCreateInfo, VkDevice vkDevice) {
 			VkPipelineLayout vkPipelineLayout;
-			VkResult vkResult = vkCreatePipelineLayout(vkDevice, &pipelineLayoutCreateInfo, nullptr, &vkPipelineLayout);
+			VkResult vkResult = vkCreatePipelineLayout(vkDevice, pipelineLayoutCreateInfo.assemble(), nullptr, &vkPipelineLayout);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
