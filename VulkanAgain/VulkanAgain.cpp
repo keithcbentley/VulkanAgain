@@ -290,7 +290,53 @@ struct ModelViewProjTransform {
 
 class DrawingFrame {
 
+
+	void createCommandBuffer(vkcpp::CommandPool commandPool) {
+		m_commandBuffer = std::move(vkcpp::CommandBuffer(commandPool));
+	}
+
+	void createUniformBuffer() {
+		m_uniformBufferMemory = std::move(
+			vkcpp::Buffer_DeviceMemory(
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				sizeof(ModelViewProjTransform),
+				m_device
+			));
+	}
+
+	void createSyncObjects() {
+		m_imageAvailableSemaphore = std::move(vkcpp::Semaphore(m_device));
+		m_renderFinishedSemaphore = std::move(vkcpp::Semaphore(m_device));
+		m_inFlightFence = std::move(vkcpp::Fence(VK_FENCE_CREATE_SIGNALED_BIT, m_device));
+	}
+
+	void createDescriptorSet(
+		vkcpp::DescriptorPool		descriptorPool,
+		vkcpp::DescriptorSetLayout descriptorSetLayout,
+		vkcpp::ImageView textureImageView,
+		vkcpp::Sampler textureSampler
+	) {
+		vkcpp::DescriptorSet descriptorSet(descriptorSetLayout, descriptorPool);
+		vkcpp::DescriptorSetUpdater descriptorSetUpdater(descriptorSet);
+		descriptorSetUpdater.addWriteDescriptor(
+			0,
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			m_uniformBufferMemory.m_buffer,
+			sizeof(ModelViewProjTransform));
+		descriptorSetUpdater.addWriteDescriptor(
+			1,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			textureImageView,
+			textureSampler);
+		descriptorSetUpdater.updateDescriptorSets();
+		m_descriptorSet = std::move(descriptorSet);
+	}
+
+	vkcpp::Device m_device;	//	Just remember the device to make things easier.
+
 public:
+
 	vkcpp::Fence	m_inFlightFence;
 	vkcpp::Semaphore m_imageAvailableSemaphore;
 	vkcpp::Semaphore m_renderFinishedSemaphore;
@@ -306,34 +352,28 @@ public:
 	DrawingFrame& operator=(DrawingFrame&&) = delete;
 
 
-	void createCommandBuffer(vkcpp::CommandPool commandPool) {
-		m_commandBuffer = std::move(vkcpp::CommandBuffer(commandPool));
+	void create(
+		vkcpp::Device device,
+		vkcpp::CommandPool commandPool,
+		vkcpp::DescriptorPool descriptorPool,
+		vkcpp::DescriptorSetLayout descriptorSetLayout,
+		vkcpp::ImageView textureImageView,
+		vkcpp::Sampler textureSampler
+	) {
+		m_device = device;
+		createUniformBuffer();
+		createCommandBuffer(commandPool);
+		createSyncObjects();
+		createDescriptorSet(
+			descriptorPool,
+			descriptorSetLayout,
+			textureImageView,
+			textureSampler);
 	}
 
-	void createUniformBuffer(vkcpp::Device device) {
-		m_uniformBufferMemory = std::move(
-			vkcpp::Buffer_DeviceMemory(
-				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				sizeof(ModelViewProjTransform),
-				device
-			));
-	}
 
-	void createSyncObjects(vkcpp::Device device) {
-		m_imageAvailableSemaphore = std::move(vkcpp::Semaphore(device));
-		m_renderFinishedSemaphore = std::move(vkcpp::Semaphore(device));
-		m_inFlightFence = std::move(vkcpp::Fence(VK_FENCE_CREATE_SIGNALED_BIT, device));
-	}
-
-	void moveDescriptorSet(vkcpp::DescriptorSet&& descriptorSet) {
-		m_descriptorSet = std::move(descriptorSet);
-	}
-
-	VkDevice getVkDevice() const {
-		//	Everything should be using the same device,
-		//	so just pick any device.
-		return m_inFlightFence.getVkDevice();
+	vkcpp::Device getDevice() const {
+		return m_device;
 	}
 };
 
@@ -359,21 +399,23 @@ public:
 
 	int	frameCount() { return static_cast<int>(m_drawingFrames.size()); }
 
-	void createUniformBuffers(vkcpp::Device device) {
+	void createDrawingFrames(
+		vkcpp::Device device,
+		vkcpp::CommandPool commandPool,
+		vkcpp::DescriptorPool descriptorPool,
+		vkcpp::DescriptorSetLayout descriptorSetLayout,
+		vkcpp::ImageView textureImageView,
+		vkcpp::Sampler textureSampler
+	) {
 		for (DrawingFrame& drawingFrame : m_drawingFrames) {
-			drawingFrame.createUniformBuffer(device);
-		}
-	}
-
-	void createCommandBuffers(vkcpp::CommandPool commandPool) {
-		for (DrawingFrame& drawingFrame : m_drawingFrames) {
-			drawingFrame.createCommandBuffer(commandPool);
-		}
-	}
-
-	void createSyncObjects(vkcpp::Device device) {
-		for (DrawingFrame& drawingFrame : m_drawingFrames) {
-			drawingFrame.createSyncObjects(device);
+			drawingFrame.create(
+				device,
+				commandPool,
+				descriptorPool,
+				descriptorSetLayout,
+				textureImageView,
+				textureSampler
+			);
 		}
 	}
 
@@ -483,36 +525,6 @@ vkcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
 }
 
 
-void createDescriptorSets(
-	vkcpp::Device device,
-	vkcpp::DescriptorPool		descriptorPool,
-	vkcpp::DescriptorSetLayout descriptorSetLayout,
-	vkcpp::ImageView textureImageView,
-	vkcpp::Sampler textureSampler,
-	AllDrawingFrames& allDrawingFrames
-) {
-	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		vkcpp::DescriptorSet descriptorSet(descriptorSetLayout, descriptorPool);
-
-		vkcpp::DescriptorSetUpdater descriptorSetUpdater(descriptorSet);
-		descriptorSetUpdater.addWriteDescriptor(
-			0,
-			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			allDrawingFrames.drawingFrameAt(i).m_uniformBufferMemory.m_buffer,
-			sizeof(ModelViewProjTransform));
-
-		descriptorSetUpdater.addWriteDescriptor(
-			1,
-			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			textureImageView,
-			textureSampler);
-
-		descriptorSetUpdater.updateDescriptorSets();
-
-		allDrawingFrames.drawingFrameAt(i).moveDescriptorSet(std::move(descriptorSet));
-	}
-}
-
 
 class  PipelineInputAssemblyStateCreateInfo : public VkPipelineInputAssemblyStateCreateInfo {
 
@@ -586,8 +598,7 @@ public:
 
 };
 
-
-class GraphicsPipelineConfig {
+class GraphicsPipelineCreateInfo {
 
 	std::vector<VkDynamicState> m_dynamicStates = {
 		VK_DYNAMIC_STATE_VIEWPORT,
@@ -957,7 +968,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		g_pointVertexBuffer.vertexData(),
 		deviceOriginal);
 
-	g_allDrawingFrames.createUniformBuffers(deviceOriginal);
 
 	vkcpp::ShaderModule	vertShaderModule =
 		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert4.spv", deviceOriginal);
@@ -986,13 +996,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::DescriptorSetLayout descriptorSetLayoutOriginal = createDrawingFrameDescriptorSetLayout(deviceOriginal);
 	vkcpp::DescriptorPool descriptorPoolOriginal = createDescriptorPool(deviceOriginal);
 
-	createDescriptorSets(
-		deviceOriginal,
-		descriptorPoolOriginal,
-		descriptorSetLayoutOriginal,
-		texture.m_imageView, textureSampler,
-		g_allDrawingFrames);
-
 	VkPipelineLayoutCreateInfo vkPipelineLayoutCreateInfo{};
 	std::vector<VkDescriptorSetLayout> descriptorSetLayouts{ descriptorSetLayoutOriginal };
 
@@ -1004,22 +1007,29 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::PipelineLayout pipelineLayout(vkPipelineLayoutCreateInfo, deviceOriginal);
 
-	GraphicsPipelineConfig graphicsPipelineConfig;
-	graphicsPipelineConfig.addVertexInputBindingDescription(Point::getBindingDescription());
+	GraphicsPipelineCreateInfo graphicsPipelineCreateInfo;
+	graphicsPipelineCreateInfo.addVertexInputBindingDescription(Point::getBindingDescription());
 	for (const VkVertexInputAttributeDescription& vkVertexInputAttributeDescription : Point::getAttributeDescriptions()) {
-		graphicsPipelineConfig.addVertexInputAttributeDescription(vkVertexInputAttributeDescription);
+		graphicsPipelineCreateInfo.addVertexInputAttributeDescription(vkVertexInputAttributeDescription);
 	}
-	graphicsPipelineConfig.setViewportExtent(vkSurfaceCapabilities.currentExtent);
-	graphicsPipelineConfig.setPipelineLayout(pipelineLayout);
-	graphicsPipelineConfig.setRenderPass(renderPassOriginal);
-	graphicsPipelineConfig.addShaderModule(vertShaderModule, VK_SHADER_STAGE_VERTEX_BIT, "main");
-	graphicsPipelineConfig.addShaderModule(textureFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+	graphicsPipelineCreateInfo.setViewportExtent(vkSurfaceCapabilities.currentExtent);
+	graphicsPipelineCreateInfo.setPipelineLayout(pipelineLayout);
+	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal);
+	graphicsPipelineCreateInfo.addShaderModule(vertShaderModule, VK_SHADER_STAGE_VERTEX_BIT, "main");
+	graphicsPipelineCreateInfo.addShaderModule(textureFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 	//graphicsPipelineConfig.addShaderModule(identityFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 
-	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineConfig.assemble(), deviceOriginal);
+	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineCreateInfo.assemble(), deviceOriginal);
 
-	g_allDrawingFrames.createCommandBuffers(commandPoolOriginal);
-	g_allDrawingFrames.createSyncObjects(deviceOriginal);
+	g_allDrawingFrames.createDrawingFrames(
+		deviceOriginal,
+		commandPoolOriginal,
+		descriptorPoolOriginal,
+		descriptorSetLayoutOriginal,
+		texture.m_imageView,
+		textureSampler
+	);
+
 
 
 #undef globals
@@ -1211,16 +1221,17 @@ void drawFrame(Globals& globals)
 	const int	currentFrameToDrawIndex = g_nextFrameToDrawIndex;
 	DrawingFrame& currentDrawingFrame = g_allDrawingFrames.drawingFrameAt(currentFrameToDrawIndex);
 
-	VkDevice vkDevice = currentDrawingFrame.getVkDevice();
+	vkcpp::Device device = currentDrawingFrame.getDevice();
 	vkcpp::CommandBuffer commandBuffer = currentDrawingFrame.m_commandBuffer;
 
 
 	//	Wait for this drawing frame to be free
+	//	TODO: does this need a warning timer?
 	currentDrawingFrame.m_inFlightFence.wait();
 
 	uint32_t	swapchainImageIndex;
 	VkResult vkResult = vkAcquireNextImageKHR(
-		vkDevice,
+		device,
 		globals.g_swapchainImageViewsFrameBuffers.vkSwapchain(),
 		0,
 		currentDrawingFrame.m_imageAvailableSemaphore,
@@ -1304,7 +1315,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_WINDOWPOSCHANGED:
 		std::cout << "WM_WINDOWPOSCHANGED\n";
 		g_globals.g_swapchainImageViewsFrameBuffers.stale();
-		//		g_windowPosChanged = true;
 		break;
 
 	default:
@@ -1425,6 +1435,8 @@ void MessageLoop(Globals& globals) {
 int main()
 {
 	std::cout << "Hello World!\n";
+
+	std::cout.imbue(std::locale(""));
 
 	VkRect2D	vkRect2D;
 	vkRect2D.extent.width = 640;
