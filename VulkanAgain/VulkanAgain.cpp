@@ -25,28 +25,6 @@
 
 #include "VulkanSynchronization2Only.h"
 
-class VertexBinding {
-
-public:
-
-	VkVertexInputBindingDescription m_vkVertexInputBindingDescription{};
-	std::vector<VkVertexInputAttributeDescription>	m_vkVertexInputAttributeDescriptions;
-
-	void addVertexInputAttributeDescription(
-		int	bindingIndex,
-		int	location,
-		VkFormat vkFormat,
-		uint32_t	offset
-	) {
-		VkVertexInputAttributeDescription vkVertexInputAttributeDescription{};
-		vkVertexInputAttributeDescription.binding = bindingIndex;
-		vkVertexInputAttributeDescription.location = location;
-		vkVertexInputAttributeDescription.format = vkFormat;
-		vkVertexInputAttributeDescription.offset = offset;
-		m_vkVertexInputAttributeDescriptions.push_back(vkVertexInputAttributeDescription);
-	}
-
-};
 
 struct Point {
 	glm::vec3	m_pos;
@@ -55,8 +33,8 @@ struct Point {
 
 	static const int s_bindingIndex = 0;
 
-	static VertexBinding getVertexBinding() {
-		VertexBinding vertexBinding;
+	static vkcpp::VertexBinding getVertexBinding() {
+		vkcpp::VertexBinding vertexBinding;
 		vertexBinding.m_vkVertexInputBindingDescription.binding = s_bindingIndex;
 		vertexBinding.m_vkVertexInputBindingDescription.stride = sizeof(Point);
 		vertexBinding.m_vkVertexInputBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
@@ -557,10 +535,11 @@ vkcpp::DescriptorSetLayout createDrawingFrameDescriptorSetLayout(VkDevice vkDevi
 vkcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
 
 	vkcpp::DescriptorPoolCreateInfo poolCreateInfo;
+	poolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+
 	poolCreateInfo.addDescriptorCount(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_FRAMES_IN_FLIGHT);
 	poolCreateInfo.addDescriptorCount(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_FRAMES_IN_FLIGHT);
 
-	poolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 	poolCreateInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
 	return vkcpp::DescriptorPool(poolCreateInfo, vkDevice);
@@ -568,234 +547,6 @@ vkcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
 
 
 
-class  PipelineInputAssemblyStateCreateInfo : public VkPipelineInputAssemblyStateCreateInfo {
-
-public:
-	PipelineInputAssemblyStateCreateInfo(VkPrimitiveTopology vkPrimitiveTopology)
-		: VkPipelineInputAssemblyStateCreateInfo{} {
-		sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-		topology = vkPrimitiveTopology;
-	}
-
-};
-
-class PipelineRasterizationStateCreateInfo : public VkPipelineRasterizationStateCreateInfo {
-
-public:
-	PipelineRasterizationStateCreateInfo()
-		: VkPipelineRasterizationStateCreateInfo{} {
-		sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-		polygonMode = VK_POLYGON_MODE_FILL;
-		lineWidth = 1.0f;
-		cullMode = VK_CULL_MODE_BACK_BIT;
-		frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-	}
-};
-
-class PipelineMultisampleStateCreateInfo : public VkPipelineMultisampleStateCreateInfo {
-
-public:
-	PipelineMultisampleStateCreateInfo()
-		: VkPipelineMultisampleStateCreateInfo{} {
-		sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-		rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-		minSampleShading = 1.0f;
-	}
-
-};
-
-
-class PipelineColorBlendAttachmentState : public VkPipelineColorBlendAttachmentState {
-
-public:
-
-	PipelineColorBlendAttachmentState()
-		: VkPipelineColorBlendAttachmentState{} {
-		colorWriteMask
-			= VK_COLOR_COMPONENT_R_BIT
-			| VK_COLOR_COMPONENT_G_BIT
-			| VK_COLOR_COMPONENT_B_BIT
-			| VK_COLOR_COMPONENT_A_BIT;
-		blendEnable = VK_FALSE;
-		srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-		dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-		colorBlendOp = VK_BLEND_OP_ADD; // Optional
-		srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-		dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-		alphaBlendOp = VK_BLEND_OP_ADD; // Optional
-
-	}
-};
-
-
-class PipelineColorBlendStateCreateInfo : public VkPipelineColorBlendStateCreateInfo {
-
-public:
-	PipelineColorBlendStateCreateInfo()
-		: VkPipelineColorBlendStateCreateInfo{} {
-		sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-		logicOpEnable = VK_FALSE;
-		logicOp = VK_LOGIC_OP_COPY; // Optional
-	}
-
-};
-
-class GraphicsPipelineCreateInfo {
-
-	std::vector<VkPipelineShaderStageCreateInfo> m_shaderStageCreateInfos;
-
-	PipelineInputAssemblyStateCreateInfo m_inputAssemblyStateCreateInfo{ VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST };
-	VkPipelineVertexInputStateCreateInfo m_vkPipelineVertexInputStateCreateInfo{};
-	std::vector<VkVertexInputBindingDescription>	m_vertexInputBindingDescriptions;
-	std::vector<VkVertexInputAttributeDescription> m_vertexInputAttributeDescriptions;
-
-
-	std::vector<VkDynamicState> m_dynamicStates = {
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR
-	};
-
-	VkPipelineDynamicStateCreateInfo m_dynamicState{};
-
-	VkViewport m_viewport{};
-	VkRect2D m_scissor{};
-
-	VkPipelineViewportStateCreateInfo m_viewportState{};
-
-
-
-	PipelineRasterizationStateCreateInfo m_pipelineRasterizationStateCreateInfo{};
-
-	PipelineMultisampleStateCreateInfo m_pipelineMultisampleStateCreateInfo{};
-
-	PipelineColorBlendAttachmentState m_pipelineColorBlendAttachmentState{};
-
-	PipelineColorBlendStateCreateInfo m_pipelineColorBlendStateCreateInfo{};
-
-	VkPipelineDepthStencilStateCreateInfo m_depthStencil{};
-
-	VkGraphicsPipelineCreateInfo m_vkGraphicsPipelineCreateInfo{};
-
-	vkcpp::PipelineLayout	m_pipelineLayout;
-	vkcpp::RenderPass		m_renderPass;
-
-public:
-
-	void addShaderModule(
-		vkcpp::ShaderModule shaderModule,
-		VkShaderStageFlagBits	vkShaderStageFlagBits,
-		const char* entryPointName
-	) {
-		VkPipelineShaderStageCreateInfo vkPipelineShaderStageCreateInfo{};
-		vkPipelineShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		vkPipelineShaderStageCreateInfo.stage = vkShaderStageFlagBits;
-		vkPipelineShaderStageCreateInfo.module = shaderModule;
-		vkPipelineShaderStageCreateInfo.pName = entryPointName;
-		m_shaderStageCreateInfos.push_back(vkPipelineShaderStageCreateInfo);
-	}
-
-
-	void addVertexBinding(VertexBinding& vertexBinding) {
-		m_vertexInputBindingDescriptions.push_back(vertexBinding.m_vkVertexInputBindingDescription);
-		for (const VkVertexInputAttributeDescription& vkVertexInputAttributeDescription
-			: vertexBinding.m_vkVertexInputAttributeDescriptions) {
-			m_vertexInputAttributeDescriptions.push_back(vkVertexInputAttributeDescription);
-		}
-	}
-
-
-
-	//void addVertexInputBindingDescription1(const VkVertexInputBindingDescription& vkVertexInputBindingDescription) {
-	//	m_vertexInputBindingDescriptions.push_back(vkVertexInputBindingDescription);
-	//}
-
-	void addVertexInputAttributeDescription(const VkVertexInputAttributeDescription& vertexInputAttributeDescriptions) {
-		m_vertexInputAttributeDescriptions.push_back(vertexInputAttributeDescriptions);
-	}
-
-	void setViewportExtent(VkExtent2D extent) {
-		m_viewport.width = static_cast<float>(extent.width);
-		m_viewport.height = static_cast<float>(extent.height);
-	}
-
-	void setScissorExtent(VkExtent2D extent) {
-		m_scissor.extent = extent;
-	}
-
-	void setPipelineLayout(vkcpp::PipelineLayout pipelineLayout) {
-		m_pipelineLayout = pipelineLayout;
-	}
-
-	void setRenderPass(vkcpp::RenderPass renderPass) {
-		m_renderPass = renderPass;
-	}
-
-
-	VkGraphicsPipelineCreateInfo& assemble() {
-
-		//	Assemble pipeline create info
-		m_vkGraphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-
-
-		m_vkGraphicsPipelineCreateInfo.stageCount = static_cast<uint32_t>(m_shaderStageCreateInfos.size());
-		m_vkGraphicsPipelineCreateInfo.pStages = m_shaderStageCreateInfos.data();
-
-
-		m_vkPipelineVertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		m_vkPipelineVertexInputStateCreateInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(m_vertexInputBindingDescriptions.size());
-		m_vkPipelineVertexInputStateCreateInfo.pVertexBindingDescriptions = m_vertexInputBindingDescriptions.data();
-		m_vkPipelineVertexInputStateCreateInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(m_vertexInputAttributeDescriptions.size());
-		m_vkPipelineVertexInputStateCreateInfo.pVertexAttributeDescriptions = m_vertexInputAttributeDescriptions.data();
-
-		m_vkGraphicsPipelineCreateInfo.pVertexInputState = &m_vkPipelineVertexInputStateCreateInfo;
-
-		m_vkGraphicsPipelineCreateInfo.pInputAssemblyState = &m_inputAssemblyStateCreateInfo;
-
-		m_viewport.maxDepth = 1.0f;
-		//TODO make the viewportState smarter
-		m_viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-		m_viewportState.viewportCount = 1;
-		m_viewportState.pViewports = &m_viewport;
-		m_viewportState.scissorCount = 1;
-		m_viewportState.pScissors = &m_scissor;
-		m_vkGraphicsPipelineCreateInfo.pViewportState = &m_viewportState;
-
-		m_vkGraphicsPipelineCreateInfo.pRasterizationState = &m_pipelineRasterizationStateCreateInfo;
-
-		m_vkGraphicsPipelineCreateInfo.pMultisampleState = &m_pipelineMultisampleStateCreateInfo;
-
-		m_vkGraphicsPipelineCreateInfo.pDepthStencilState = nullptr; // Optional
-
-		m_pipelineColorBlendStateCreateInfo.attachmentCount = 1;
-		m_pipelineColorBlendStateCreateInfo.pAttachments = &m_pipelineColorBlendAttachmentState;
-		m_vkGraphicsPipelineCreateInfo.pColorBlendState = &m_pipelineColorBlendStateCreateInfo;
-
-
-		// TODO make this smarter
-		m_dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-		m_dynamicState.dynamicStateCount = static_cast<uint32_t>(m_dynamicStates.size());
-		m_dynamicState.pDynamicStates = m_dynamicStates.data();
-		m_vkGraphicsPipelineCreateInfo.pDynamicState = &m_dynamicState;
-
-
-		m_depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-		m_depthStencil.depthTestEnable = VK_TRUE;
-		m_depthStencil.depthWriteEnable = VK_TRUE;
-		m_depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;	// Less depth means in front of
-		m_depthStencil.depthBoundsTestEnable = VK_FALSE;
-		m_depthStencil.stencilTestEnable = VK_FALSE;
-		m_vkGraphicsPipelineCreateInfo.pDepthStencilState = &m_depthStencil;
-
-
-		m_vkGraphicsPipelineCreateInfo.layout = m_pipelineLayout;
-		m_vkGraphicsPipelineCreateInfo.renderPass = m_renderPass;
-		m_vkGraphicsPipelineCreateInfo.subpass = 0;
-		m_vkGraphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
-		m_vkGraphicsPipelineCreateInfo.basePipelineIndex = -1; // Optional
-
-		return m_vkGraphicsPipelineCreateInfo;
-	}
-};
 
 
 
@@ -1056,16 +807,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::PipelineLayout pipelineLayout(pipelineLayoutCreateInfo, deviceOriginal);
 
 
-	GraphicsPipelineCreateInfo graphicsPipelineCreateInfo;
+	vkcpp::GraphicsPipelineCreateInfo graphicsPipelineCreateInfo;
 	//	make a variable so we don't need an rvalue ref to add
-	VertexBinding vertexBinding = Point::getVertexBinding();
+	vkcpp::VertexBinding vertexBinding = Point::getVertexBinding();
 	graphicsPipelineCreateInfo.addVertexBinding(vertexBinding);
-
-	//graphicsPipelineCreateInfo.addVertexInputBindingDescription(Point::getBindingDescription());
-	//for (const VkVertexInputAttributeDescription& vkVertexInputAttributeDescription : Point::getAttributeDescriptions()) {
-	//	graphicsPipelineCreateInfo.addVertexInputAttributeDescription(vkVertexInputAttributeDescription);
-	//}
-
 
 	graphicsPipelineCreateInfo.setViewportExtent(vkSurfaceCapabilities.currentExtent);
 	graphicsPipelineCreateInfo.setPipelineLayout(pipelineLayout);
@@ -1074,7 +819,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	graphicsPipelineCreateInfo.addShaderModule(textureFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 	//graphicsPipelineConfig.addShaderModule(identityFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 
-	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineCreateInfo.assemble(), deviceOriginal);
+	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineCreateInfo, deviceOriginal);
 
 	g_allDrawingFrames.createDrawingFrames(
 		deviceOriginal,
