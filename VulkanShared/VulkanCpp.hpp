@@ -1848,6 +1848,8 @@ namespace vkcpp {
 
 	public:
 
+		VkPipelineLayoutCreateInfo* operator&() = delete;
+
 		PipelineLayoutCreateInfo()
 			: VkPipelineLayoutCreateInfo() {
 			sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;

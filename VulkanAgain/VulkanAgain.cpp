@@ -25,44 +25,86 @@
 
 #include "VulkanSynchronization2Only.h"
 
+class VertexBinding {
+
+public:
+
+	VkVertexInputBindingDescription m_vkVertexInputBindingDescription{};
+	std::vector<VkVertexInputAttributeDescription>	m_vkVertexInputAttributeDescriptions;
+
+	void addVertexInputAttributeDescription(
+		int	bindingIndex,
+		int	location,
+		VkFormat vkFormat,
+		uint32_t	offset
+	) {
+		VkVertexInputAttributeDescription vkVertexInputAttributeDescription{};
+		vkVertexInputAttributeDescription.binding = bindingIndex;
+		vkVertexInputAttributeDescription.location = location;
+		vkVertexInputAttributeDescription.format = vkFormat;
+		vkVertexInputAttributeDescription.offset = offset;
+		m_vkVertexInputAttributeDescriptions.push_back(vkVertexInputAttributeDescription);
+	}
+
+};
 
 struct Point {
-	glm::vec3	pos;
-	glm::vec3	color;
-	glm::vec2 texCoord;
+	glm::vec3	m_pos;
+	glm::vec3	m_color;
+	glm::vec2	m_textureCoord;
 
 	static const int s_bindingIndex = 0;
 
-	static VkVertexInputBindingDescription getBindingDescription() {
-		VkVertexInputBindingDescription bindingDescription{};
+	static VertexBinding getVertexBinding() {
+		VertexBinding vertexBinding;
+		vertexBinding.m_vkVertexInputBindingDescription.binding = s_bindingIndex;
+		vertexBinding.m_vkVertexInputBindingDescription.stride = sizeof(Point);
+		vertexBinding.m_vkVertexInputBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-		bindingDescription.binding = s_bindingIndex;
-		bindingDescription.stride = sizeof(Point);
-		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+		//	A little bit fragile since location depends on addition order,
+		//	but we need to keep locations explicit for vertex shader.
+		vertexBinding.addVertexInputAttributeDescription(
+			s_bindingIndex, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Point, m_pos));
 
-		return bindingDescription;
+		vertexBinding.addVertexInputAttributeDescription(
+			s_bindingIndex, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Point, m_color));
+
+		vertexBinding.addVertexInputAttributeDescription(
+			s_bindingIndex, 2, VK_FORMAT_R32G32_SFLOAT, offsetof(Point, m_textureCoord));
+
+		return vertexBinding;
 	}
 
-	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
-		std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+	//static VkVertexInputBindingDescription getBindingDescription() {
+	//	VkVertexInputBindingDescription bindingDescription{};
 
-		attributeDescriptions[0].binding = s_bindingIndex;
-		attributeDescriptions[0].location = 0;
-		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[0].offset = offsetof(Point, pos);
+	//	bindingDescription.binding = s_bindingIndex;
+	//	bindingDescription.stride = sizeof(Point);
+	//	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-		attributeDescriptions[1].binding = s_bindingIndex;
-		attributeDescriptions[1].location = 1;
-		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[1].offset = offsetof(Point, color);
+	//	return bindingDescription;
+	//}
 
-		attributeDescriptions[2].binding = s_bindingIndex;
-		attributeDescriptions[2].location = 2;
-		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-		attributeDescriptions[2].offset = offsetof(Point, texCoord);
+	//static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
+	//	std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
 
-		return attributeDescriptions;
-	}
+	//	attributeDescriptions[0].binding = s_bindingIndex;
+	//	attributeDescriptions[0].location = 0;
+	//	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+	//	attributeDescriptions[0].offset = offsetof(Point, pos);
+
+	//	attributeDescriptions[1].binding = s_bindingIndex;
+	//	attributeDescriptions[1].location = 1;
+	//	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+	//	attributeDescriptions[1].offset = offsetof(Point, color);
+
+	//	attributeDescriptions[2].binding = s_bindingIndex;
+	//	attributeDescriptions[2].location = 2;
+	//	attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+	//	attributeDescriptions[2].offset = offsetof(Point, texCoord);
+
+	//	return attributeDescriptions;
+	//}
 };
 
 
@@ -137,18 +179,18 @@ public:
 	void addOffset(double x, double y, double z, int16_t pointStartIndex, int16_t pointCount) {
 		for (int i = pointStartIndex; i < pointStartIndex + pointCount; i++) {
 			Point& p = m_points.at(i);
-			p.pos.x += x;
-			p.pos.y += y;
-			p.pos.z += z;
+			p.m_pos.x += x;
+			p.m_pos.y += y;
+			p.m_pos.z += z;
 		}
 	}
 
 	void scale(double x, double y, double z, int16_t pointStartIndex, int16_t pointCount) {
 		for (int i = pointStartIndex; i < pointStartIndex + pointCount; i++) {
 			Point& p = m_points.at(i);
-			p.pos.x *= x;
-			p.pos.y *= y;
-			p.pos.z *= z;
+			p.m_pos.x *= x;
+			p.m_pos.y *= y;
+			p.m_pos.z *= z;
 		}
 	}
 
@@ -557,7 +599,7 @@ public:
 		: VkPipelineMultisampleStateCreateInfo{} {
 		sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 		rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-		minSampleShading = 1.0f; // Optional
+		minSampleShading = 1.0f;
 	}
 
 };
@@ -600,6 +642,14 @@ public:
 
 class GraphicsPipelineCreateInfo {
 
+	std::vector<VkPipelineShaderStageCreateInfo> m_shaderStageCreateInfos;
+
+	PipelineInputAssemblyStateCreateInfo m_inputAssemblyStateCreateInfo{ VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST };
+	VkPipelineVertexInputStateCreateInfo m_vkPipelineVertexInputStateCreateInfo{};
+	std::vector<VkVertexInputBindingDescription>	m_vertexInputBindingDescriptions;
+	std::vector<VkVertexInputAttributeDescription> m_vertexInputAttributeDescriptions;
+
+
 	std::vector<VkDynamicState> m_dynamicStates = {
 		VK_DYNAMIC_STATE_VIEWPORT,
 		VK_DYNAMIC_STATE_SCISSOR
@@ -612,12 +662,6 @@ class GraphicsPipelineCreateInfo {
 
 	VkPipelineViewportStateCreateInfo m_viewportState{};
 
-
-	PipelineInputAssemblyStateCreateInfo m_inputAssemblyStateCreateInfo{ VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST };
-	std::vector<VkVertexInputBindingDescription>	m_vertexInputBindingDescriptions;
-	VkPipelineVertexInputStateCreateInfo m_vkPipelineVertexInputStateCreateInfo{};
-
-	std::vector<VkPipelineShaderStageCreateInfo> m_shaderStageCreateInfos;
 
 
 	PipelineRasterizationStateCreateInfo m_pipelineRasterizationStateCreateInfo{};
@@ -637,16 +681,6 @@ class GraphicsPipelineCreateInfo {
 
 public:
 
-
-	void addVertexInputBindingDescription(const VkVertexInputBindingDescription& vkVertexInputBindingDescription) {
-		m_vertexInputBindingDescriptions.push_back(vkVertexInputBindingDescription);
-	}
-
-	std::vector<VkVertexInputAttributeDescription> m_vertexInputAttributeDescriptions;
-	void addVertexInputAttributeDescription(const VkVertexInputAttributeDescription& vertexInputAttributeDescriptions) {
-		m_vertexInputAttributeDescriptions.push_back(vertexInputAttributeDescriptions);
-	}
-
 	void addShaderModule(
 		vkcpp::ShaderModule shaderModule,
 		VkShaderStageFlagBits	vkShaderStageFlagBits,
@@ -658,6 +692,25 @@ public:
 		vkPipelineShaderStageCreateInfo.module = shaderModule;
 		vkPipelineShaderStageCreateInfo.pName = entryPointName;
 		m_shaderStageCreateInfos.push_back(vkPipelineShaderStageCreateInfo);
+	}
+
+
+	void addVertexBinding(VertexBinding& vertexBinding) {
+		m_vertexInputBindingDescriptions.push_back(vertexBinding.m_vkVertexInputBindingDescription);
+		for (const VkVertexInputAttributeDescription& vkVertexInputAttributeDescription
+			: vertexBinding.m_vkVertexInputAttributeDescriptions) {
+			m_vertexInputAttributeDescriptions.push_back(vkVertexInputAttributeDescription);
+		}
+	}
+
+
+
+	//void addVertexInputBindingDescription1(const VkVertexInputBindingDescription& vkVertexInputBindingDescription) {
+	//	m_vertexInputBindingDescriptions.push_back(vkVertexInputBindingDescription);
+	//}
+
+	void addVertexInputAttributeDescription(const VkVertexInputAttributeDescription& vertexInputAttributeDescriptions) {
+		m_vertexInputAttributeDescriptions.push_back(vertexInputAttributeDescriptions);
 	}
 
 	void setViewportExtent(VkExtent2D extent) {
@@ -682,6 +735,7 @@ public:
 
 		//	Assemble pipeline create info
 		m_vkGraphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+
 
 		m_vkGraphicsPipelineCreateInfo.stageCount = static_cast<uint32_t>(m_shaderStageCreateInfos.size());
 		m_vkGraphicsPipelineCreateInfo.pStages = m_shaderStageCreateInfos.data();
@@ -1001,11 +1055,18 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	pipelineLayoutCreateInfo.addDescriptorSetLayout(descriptorSetLayoutOriginal);
 	vkcpp::PipelineLayout pipelineLayout(pipelineLayoutCreateInfo, deviceOriginal);
 
+
 	GraphicsPipelineCreateInfo graphicsPipelineCreateInfo;
-	graphicsPipelineCreateInfo.addVertexInputBindingDescription(Point::getBindingDescription());
-	for (const VkVertexInputAttributeDescription& vkVertexInputAttributeDescription : Point::getAttributeDescriptions()) {
-		graphicsPipelineCreateInfo.addVertexInputAttributeDescription(vkVertexInputAttributeDescription);
-	}
+	//	make a variable so we don't need an rvalue ref to add
+	VertexBinding vertexBinding = Point::getVertexBinding();
+	graphicsPipelineCreateInfo.addVertexBinding(vertexBinding);
+
+	//graphicsPipelineCreateInfo.addVertexInputBindingDescription(Point::getBindingDescription());
+	//for (const VkVertexInputAttributeDescription& vkVertexInputAttributeDescription : Point::getAttributeDescriptions()) {
+	//	graphicsPipelineCreateInfo.addVertexInputAttributeDescription(vkVertexInputAttributeDescription);
+	//}
+
+
 	graphicsPipelineCreateInfo.setViewportExtent(vkSurfaceCapabilities.currentExtent);
 	graphicsPipelineCreateInfo.setPipelineLayout(pipelineLayout);
 	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal);
