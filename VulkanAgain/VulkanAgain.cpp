@@ -31,6 +31,7 @@ struct Point {
 	glm::vec3	m_color;
 	glm::vec2	m_textureCoord;
 
+	//	TODO: move to magic numbers struct.
 	static const int s_bindingIndex = 0;
 
 	static vkcpp::VertexBinding getVertexBinding() {
@@ -53,36 +54,6 @@ struct Point {
 		return vertexBinding;
 	}
 
-	//static VkVertexInputBindingDescription getBindingDescription() {
-	//	VkVertexInputBindingDescription bindingDescription{};
-
-	//	bindingDescription.binding = s_bindingIndex;
-	//	bindingDescription.stride = sizeof(Point);
-	//	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-	//	return bindingDescription;
-	//}
-
-	//static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
-	//	std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
-
-	//	attributeDescriptions[0].binding = s_bindingIndex;
-	//	attributeDescriptions[0].location = 0;
-	//	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-	//	attributeDescriptions[0].offset = offsetof(Point, pos);
-
-	//	attributeDescriptions[1].binding = s_bindingIndex;
-	//	attributeDescriptions[1].location = 1;
-	//	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-	//	attributeDescriptions[1].offset = offsetof(Point, color);
-
-	//	attributeDescriptions[2].binding = s_bindingIndex;
-	//	attributeDescriptions[2].location = 2;
-	//	attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-	//	attributeDescriptions[2].offset = offsetof(Point, texCoord);
-
-	//	return attributeDescriptions;
-	//}
 };
 
 
@@ -268,10 +239,10 @@ Shape g_theRightTriangle(g_rightTrianglePointVertexBuffer);
 
 
 const std::vector<Point> g_squarePoints{
-	{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-	{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{1.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
-	{{0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+	{{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
+	{{1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+	{{1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
 	{{0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f}}
 };
 
@@ -300,10 +271,13 @@ const int windowWidth = 800;
 const int windowHeight = 600;
 
 
+
+//	TODO: turn into "camera".
+//	TODO: better uniform buffer object handling.
 struct ModelViewProjTransform {
-	alignas(16) glm::mat4 model;
-	alignas(16) glm::mat4 view;
-	alignas(16) glm::mat4 proj;
+	alignas(16) glm::mat4 modelTransform;
+	alignas(16) glm::mat4 viewTransform;
+	alignas(16) glm::mat4 projTransform;
 };
 
 
@@ -328,7 +302,7 @@ class DrawingFrame {
 	void createSyncObjects() {
 		m_imageAvailableSemaphore = std::move(vkcpp::Semaphore(m_device));
 		m_renderFinishedSemaphore = std::move(vkcpp::Semaphore(m_device));
-		m_inFlightFence = std::move(vkcpp::Fence(VK_FENCE_CREATE_SIGNALED_BIT, m_device));
+		m_inFlightFence = std::move(vkcpp::Fence(m_device, VKCPP_FENCE_CREATE_OPENED));
 	}
 
 	void createDescriptorSet(
@@ -556,8 +530,8 @@ void transitionImageLayout(
 	VkImageLayout oldLayout,
 	VkImageLayout newLayout,
 	vkcpp::CommandPool commandPool,
-	vkcpp::Queue graphicsQueue) {
-
+	vkcpp::Queue graphicsQueue
+) {
 	vkcpp::CommandBuffer commandBuffer(commandPool);
 	commandBuffer.beginOneTimeSubmit();
 
@@ -568,8 +542,9 @@ void transitionImageLayout(
 
 	commandBuffer.end();
 
-	graphicsQueue.submit(commandBuffer);
-	graphicsQueue.waitIdle();
+	vkcpp::Fence completedFence(commandPool.getVkDevice());
+	graphicsQueue.submit(commandBuffer, completedFence);
+	completedFence.wait();
 
 }
 
@@ -580,16 +555,17 @@ void copyBufferToImage(
 	int width,
 	int height,
 	vkcpp::CommandPool commandPool,
-	vkcpp::Queue graphicsQueue) {
+	vkcpp::Queue graphicsQueue
+) {
 
 	vkcpp::CommandBuffer commandBuffer(commandPool);
 	commandBuffer.beginOneTimeSubmit();
-
 	commandBuffer.copyBufferToImage(buffer, image, width, height);
 	commandBuffer.end();
 
-	graphicsQueue.submit(commandBuffer);
-	graphicsQueue.waitIdle();
+	vkcpp::Fence completedFence(commandPool.getVkDevice());
+	graphicsQueue.submit(commandBuffer, completedFence);
+	completedFence.wait();
 }
 
 
@@ -817,7 +793,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal);
 	graphicsPipelineCreateInfo.addShaderModule(vertShaderModule, VK_SHADER_STAGE_VERTEX_BIT, "main");
 	graphicsPipelineCreateInfo.addShaderModule(textureFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
-	//graphicsPipelineConfig.addShaderModule(identityFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+	//graphicsPipelineCreateInfo.addShaderModule(identityFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 
 	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineCreateInfo, deviceOriginal);
 
@@ -870,6 +846,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 }
 
+
+//	TODO: better uniform buffer handling.
 void updateUniformBuffer(
 	vkcpp::Buffer_DeviceMemory& uniformBufferMemory,
 	const VkExtent2D				swapchainImageExtent
@@ -879,21 +857,25 @@ void updateUniformBuffer(
 	auto currentTime = std::chrono::high_resolution_clock::now();
 	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
+
+	//	TODO: turn into real "camera".
 	ModelViewProjTransform modelViewProjTransform{};
-	modelViewProjTransform.model = glm::rotate(
-		glm::mat4(1.0f),
-		time * glm::radians(22.5f),
-		glm::vec3(0.0f, 0.0f, 1.0f));
-	modelViewProjTransform.view = glm::lookAt(
-		glm::vec3(2.0f, 2.0f, 2.0f),
+	modelViewProjTransform.modelTransform =
+		glm::rotate(
+			glm::mat4(1.0f),
+			time * glm::radians(10.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f));
+	modelViewProjTransform.viewTransform = glm::lookAt(
+		glm::vec3(0.0f, 2.0f, 2.0f),
 		glm::vec3(0.0f, 0.0f, 0.0f),
-		glm::vec3(0.0f, 0.0f, 1.0f));
-	modelViewProjTransform.proj = glm::perspective(
+		glm::vec3(0.0f, 1.0f, 0.0f));
+	modelViewProjTransform.projTransform = glm::perspective(
 		glm::radians(45.0f),
 		(float)swapchainImageExtent.width / (float)swapchainImageExtent.height,
 		0.1f,
 		10.0f);
-	modelViewProjTransform.proj[1][1] *= -1;
+	modelViewProjTransform.projTransform[1][1] *= -1.0;
+	//	modelViewProjTransform.projTransform[2][2] *= -1.0;
 
 	memcpy(
 		uniformBufferMemory.m_mappedMemory,
@@ -1069,8 +1051,8 @@ void drawFrame(Globals& globals)
 
 
 	//	Show that this drawing frame is now in use ..
-	//	Fence will be signaled when graphics queue is finished.
-	currentDrawingFrame.m_inFlightFence.reset();
+	//	Fence will be opened when graphics queue is finished.
+	currentDrawingFrame.m_inFlightFence.close();
 	g_drawFrameDraws++;
 
 	globals.g_graphicsQueue.submit(submitInfo, currentDrawingFrame.m_inFlightFence);
@@ -1256,10 +1238,11 @@ int main()
 	HWND hWnd = CreateFirstWindow(hInstance);
 
 	Shape shape1 = g_pointVertexBuffer.add(g_theSquare);
-	//	shape1.scale(1.5, 1.5, 0.0);
+	//shape1.scale(1.5, 1.5, 0.0);
 
-	Shape shape2 = g_pointVertexBuffer.add(g_theRightTriangle);
-	shape2.addOffset(0.0, 0.0, 0.5);
+	Shape shape2 = g_pointVertexBuffer.add(g_theSquare);
+	shape2.scale(0.5, 0.5, 0.0);
+	shape2.addOffset(1.0, 0.0, -0.5);
 
 	//Shape shape3 = g_pointVertexBuffer.add(g_theRightTriangle);
 	//shape3.addOffset(0.5, 0.5, 0.2);

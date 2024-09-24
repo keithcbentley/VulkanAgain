@@ -864,6 +864,7 @@ namespace vkcpp {
 
 
 	class Fence : public HandleWithOwner<VkFence> {
+#define VKCPP_FENCE_CREATE_OPENED VK_FENCE_CREATE_SIGNALED_BIT
 
 		Fence(VkFence vkFence, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
 			: HandleWithOwner(vkFence, vkDevice, pfnDestroy) {
@@ -876,7 +877,14 @@ namespace vkcpp {
 	public:
 
 		Fence() {}
-		Fence(const VkFenceCreateInfo& vkFenceCreateInfo, VkDevice vkDevice) {
+
+		//	Kind of an exception to the argument ordering usually used.
+		//	Flags are almost always 0, so make them optional.  Only
+		//	the device is required.
+		Fence(VkDevice vkDevice, VkFenceCreateFlags vkFenceCreateFlags = 0) {
+			VkFenceCreateInfo vkFenceCreateInfo{};
+			vkFenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+			vkFenceCreateInfo.flags = vkFenceCreateFlags;
 			VkFence vkFence;
 			VkResult vkResult = vkCreateFence(vkDevice, &vkFenceCreateInfo, nullptr, &vkFence);
 			if (vkResult != VK_SUCCESS) {
@@ -885,14 +893,7 @@ namespace vkcpp {
 			new(this) Fence(vkFence, vkDevice, &destroy);
 		}
 
-		Fence(VkFenceCreateFlags vkFenceCreateFlags, VkDevice vkDevice) {
-			VkFenceCreateInfo vkFenceCreateInfo{};
-			vkFenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-			vkFenceCreateInfo.flags = vkFenceCreateFlags;
-			new(this) Fence(vkFenceCreateInfo, vkDevice);
-		}
-
-		void reset() {
+		void close() {
 			VkFence vkFence = *this;
 			vkResetFences(m_owner, 1, &vkFence);
 		}
@@ -1119,10 +1120,10 @@ namespace vkcpp {
 
 		std::vector<VkAttachmentDescription>	m_attachmentDescriptions;
 
-		VkAttachmentDescription m_colorAttachment{};
+		VkAttachmentDescription m_colorAttachmentDescription{};
 		VkAttachmentReference m_colorAttachmentRef{};
 
-		VkAttachmentDescription m_depthAttachment{};
+		VkAttachmentDescription m_depthAttachmentDescription{};
 		VkAttachmentReference m_depthAttachmentRef{};
 
 		VkSubpassDescription m_vkSubpassDescription{};
@@ -1138,38 +1139,43 @@ namespace vkcpp {
 		VkRenderPassCreateInfo* assemble() {
 
 			//	TODO: split into configure operations, a simple default, and an assemble/build
-			m_colorAttachment.format = m_vkFormat;
-			m_colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-			m_colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-			m_colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-			m_colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-			m_colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-			m_colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			m_colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+			//	TODO: where do these magic layout transitions happen?
+
+			//	TODO: split out into struct with reasonable defaults.
+			m_colorAttachmentDescription.format = m_vkFormat;
+			m_colorAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
+			m_colorAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			m_colorAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+			m_colorAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			m_colorAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			m_colorAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			m_colorAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
 			m_colorAttachmentRef.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size());	//	size before push is index
 			m_colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-			m_attachmentDescriptions.push_back(m_colorAttachment);
+			m_attachmentDescriptions.push_back(m_colorAttachmentDescription);
 
-			m_depthAttachment.format = VK_FORMAT_D32_SFLOAT;
-			m_depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-			m_depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-			m_depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-			m_depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-			m_depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-			m_depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			m_depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			//	TODO: split out into struct with reasonable defaults.
+			m_depthAttachmentDescription.format = VK_FORMAT_D32_SFLOAT;
+			m_depthAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
+			m_depthAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			m_depthAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			m_depthAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			m_depthAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			m_depthAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			m_depthAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 			m_depthAttachmentRef.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size());
 			m_depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-			m_attachmentDescriptions.push_back(m_depthAttachment);
+			m_attachmentDescriptions.push_back(m_depthAttachmentDescription);
 
 			m_vkSubpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 			m_vkSubpassDescription.colorAttachmentCount = 1;
 			m_vkSubpassDescription.pColorAttachments = &m_colorAttachmentRef;
 			m_vkSubpassDescription.pDepthStencilAttachment = &m_depthAttachmentRef;
 
+			//	TODO: when srcStageMask and dstStageMask are the same, does that mean wait on the previous pass?
 			m_vkSubpassDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
 			m_vkSubpassDependency.dstSubpass = 0;
 			m_vkSubpassDependency.srcStageMask
@@ -1644,6 +1650,16 @@ namespace vkcpp {
 			}
 		}
 
+		void submit(CommandBuffer commandBuffer, vkcpp::Fence fence) {
+			SubmitInfo submitInfo;
+			submitInfo.addCommandBuffer(commandBuffer);
+			VkResult vkResult = vkQueueSubmit(*this, 1, submitInfo.assemble(), fence);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+		}
+
+
 		void submit(SubmitInfo& submitInfo, Fence fence) {
 			VkResult vkResult = vkQueueSubmit(*this, 1, submitInfo.assemble(), fence);
 			if (vkResult != VK_SUCCESS) {
@@ -1917,7 +1933,8 @@ namespace vkcpp {
 			sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 			polygonMode = VK_POLYGON_MODE_FILL;
 			lineWidth = 1.0f;
-			cullMode = VK_CULL_MODE_BACK_BIT;
+			//			cullMode = VK_CULL_MODE_BACK_BIT;
+			cullMode = VK_CULL_MODE_NONE;
 			frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		}
 	};
