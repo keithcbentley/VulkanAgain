@@ -1364,7 +1364,6 @@ namespace vkcpp {
 			}
 		}
 
-
 	};
 	static_assert(sizeof(ImageMemoryBarrier2) == sizeof(VkImageMemoryBarrier2));
 
@@ -1582,6 +1581,70 @@ namespace vkcpp {
 
 	};
 
+	class SubmitInfo2 : public VkSubmitInfo2 {
+
+		std::vector<VkSemaphoreSubmitInfo>		m_waitSemaphoreInfos;
+		std::vector<VkCommandBufferSubmitInfo>	m_commandBufferInfos;
+		std::vector<VkSemaphoreSubmitInfo>		m_signalSemaphoreInfos;
+
+
+	public:
+
+		SubmitInfo2()
+			: VkSubmitInfo2{} {
+			sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+		}
+
+		SubmitInfo2* operator&() = delete;
+
+		void addCommandBuffer(CommandBuffer commandBuffer) {
+			VkCommandBufferSubmitInfo	vkCommandBufferSubmitInfo{};
+			vkCommandBufferSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+			vkCommandBufferSubmitInfo.commandBuffer = commandBuffer;
+			m_commandBufferInfos.push_back(vkCommandBufferSubmitInfo);
+		}
+
+		void addWaitSemaphore(
+			Semaphore semaphore,
+			VkPipelineStageFlags2 waitPipelineStateFlags2
+		) {
+			VkSemaphoreSubmitInfo	vkSemaphoreSubmitInfo{};
+			vkSemaphoreSubmitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+			vkSemaphoreSubmitInfo.semaphore = semaphore;
+			vkSemaphoreSubmitInfo.stageMask = waitPipelineStateFlags2;
+			m_waitSemaphoreInfos.push_back(vkSemaphoreSubmitInfo);
+		}
+
+		void addSignalSemaphore(Semaphore semaphore) {
+			VkSemaphoreSubmitInfo	vkSemaphoreSubmitInfo{};
+			vkSemaphoreSubmitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+			vkSemaphoreSubmitInfo.semaphore = semaphore;
+			m_signalSemaphoreInfos.push_back(vkSemaphoreSubmitInfo);
+		}
+
+
+		SubmitInfo2* assemble() {
+			if (m_waitSemaphoreInfos.size() > 0) {
+				waitSemaphoreInfoCount = m_waitSemaphoreInfos.size();
+				pWaitSemaphoreInfos = m_waitSemaphoreInfos.data();
+			}
+
+			if (m_commandBufferInfos.size() > 0) {
+				commandBufferInfoCount = m_commandBufferInfos.size();
+				pCommandBufferInfos = m_commandBufferInfos.data();
+			}
+
+			if (m_signalSemaphoreInfos.size() > 0) {
+				signalSemaphoreInfoCount = m_signalSemaphoreInfos.size();
+				pSignalSemaphoreInfos = m_signalSemaphoreInfos.data();
+
+			}
+
+			return this;
+		}
+
+	};
+
 	class PresentInfo : public VkPresentInfoKHR {
 
 		//	TODO: modify to handle more semaphores?
@@ -1654,31 +1717,59 @@ namespace vkcpp {
 			vkQueueWaitIdle(*this);
 		}
 
-		void submit(CommandBuffer commandBuffer) {
-			SubmitInfo submitInfo;
-			submitInfo.addCommandBuffer(commandBuffer);
-			VkResult vkResult = vkQueueSubmit(*this, 1, submitInfo.assemble(), VK_NULL_HANDLE);
+		//void submit(CommandBuffer commandBuffer) {
+		//	SubmitInfo submitInfo;
+		//	submitInfo.addCommandBuffer(commandBuffer);
+		//	VkResult vkResult = vkQueueSubmit(*this, 1, submitInfo.assemble(), VK_NULL_HANDLE);
+		//	if (vkResult != VK_SUCCESS) {
+		//		throw Exception(vkResult);
+		//	}
+		//}
+
+		//void submit(CommandBuffer commandBuffer, vkcpp::Fence fence) {
+		//	SubmitInfo submitInfo;
+		//	submitInfo.addCommandBuffer(commandBuffer);
+		//	VkResult vkResult = vkQueueSubmit(*this, 1, submitInfo.assemble(), fence);
+		//	if (vkResult != VK_SUCCESS) {
+		//		throw Exception(vkResult);
+		//	}
+		//}
+
+
+		//void submit(SubmitInfo& submitInfo, Fence fence) {
+		//	VkResult vkResult = vkQueueSubmit(*this, 1, submitInfo.assemble(), fence);
+		//	if (vkResult != VK_SUCCESS) {
+		//		throw Exception(vkResult);
+		//	}
+		//}
+
+		void submit2(CommandBuffer commandBuffer) {
+			SubmitInfo2 submitInfo2;
+			submitInfo2.addCommandBuffer(commandBuffer);
+			VkResult vkResult = vkQueueSubmit2(*this, 1, submitInfo2.assemble(), VK_NULL_HANDLE);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
 		}
 
-		void submit(CommandBuffer commandBuffer, vkcpp::Fence fence) {
-			SubmitInfo submitInfo;
-			submitInfo.addCommandBuffer(commandBuffer);
-			VkResult vkResult = vkQueueSubmit(*this, 1, submitInfo.assemble(), fence);
+		void submit2(CommandBuffer commandBuffer, vkcpp::Fence fence) {
+			SubmitInfo2 submitInfo2;
+			submitInfo2.addCommandBuffer(commandBuffer);
+			VkResult vkResult = vkQueueSubmit2(*this, 1, submitInfo2.assemble(), fence);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+		}
+
+		void submit2(SubmitInfo2& submitInfo2, Fence fence) {
+			VkResult vkResult = vkQueueSubmit2(*this, 1, submitInfo2.assemble(), fence);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
 		}
 
 
-		void submit(SubmitInfo& submitInfo, Fence fence) {
-			VkResult vkResult = vkQueueSubmit(*this, 1, submitInfo.assemble(), fence);
-			if (vkResult != VK_SUCCESS) {
-				throw Exception(vkResult);
-			}
-		}
+
 
 		VkResult present(PresentInfo& presentInfo) {
 			VkResult vkResult = vkQueuePresentKHR(*this, presentInfo.assemble());

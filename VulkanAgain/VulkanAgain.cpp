@@ -481,7 +481,6 @@ public:
 
 	vkcpp::RenderPass g_renderPassOriginal;
 
-	//	uint32_t						g_swapchainMinImageCount = SWAP_CHAIN_IMAGE_COUNT;
 	vkcpp::Swapchain_ImageViews_FrameBuffers	g_swapchainImageViewsFrameBuffers;
 
 	vkcpp::ShaderModule g_vertShaderModule;
@@ -557,7 +556,7 @@ void transitionImageLayout(
 	commandBuffer.end();
 
 	vkcpp::Fence completedFence(commandPool.getVkDevice());
-	graphicsQueue.submit(commandBuffer, completedFence);
+	graphicsQueue.submit2(commandBuffer, completedFence);
 	completedFence.wait();
 
 }
@@ -578,7 +577,7 @@ void copyBufferToImage(
 	commandBuffer.end();
 
 	vkcpp::Fence completedFence(commandPool.getVkDevice());
-	graphicsQueue.submit(commandBuffer, completedFence);
+	graphicsQueue.submit2(commandBuffer, completedFence);
 	completedFence.wait();
 }
 
@@ -1059,16 +1058,16 @@ void drawFrame(Globals& globals)
 		globals.g_graphicsPipeline);
 
 
-	vkcpp::SubmitInfo submitInfo;
+	vkcpp::SubmitInfo2 submitInfo2;
 	//	Command can proceed but wait for the image to
 	//	actually be available before writing, i.e.,
 	//	(COLOR_ATTACHMENT_OUTPUT) to the image.
-	submitInfo.addWaitSemaphore(
+	submitInfo2.addWaitSemaphore(
 		currentDrawingFrame.m_swapchainImageAvailableSemaphore,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
 	);
-	submitInfo.addCommandBuffer(commandBuffer);
-	submitInfo.addSignalSemaphore(currentDrawingFrame.m_renderFinishedSemaphore);
+	submitInfo2.addCommandBuffer(commandBuffer);
+	submitInfo2.addSignalSemaphore(currentDrawingFrame.m_renderFinishedSemaphore);
 
 
 	//	Show that this drawing frame is now in use ..
@@ -1076,7 +1075,7 @@ void drawFrame(Globals& globals)
 	currentDrawingFrame.m_inFlightFence.close();
 	g_drawFrameDraws++;
 
-	globals.g_graphicsQueue.submit(submitInfo, currentDrawingFrame.m_inFlightFence);
+	globals.g_graphicsQueue.submit2(submitInfo2, currentDrawingFrame.m_inFlightFence);
 
 	vkcpp::PresentInfo presentInfo;
 	presentInfo.addWaitSemaphore(currentDrawingFrame.m_renderFinishedSemaphore);
