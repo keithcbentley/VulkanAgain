@@ -9,6 +9,9 @@
 
 #include <vulkan/vulkan.h>
 
+#include "VulkanSynchronization2Only.h"
+
+
 template<typename T>
 concept DefaultCopyConstructible = requires (T t) {
 	T(t);
@@ -513,6 +516,7 @@ namespace vkcpp {
 				ppEnabledExtensionNames = m_extensionNamesVector.data();
 			}
 
+
 			pApplicationInfo = &m_vkApplicationInfo;
 
 			return this;
@@ -864,6 +868,8 @@ namespace vkcpp {
 
 
 	class Fence : public HandleWithOwner<VkFence> {
+		//	Vulkan set/reset/signaled names are not really clear when it comes to fences.
+		//	Use better open/closed terminology.
 #define VKCPP_FENCE_CREATE_OPENED VK_FENCE_CREATE_SIGNALED_BIT
 
 		Fence(VkFence vkFence, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
@@ -1179,12 +1185,19 @@ namespace vkcpp {
 			m_vkSubpassDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
 			m_vkSubpassDependency.dstSubpass = 0;
 			m_vkSubpassDependency.srcStageMask
-				= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-			m_vkSubpassDependency.srcAccessMask = 0;
+				= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+				| VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+				| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+			m_vkSubpassDependency.srcAccessMask
+				= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+				| VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 			m_vkSubpassDependency.dstStageMask
-				= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+				= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+				| VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+				| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 			m_vkSubpassDependency.dstAccessMask
-				= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+				= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+				| VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
 
 			sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;

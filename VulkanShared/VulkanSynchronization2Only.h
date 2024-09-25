@@ -11,6 +11,7 @@ DO_NOT_USE(vkQueueSubmit)
 
 DO_NOT_USE(VkBufferMemoryBarrier)
 DO_NOT_USE(VkImageMemoryBarrier)
+DO_NOT_USE(VkSubpassDependency)
 DO_NOT_USE(VkSubmitInfo)
 
 

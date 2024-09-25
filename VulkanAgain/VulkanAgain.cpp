@@ -300,7 +300,7 @@ class DrawingFrame {
 	}
 
 	void createSyncObjects() {
-		m_imageAvailableSemaphore = std::move(vkcpp::Semaphore(m_device));
+		m_swapchainImageAvailableSemaphore = std::move(vkcpp::Semaphore(m_device));
 		m_renderFinishedSemaphore = std::move(vkcpp::Semaphore(m_device));
 		m_inFlightFence = std::move(vkcpp::Fence(m_device, VKCPP_FENCE_CREATE_OPENED));
 	}
@@ -332,7 +332,7 @@ class DrawingFrame {
 public:
 
 	vkcpp::Fence	m_inFlightFence;
-	vkcpp::Semaphore m_imageAvailableSemaphore;
+	vkcpp::Semaphore m_swapchainImageAvailableSemaphore;
 	vkcpp::Semaphore m_renderFinishedSemaphore;
 	vkcpp::CommandBuffer	m_commandBuffer;;
 	vkcpp::Buffer_DeviceMemory	m_uniformBufferMemory;
@@ -426,6 +426,7 @@ vkcpp::VulkanInstance createVulkanInstance() {
 
 	vkcpp::VulkanInstanceCreateInfo vulkanInstanceCreateInfo{};
 	vulkanInstanceCreateInfo.addLayer("VK_LAYER_KHRONOS_validation");
+
 
 	vulkanInstanceCreateInfo.addExtension("VK_EXT_debug_utils");
 	vulkanInstanceCreateInfo.addExtension("VK_KHR_surface");
@@ -1013,11 +1014,16 @@ void drawFrame(Globals& globals)
 	currentDrawingFrame.m_inFlightFence.wait();
 
 	uint32_t	swapchainImageIndex;
+	//	Try to get the next image available index.  Don't wait though.
+	//	If no image available, just return.
+	//	(I think) In some cases, this might return an index before the image
+	//	is actually available.  The image available semaphore will be
+	//	signaled when the image itself is actually available.
 	VkResult vkResult = vkAcquireNextImageKHR(
 		device,
 		globals.g_swapchainImageViewsFrameBuffers.vkSwapchain(),
 		0,
-		currentDrawingFrame.m_imageAvailableSemaphore,
+		currentDrawingFrame.m_swapchainImageAvailableSemaphore,
 		VK_NULL_HANDLE,
 		&swapchainImageIndex);
 	if (vkResult == VK_NOT_READY) {
@@ -1042,8 +1048,11 @@ void drawFrame(Globals& globals)
 
 
 	vkcpp::SubmitInfo submitInfo;
+	//	Command can proceed but wait for the image to
+	//	actually be available before writing, i.e.,
+	//	(COLOR_ATTACHMENT_OUTPUT) to the image.
 	submitInfo.addWaitSemaphore(
-		currentDrawingFrame.m_imageAvailableSemaphore,
+		currentDrawingFrame.m_swapchainImageAvailableSemaphore,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
 	);
 	submitInfo.addCommandBuffer(commandBuffer);
