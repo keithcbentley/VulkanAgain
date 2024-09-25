@@ -25,31 +25,42 @@
 
 #include "VulkanSynchronization2Only.h"
 
+class MagicValues {
+
+
+public:
+
+	static const int MAX_FRAMES_IN_FLIGHT = 3;
+	static const int SWAP_CHAIN_IMAGE_COUNT = 5;
+
+
+	static const int VERTEX_BINDING_INDEX = 0;
+
+};
+
 
 struct Point {
 	glm::vec3	m_pos;
 	glm::vec3	m_color;
 	glm::vec2	m_textureCoord;
 
-	//	TODO: move to magic numbers struct.
-	static const int s_bindingIndex = 0;
 
-	static vkcpp::VertexBinding getVertexBinding() {
+	static vkcpp::VertexBinding getVertexBinding(int bindingIndex) {
 		vkcpp::VertexBinding vertexBinding;
-		vertexBinding.m_vkVertexInputBindingDescription.binding = s_bindingIndex;
+		vertexBinding.m_vkVertexInputBindingDescription.binding = bindingIndex;
 		vertexBinding.m_vkVertexInputBindingDescription.stride = sizeof(Point);
 		vertexBinding.m_vkVertexInputBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
 		//	A little bit fragile since location depends on addition order,
 		//	but we need to keep locations explicit for vertex shader.
 		vertexBinding.addVertexInputAttributeDescription(
-			s_bindingIndex, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Point, m_pos));
+			bindingIndex, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Point, m_pos));
 
 		vertexBinding.addVertexInputAttributeDescription(
-			s_bindingIndex, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Point, m_color));
+			bindingIndex, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Point, m_color));
 
 		vertexBinding.addVertexInputAttributeDescription(
-			s_bindingIndex, 2, VK_FORMAT_R32G32_SFLOAT, offsetof(Point, m_textureCoord));
+			bindingIndex, 2, VK_FORMAT_R32G32_SFLOAT, offsetof(Point, m_textureCoord));
 
 		return vertexBinding;
 	}
@@ -220,8 +231,6 @@ Shape PointVertexBuffer::add(const Shape& shape) {
 		int16_t newIndex = oldNormalIndex + thisPointStartIndex;
 		m_vertices.push_back(newIndex);
 	}
-	//this->dump();
-	//std::cout << "\n";
 	return Shape(*this, thisPointStartIndex, shapePointCount, thisVertexStartIndex, shapeVertexCount);
 }
 
@@ -379,6 +388,9 @@ private:
 
 public:
 
+	int m_nextFrameToDrawIndex = 0;
+
+
 	AllDrawingFrames() {}
 	~AllDrawingFrames() = default;
 
@@ -387,8 +399,12 @@ public:
 
 	AllDrawingFrames(int frameCount) : m_drawingFrames(frameCount) {}
 
-	DrawingFrame& drawingFrameAt(int index) {
-		return m_drawingFrames.at(index);
+	void advanceNextFrameToDraw() {
+		m_nextFrameToDrawIndex = (m_nextFrameToDrawIndex + 1) % m_drawingFrames.size();;
+	}
+
+	DrawingFrame& getNextFrameToDraw() {
+		return m_drawingFrames.at(m_nextFrameToDrawIndex);
 	}
 
 	int	frameCount() { return static_cast<int>(m_drawingFrames.size()); }
@@ -415,11 +431,8 @@ public:
 
 };
 
-static const int MAX_FRAMES_IN_FLIGHT = 3;
-static const int SWAP_CHAIN_IMAGE_COUNT = 5;
 
 
-static int g_nextFrameToDrawIndex = 0;
 
 
 vkcpp::VulkanInstance createVulkanInstance() {
@@ -468,7 +481,7 @@ public:
 
 	vkcpp::RenderPass g_renderPassOriginal;
 
-	uint32_t						g_swapchainMinImageCount = SWAP_CHAIN_IMAGE_COUNT;
+	//	uint32_t						g_swapchainMinImageCount = SWAP_CHAIN_IMAGE_COUNT;
 	vkcpp::Swapchain_ImageViews_FrameBuffers	g_swapchainImageViewsFrameBuffers;
 
 	vkcpp::ShaderModule g_vertShaderModule;
@@ -493,7 +506,7 @@ public:
 
 Globals g_globals;
 
-AllDrawingFrames g_allDrawingFrames(MAX_FRAMES_IN_FLIGHT);
+AllDrawingFrames g_allDrawingFrames(MagicValues::MAX_FRAMES_IN_FLIGHT);
 
 
 vkcpp::DescriptorSetLayout createDrawingFrameDescriptorSetLayout(VkDevice vkDevice) {
@@ -512,10 +525,10 @@ vkcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
 	vkcpp::DescriptorPoolCreateInfo poolCreateInfo;
 	poolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
-	poolCreateInfo.addDescriptorCount(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_FRAMES_IN_FLIGHT);
-	poolCreateInfo.addDescriptorCount(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_FRAMES_IN_FLIGHT);
+	poolCreateInfo.addDescriptorCount(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MagicValues::MAX_FRAMES_IN_FLIGHT);
+	poolCreateInfo.addDescriptorCount(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MagicValues::MAX_FRAMES_IN_FLIGHT);
 
-	poolCreateInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	poolCreateInfo.maxSets = static_cast<uint32_t>(MagicValues::MAX_FRAMES_IN_FLIGHT);
 
 	return vkcpp::DescriptorPool(poolCreateInfo, vkDevice);
 }
@@ -716,7 +729,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	VkSwapchainCreateInfoKHR swapchainCreateInfo{};
 	swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapchainCreateInfo.surface = surfaceOriginal;
-	swapchainCreateInfo.minImageCount = SWAP_CHAIN_IMAGE_COUNT;
+	swapchainCreateInfo.minImageCount = MagicValues::SWAP_CHAIN_IMAGE_COUNT;
 	swapchainCreateInfo.imageFormat = swapchainImageFormat;
 	swapchainCreateInfo.imageColorSpace = swapchainImageColorSpace;
 	swapchainCreateInfo.imageArrayLayers = 1;
@@ -786,7 +799,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::GraphicsPipelineCreateInfo graphicsPipelineCreateInfo;
 	//	make a variable so we don't need an rvalue ref to add
-	vkcpp::VertexBinding vertexBinding = Point::getVertexBinding();
+	vkcpp::VertexBinding vertexBinding = Point::getVertexBinding(MagicValues::VERTEX_BINDING_INDEX);
 	graphicsPipelineCreateInfo.addVertexBinding(vertexBinding);
 
 	graphicsPipelineCreateInfo.setViewportExtent(vkSurfaceCapabilities.currentExtent);
@@ -1002,8 +1015,7 @@ void drawFrame(Globals& globals)
 		return;
 	}
 
-	const int	currentFrameToDrawIndex = g_nextFrameToDrawIndex;
-	DrawingFrame& currentDrawingFrame = g_allDrawingFrames.drawingFrameAt(currentFrameToDrawIndex);
+	DrawingFrame& currentDrawingFrame = g_allDrawingFrames.getNextFrameToDraw();
 
 	vkcpp::Device device = currentDrawingFrame.getDevice();
 	vkcpp::CommandBuffer commandBuffer = currentDrawingFrame.m_commandBuffer;
@@ -1079,7 +1091,8 @@ void drawFrame(Globals& globals)
 		globals.g_swapchainImageViewsFrameBuffers.stale();
 	}
 
-	g_nextFrameToDrawIndex = (g_nextFrameToDrawIndex + 1) % MAX_FRAMES_IN_FLIGHT;
+	g_allDrawingFrames.advanceNextFrameToDraw();
+
 
 }
 
