@@ -719,7 +719,9 @@ namespace vkcpp {
 
 	class DeviceQueueCreateInfo : public VkDeviceQueueCreateInfo {
 
-		static inline const float s_queuePriority = 1.0f;
+		static const inline int	MAX_DEVICE_QUEUES = 8;
+
+		static const inline std::array<float, MAX_DEVICE_QUEUES> s_queuePriorities{ 1.0f,1.0f,1.0f,1.0f,1.0f,1.0f,1.0f,1.0f };
 
 	public:
 		DeviceQueueCreateInfo(const DeviceQueueCreateInfo&) = delete;
@@ -727,23 +729,25 @@ namespace vkcpp {
 		DeviceQueueCreateInfo(DeviceQueueCreateInfo&&) = delete;
 		DeviceQueueCreateInfo& operator=(DeviceQueueCreateInfo&&) = delete;
 
-		DeviceQueueCreateInfo() : VkDeviceQueueCreateInfo{} {
+		DeviceQueueCreateInfo(uint32_t queueFamilyIndexArg, int queueCountArg) : VkDeviceQueueCreateInfo{} {
 
 			sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-
-			queueFamilyIndex = 0;
-			queueCount = 1;
-			pQueuePriorities = &s_queuePriority;
-
+			queueFamilyIndex = queueFamilyIndexArg;
+			queueCount = queueCountArg;
+			pQueuePriorities = s_queuePriorities.data();
 		}
 
 	};
+	static_assert(sizeof(DeviceQueueCreateInfo) == sizeof(VkDeviceQueueCreateInfo));
 
 	class DeviceCreateInfo : public VkDeviceCreateInfo {
 
 		std::vector<std::string>	m_extensionNames{};
-
 		std::vector<const char*>	m_extensionStrings{};
+
+		static const int MAX_DEVICE_QUEUE_FAMILIES = 8;
+		std::array<int, MAX_DEVICE_QUEUE_FAMILIES> m_deviceQueueCounts{};
+		std::vector<VkDeviceQueueCreateInfo>	m_deviceQueueCreateInfos;
 
 		VkPhysicalDeviceSynchronization2Features m_sync2Features;
 
@@ -760,11 +764,23 @@ namespace vkcpp {
 
 		DeviceCreateInfo() : VkDeviceCreateInfo{} {
 			sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+			//VkStructureType                    sType;
+			//const void* pNext;
+			//VkDeviceCreateFlags                flags;
+			//uint32_t                           queueCreateInfoCount;
+			//const VkDeviceQueueCreateInfo* pQueueCreateInfos;
+			//uint32_t                           enabledLayerCount;
+			//const char* const* ppEnabledLayerNames;
+			//uint32_t                           enabledExtensionCount;
+			//const char* const* ppEnabledExtensionNames;
+			//const VkPhysicalDeviceFeatures* pEnabledFeatures;
+
 		}
 
 		VkDeviceCreateInfo* assemble() {
 
-			m_extensionStrings.clear();
+			m_extensionStrings.clear();			//	Hygiene in case we are called more than once.
 			ppEnabledExtensionNames = nullptr;
 			for (const std::string& extensionName : m_extensionNames) {
 				m_extensionStrings.push_back(extensionName.c_str());
@@ -772,6 +788,22 @@ namespace vkcpp {
 			enabledExtensionCount = static_cast<uint32_t>(m_extensionNames.size());
 			if (enabledExtensionCount > 0) {
 				ppEnabledExtensionNames = m_extensionStrings.data();
+			}
+
+			for (int deviceQueueFamilyIndex = 0;
+				deviceQueueFamilyIndex < MAX_DEVICE_QUEUE_FAMILIES;
+				deviceQueueFamilyIndex++) {
+				if (m_deviceQueueCounts[deviceQueueFamilyIndex] > 0) {
+					vkcpp::DeviceQueueCreateInfo deviceQueueCreateInfo(
+						deviceQueueFamilyIndex, m_deviceQueueCounts[deviceQueueFamilyIndex]);
+					m_deviceQueueCreateInfos.push_back(deviceQueueCreateInfo);
+				}
+			}
+
+			//	TODO: hygiene in case we are called twice.
+			queueCreateInfoCount = m_deviceQueueCreateInfos.size();
+			if (queueCreateInfoCount > 0) {
+				pQueueCreateInfos = m_deviceQueueCreateInfos.data();
 			}
 
 			// For some reason, this needs to be enabled through this structure.
@@ -787,7 +819,9 @@ namespace vkcpp {
 			m_extensionNames.push_back(extensionName);
 		}
 
-
+		void addDeviceQueue(uint32_t deviceQueueFamilyIndex, int numberOfQueues) {
+			m_deviceQueueCounts.at(deviceQueueFamilyIndex) += numberOfQueues;
+		}
 	};
 
 	class Queue;
@@ -1200,6 +1234,7 @@ namespace vkcpp {
 				| VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
 
+			//	TODO: need to make smarter when more subpasses and dependencies.
 			sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 			attachmentCount = static_cast<uint32_t>(m_attachmentDescriptions.size());
 			pAttachments = m_attachmentDescriptions.data();
@@ -1392,7 +1427,10 @@ namespace vkcpp {
 
 		VkDependencyInfo* assemble() {
 			imageMemoryBarrierCount = m_imageMemoryBarriers.size();
-			pImageMemoryBarriers = m_imageMemoryBarriers.data();
+			pImageMemoryBarriers = nullptr;
+			if (imageMemoryBarrierCount > 0) {
+				pImageMemoryBarriers = m_imageMemoryBarriers.data();
+			}
 			return this;
 		}
 
@@ -1624,20 +1662,23 @@ namespace vkcpp {
 
 
 		SubmitInfo2* assemble() {
-			if (m_waitSemaphoreInfos.size() > 0) {
-				waitSemaphoreInfoCount = m_waitSemaphoreInfos.size();
+
+			waitSemaphoreInfoCount = m_waitSemaphoreInfos.size();
+			pWaitSemaphoreInfos = nullptr;
+			if (waitSemaphoreInfoCount > 0) {
 				pWaitSemaphoreInfos = m_waitSemaphoreInfos.data();
 			}
 
-			if (m_commandBufferInfos.size() > 0) {
-				commandBufferInfoCount = m_commandBufferInfos.size();
+			commandBufferInfoCount = m_commandBufferInfos.size();
+			pCommandBufferInfos = nullptr;
+			if (commandBufferInfoCount > 0) {
 				pCommandBufferInfos = m_commandBufferInfos.data();
 			}
 
-			if (m_signalSemaphoreInfos.size() > 0) {
-				signalSemaphoreInfoCount = m_signalSemaphoreInfos.size();
+			signalSemaphoreInfoCount = m_signalSemaphoreInfos.size();
+			pSignalSemaphoreInfos = nullptr;
+			if (signalSemaphoreInfoCount > 0) {
 				pSignalSemaphoreInfos = m_signalSemaphoreInfos.data();
-
 			}
 
 			return this;
@@ -1826,7 +1867,10 @@ namespace vkcpp {
 				m_poolSizes.push_back(vkDescriptorPoolSize);
 			}
 			poolSizeCount = static_cast<uint32_t>(m_poolSizes.size());
-			pPoolSizes = m_poolSizes.data();
+			pPoolSizes = nullptr;
+			if (poolSizeCount > 0) {
+				pPoolSizes = m_poolSizes.data();
+			}
 
 			return this;
 		}
@@ -1892,7 +1936,10 @@ namespace vkcpp {
 
 		VkDescriptorSetLayoutCreateInfo* assemble() {
 			bindingCount = static_cast<uint32_t>(m_bindings.size());
-			pBindings = m_bindings.data();
+			pBindings = nullptr;
+			if (bindingCount > 0) {
+				pBindings = m_bindings.data();
+			}
 			return this;
 		}
 	};
@@ -1982,8 +2029,10 @@ namespace vkcpp {
 		}
 
 		VkPipelineLayoutCreateInfo* assemble() {
-			if (m_descriptorSetLayouts.size() > 0) {
-				setLayoutCount = (uint32_t)m_descriptorSetLayouts.size();
+
+			setLayoutCount = (uint32_t)m_descriptorSetLayouts.size();
+			pSetLayouts = nullptr;
+			if (setLayoutCount > 0) {
 				pSetLayouts = m_descriptorSetLayouts.data();
 			}
 			return this;
@@ -2205,20 +2254,31 @@ namespace vkcpp {
 		//	Should just be used to create pipeline.
 		VkGraphicsPipelineCreateInfo* assemble() {
 
+			//	TODO: need to clear out create info in case we are called twice.
+
 			//	Assemble pipeline create info
 			m_vkGraphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 
-
 			m_vkGraphicsPipelineCreateInfo.stageCount = static_cast<uint32_t>(m_shaderStageCreateInfos.size());
-			m_vkGraphicsPipelineCreateInfo.pStages = m_shaderStageCreateInfos.data();
+			if (m_vkGraphicsPipelineCreateInfo.stageCount) {
+				m_vkGraphicsPipelineCreateInfo.pStages = m_shaderStageCreateInfos.data();
+			}
 
 			//	Just assemble this create structure in place.
 			//	Doesn't seem to be a need to make the create structure independent right now.
+			//	TODO: maybe make independent when more vertex info?  This is getting messy.
 			m_vkPipelineVertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
 			m_vkPipelineVertexInputStateCreateInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(m_vertexInputBindingDescriptions.size());
-			m_vkPipelineVertexInputStateCreateInfo.pVertexBindingDescriptions = m_vertexInputBindingDescriptions.data();
+			if (m_vkPipelineVertexInputStateCreateInfo.vertexBindingDescriptionCount) {
+				m_vkPipelineVertexInputStateCreateInfo.pVertexBindingDescriptions = m_vertexInputBindingDescriptions.data();
+			}
+
 			m_vkPipelineVertexInputStateCreateInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(m_vertexInputAttributeDescriptions.size());
-			m_vkPipelineVertexInputStateCreateInfo.pVertexAttributeDescriptions = m_vertexInputAttributeDescriptions.data();
+			if (m_vkPipelineVertexInputStateCreateInfo.vertexAttributeDescriptionCount) {
+				m_vkPipelineVertexInputStateCreateInfo.pVertexAttributeDescriptions = m_vertexInputAttributeDescriptions.data();
+			}
+
 			m_vkGraphicsPipelineCreateInfo.pVertexInputState = &m_vkPipelineVertexInputStateCreateInfo;
 
 			m_vkGraphicsPipelineCreateInfo.pInputAssemblyState = &m_inputAssemblyStateCreateInfo;

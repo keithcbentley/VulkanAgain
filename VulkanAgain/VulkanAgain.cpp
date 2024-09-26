@@ -33,8 +33,13 @@ public:
 	static const int MAX_FRAMES_IN_FLIGHT = 3;
 	static const int SWAP_CHAIN_IMAGE_COUNT = 5;
 
-
 	static const int VERTEX_BINDING_INDEX = 0;
+
+	static const uint32_t	GRAPHICS_QUEUE_FAMILY_INDEX = 0;
+	static const uint32_t	GRAPHICS_QUEUE_INDEX = 0;
+
+	static const uint32_t	PRESENTATION_QUEUE_FAMILY_INDEX = 0;
+	static const uint32_t	PRESENTATION_QUEUE_INDEX = 0;
 
 };
 
@@ -684,26 +689,28 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vulkanInstance.createDebugMessenger();
 
 	vkcpp::PhysicalDevice physicalDevice = vulkanInstance.getPhysicalDevice(0);
-	VkPhysicalDeviceFeatures2 vkPhysicalDeviceFeatures2 = physicalDevice.getPhysicalDeviceFeatures2();
 
 	//auto allQueueFamilyProperties = physicalDevice.getAllQueueFamilyProperties();
 
-	vkcpp::DeviceCreateInfo deviceCreateInfo{};
+	vkcpp::DeviceCreateInfo deviceCreateInfo;
 	deviceCreateInfo.addExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
-	vkcpp::DeviceQueueCreateInfo deviceQueueCreateInfo{};
-	deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
-	deviceCreateInfo.queueCreateInfoCount = 1;
+	deviceCreateInfo.addDeviceQueue(MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX, 1);
+	deviceCreateInfo.addDeviceQueue(MagicValues::PRESENTATION_QUEUE_FAMILY_INDEX, 1);
 
+	VkPhysicalDeviceFeatures2 vkPhysicalDeviceFeatures2 = physicalDevice.getPhysicalDeviceFeatures2();
 	deviceCreateInfo.pNext = &vkPhysicalDeviceFeatures2;
-	deviceCreateInfo.pEnabledFeatures = nullptr;
 
 	vkcpp::Device deviceOriginal(deviceCreateInfo, physicalDevice);
 
-	const int queueFamilyIndex = 0;
-	const int queueIndex = 0;
-	vkcpp::Queue graphicsQueue = deviceOriginal.getDeviceQueue(queueFamilyIndex, queueIndex);
+	vkcpp::Queue graphicsQueue = deviceOriginal.getDeviceQueue(
+		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+		MagicValues::GRAPHICS_QUEUE_INDEX);
 	vkcpp::Queue presentationQueue = graphicsQueue;
+
+	//vkcpp::Queue presentationQueue = deviceOriginal.getDeviceQueue(
+	//	MagicValues::PRESENTATION_QUEUE_FAMILY_INDEX,
+	//	MagicValues::PRESENTATION_QUEUE_INDEX);
 
 
 	VkWin32SurfaceCreateInfoKHR vkWin32SurfaceCreateInfo{};
@@ -775,7 +782,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};
 	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
+	commandPoolCreateInfo.queueFamilyIndex = MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX;
 	vkcpp::CommandPool commandPoolOriginal(commandPoolCreateInfo, deviceOriginal);
 
 
