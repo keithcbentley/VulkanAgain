@@ -1152,26 +1152,69 @@ namespace vkcpp {
 	};
 
 
+	class AttachmentDescription : public VkAttachmentDescription {
+
+	public:
+
+		AttachmentDescription()
+			: VkAttachmentDescription{} {
+		}
+
+		static AttachmentDescription getColorAttachmentDescription(
+			VkFormat	colorAttachmentVkFormat
+		) {
+			AttachmentDescription	colorAttachmentDescription;
+			//	Reasonable defaults
+			colorAttachmentDescription.format = colorAttachmentVkFormat;
+			colorAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
+			colorAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			colorAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+			colorAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			colorAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			colorAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			colorAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+			return colorAttachmentDescription;
+		}
+
+		static AttachmentDescription getDepthAttachmentDescription() {
+			AttachmentDescription depthAttachmentDescription;
+			//	Reasonable defaults
+			depthAttachmentDescription.format = VK_FORMAT_D32_SFLOAT;
+			depthAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
+			depthAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			depthAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			depthAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			depthAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			depthAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			depthAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			return depthAttachmentDescription;
+		}
+
+
+	};
+	static_assert(sizeof(AttachmentDescription) == sizeof(VkAttachmentDescription));
+
+
 	class RenderPassCreateInfo : public VkRenderPassCreateInfo {
 
 	public:
 
-		VkFormat								m_vkFormat;
+		VkFormat								m_colorAttachmentVkFormat;
 
 		std::vector<VkAttachmentDescription>	m_attachmentDescriptions;
 
-		VkAttachmentDescription m_colorAttachmentDescription{};
+		//		VkAttachmentDescription m_colorAttachmentDescription{};
 		VkAttachmentReference m_colorAttachmentRef{};
 
-		VkAttachmentDescription m_depthAttachmentDescription{};
+		//VkAttachmentDescription m_depthAttachmentDescription{};
 		VkAttachmentReference m_depthAttachmentRef{};
 
 		VkSubpassDescription m_vkSubpassDescription{};
 		VkSubpassDependency m_vkSubpassDependency{};
 
-		RenderPassCreateInfo(VkFormat vkFormat)
+		RenderPassCreateInfo(VkFormat colorAttachmentVkFormat)
 			: VkRenderPassCreateInfo{}
-			, m_vkFormat(vkFormat) {
+			, m_colorAttachmentVkFormat(colorAttachmentVkFormat) {
 		}
 
 		VkRenderPassCreateInfo* operator&() = delete;
@@ -1181,41 +1224,23 @@ namespace vkcpp {
 			//	TODO: split into configure operations, a simple default, and an assemble/build
 			//	TODO: where do these magic layout transitions happen?
 
-			//	TODO: split out into struct with reasonable defaults.
-			m_colorAttachmentDescription.format = m_vkFormat;
-			m_colorAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
-			m_colorAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-			m_colorAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-			m_colorAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-			m_colorAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-			m_colorAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			m_colorAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-			m_colorAttachmentRef.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size());	//	size before push is index
+			m_attachmentDescriptions.emplace_back(
+				AttachmentDescription::getColorAttachmentDescription(m_colorAttachmentVkFormat));
+			//	"attachment" really means "attachment index in the array of attachments"
+			m_colorAttachmentRef.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size() - 1);
 			m_colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-			m_attachmentDescriptions.push_back(m_colorAttachmentDescription);
-
-			//	TODO: split out into struct with reasonable defaults.
-			m_depthAttachmentDescription.format = VK_FORMAT_D32_SFLOAT;
-			m_depthAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
-			m_depthAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-			m_depthAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-			m_depthAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-			m_depthAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-			m_depthAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			m_depthAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-			m_depthAttachmentRef.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size());
+			m_attachmentDescriptions.emplace_back(
+				AttachmentDescription::getDepthAttachmentDescription());
+			m_depthAttachmentRef.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size() - 1);
 			m_depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-			m_attachmentDescriptions.push_back(m_depthAttachmentDescription);
 
 			m_vkSubpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 			m_vkSubpassDescription.colorAttachmentCount = 1;
 			m_vkSubpassDescription.pColorAttachments = &m_colorAttachmentRef;
 			m_vkSubpassDescription.pDepthStencilAttachment = &m_depthAttachmentRef;
 
-			//	TODO: when srcStageMask and dstStageMask are the same, does that mean wait on the previous pass?
 			m_vkSubpassDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
 			m_vkSubpassDependency.dstSubpass = 0;
 			m_vkSubpassDependency.srcStageMask
@@ -1236,10 +1261,13 @@ namespace vkcpp {
 
 			//	TODO: need to make smarter when more subpasses and dependencies.
 			sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+
 			attachmentCount = static_cast<uint32_t>(m_attachmentDescriptions.size());
 			pAttachments = m_attachmentDescriptions.data();
+
 			subpassCount = 1;
 			pSubpasses = &m_vkSubpassDescription;
+
 			dependencyCount = 1;
 			pDependencies = &m_vkSubpassDependency;
 
@@ -1273,6 +1301,8 @@ namespace vkcpp {
 			}
 			new(this)RenderPass(vkRenderPass, vkDevice, &destroy);
 		}
+
+		//		RenderPass(RenderPassCreateIfo2&)
 
 	};
 
@@ -2691,13 +2721,16 @@ namespace vkcpp {
 			Surface surface
 		) {
 			const VkSurfaceCapabilitiesKHR vkSurfaceCapabilities = surface.getSurfaceCapabilities();
-			const VkExtent2D swapchainExtent = vkSurfaceCapabilities.currentExtent;
-			if (swapchainExtent.width == 0 || swapchainExtent.height == 0) {
+			const VkExtent2D surfaceExtent = vkSurfaceCapabilities.currentExtent;
+			//	Can't make "real" swapchains with 0 width or height, e.g.,
+			//	the window is minimized.  Return a "null" swapchain if
+			//	this occurs.
+			if (surfaceExtent.width == 0 || surfaceExtent.height == 0) {
 				return Swapchain{};
 			}
 
 			vkSwapchainCreateInfo.surface = surface;
-			vkSwapchainCreateInfo.imageExtent = swapchainExtent;
+			vkSwapchainCreateInfo.imageExtent = surfaceExtent;
 			vkSwapchainCreateInfo.preTransform = vkSurfaceCapabilities.currentTransform;
 
 			return Swapchain(vkSwapchainCreateInfo, s_device);
