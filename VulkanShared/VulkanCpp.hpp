@@ -1249,6 +1249,7 @@ namespace vkcpp {
 			return *this;
 		}
 
+		static inline const std::array<uint32_t, 2> s_preserve = { 0,1 };
 
 		VkSubpassDescription* assemble() {
 
@@ -1264,20 +1265,16 @@ namespace vkcpp {
 
 			pDepthStencilAttachment = &m_depthStencilAttachmentReference;
 
+			//preserveAttachmentCount = 2;
+			//pPreserveAttachments = s_preserve.data();
+
+
 			return this;
 		}
 
 	};
 
 	class SubpassDependency : public VkSubpassDependency {
-
-		//uint32_t                srcSubpass;
-		//uint32_t                dstSubpass;
-		//VkPipelineStageFlags    srcStageMask;
-		//VkPipelineStageFlags    dstStageMask;
-		//VkAccessFlags           srcAccessMask;
-		//VkAccessFlags           dstAccessMask;
-		//VkDependencyFlags       dependencyFlags;
 
 	public:
 
@@ -1344,7 +1341,7 @@ namespace vkcpp {
 			//	"attachment" really means "attachment index in the array of attachments"
 			VkAttachmentReference attachmentReference{};
 			attachmentReference.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size() - 1);
-			attachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			attachmentReference.layout = imageLayout;
 			return attachmentReference;
 		}
 
