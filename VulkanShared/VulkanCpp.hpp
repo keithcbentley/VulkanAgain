@@ -1246,10 +1246,11 @@ namespace vkcpp {
 
 		SubpassDescription& setDepthStencilAttachmentReference(VkAttachmentReference& vkDepthStencilAttachmentReference) {
 			m_depthStencilAttachmentReference = vkDepthStencilAttachmentReference;
+			pDepthStencilAttachment = &m_depthStencilAttachmentReference;
 			return *this;
 		}
 
-		static inline const std::array<uint32_t, 2> s_preserve = { 0,1 };
+		//static inline const std::array<uint32_t, 2> s_preserve = { 0,1 };
 
 		VkSubpassDescription* assemble() {
 
@@ -1263,8 +1264,9 @@ namespace vkcpp {
 				pColorAttachments = m_colorAttachmentReferences.data();
 			}
 
-			pDepthStencilAttachment = &m_depthStencilAttachmentReference;
 
+
+			//	TODO:	need to figure out which attachments to preserve.
 			//preserveAttachmentCount = 2;
 			//pPreserveAttachments = s_preserve.data();
 
@@ -1276,11 +1278,13 @@ namespace vkcpp {
 
 	class SubpassDependency : public VkSubpassDependency {
 
+
 	public:
 
 		SubpassDependency()
 			: VkSubpassDependency{} {
 		}
+
 
 		SubpassDependency& setDependency(
 			uint32_t	srcSubpassArg,
@@ -1300,6 +1304,16 @@ namespace vkcpp {
 			return *this;
 		}
 
+		SubpassDependency& addSrc(
+			VkPipelineStageFlags    srcStageMaskArg,
+			VkAccessFlags           srcAccessMaskArg
+		) {
+			srcStageMask |= srcStageMaskArg;
+			srcAccessMask |= srcAccessMaskArg;
+			return *this;
+		}
+
+
 		SubpassDependency& setDst(
 			VkPipelineStageFlags    dstStageMaskArg,
 			VkAccessFlags           dstAccessMaskArg
@@ -1309,6 +1323,14 @@ namespace vkcpp {
 			return *this;
 		}
 
+		SubpassDependency& addDst(
+			VkPipelineStageFlags    dstStageMaskArg,
+			VkAccessFlags           dstAccessMaskArg
+		) {
+			dstStageMask |= dstStageMaskArg;
+			dstAccessMask |= dstAccessMaskArg;
+			return *this;
+		}
 
 	};
 
@@ -2800,10 +2822,10 @@ namespace vkcpp {
 		void createSwapchainFrameBuffers() {
 			m_swapchainFrameBuffers.resize(m_swapchainImageViews.size());
 			for (size_t i = 0; i < m_swapchainImageViews.size(); i++) {
-				std::array<VkImageView, 2> attachments = {
-					m_swapchainImageViews[i],
-					m_depthBuffer.m_imageView
+				std::vector<VkImageView> attachments = {
+					m_swapchainImageViews[i]
 				};
+				attachments.push_back(m_depthBuffer.m_imageView);
 
 				VkFramebufferCreateInfo framebufferInfo{};
 				framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
