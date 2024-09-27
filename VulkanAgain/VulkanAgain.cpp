@@ -706,11 +706,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::Queue graphicsQueue = deviceOriginal.getDeviceQueue(
 		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
 		MagicValues::GRAPHICS_QUEUE_INDEX);
-	vkcpp::Queue presentationQueue = graphicsQueue;
 
-	//vkcpp::Queue presentationQueue = deviceOriginal.getDeviceQueue(
-	//	MagicValues::PRESENTATION_QUEUE_FAMILY_INDEX,
-	//	MagicValues::PRESENTATION_QUEUE_INDEX);
+	vkcpp::Queue presentationQueue = deviceOriginal.getDeviceQueue(
+		MagicValues::PRESENTATION_QUEUE_FAMILY_INDEX,
+		MagicValues::PRESENTATION_QUEUE_INDEX);
 
 
 	VkWin32SurfaceCreateInfoKHR vkWin32SurfaceCreateInfo{};

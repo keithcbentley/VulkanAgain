@@ -1195,6 +1195,79 @@ namespace vkcpp {
 	static_assert(sizeof(AttachmentDescription) == sizeof(VkAttachmentDescription));
 
 
+
+	class SubpassDescription : public VkSubpassDescription {
+
+		std::vector<VkAttachmentReference>	m_inputAttachmentReferences;
+		std::vector<VkAttachmentReference>	m_colorAttachmentReferences;
+		VkAttachmentReference				m_depthStencilAttachmentReference;
+
+		//typedef struct VkSubpassDescription {
+		//	VkSubpassDescriptionFlags       flags;
+		//	VkPipelineBindPoint             pipelineBindPoint;
+		// 
+		//	uint32_t                        inputAttachmentCount;
+		//	const VkAttachmentReference* pInputAttachments;
+		// 
+		//	uint32_t                        colorAttachmentCount;
+		//	const VkAttachmentReference* pColorAttachments;
+		// 
+		//	const VkAttachmentReference* pResolveAttachments;
+		// 
+		//	const VkAttachmentReference* pDepthStencilAttachment;
+		// 
+		//	uint32_t                        preserveAttachmentCount;
+		//	const uint32_t* pPreserveAttachments;
+		//} VkSubpassDescription;
+
+
+	public:
+
+		VkSubpassDescription* operator&() = delete;
+
+		SubpassDescription()
+			: VkSubpassDescription{} {
+		}
+
+		void setPipelineBindPoint(VkPipelineBindPoint vkPipelineBindPoint) {
+			pipelineBindPoint = vkPipelineBindPoint;
+		}
+
+		void addInputAttachmentReference(VkAttachmentReference& vkAttachmentReference) {
+			m_inputAttachmentReferences.push_back(vkAttachmentReference);
+		}
+
+		void addColorAttachmentReference(VkAttachmentReference& vkAttachmentReference) {
+			m_colorAttachmentReferences.push_back(vkAttachmentReference);
+		}
+
+		void setDepthStencilAttachmentReference(VkAttachmentReference& vkDepthStencilAttachmentReference) {
+			m_depthStencilAttachmentReference = vkDepthStencilAttachmentReference;
+		}
+
+
+		VkSubpassDescription* assemble() {
+
+			inputAttachmentCount = m_inputAttachmentReferences.size();
+			if (inputAttachmentCount > 0) {
+				pInputAttachments = m_inputAttachmentReferences.data();
+			}
+
+			colorAttachmentCount = m_colorAttachmentReferences.size();
+			if (colorAttachmentCount > 0) {
+				pColorAttachments = m_colorAttachmentReferences.data();
+			}
+
+			pDepthStencilAttachment = &m_depthStencilAttachmentReference;
+
+			return this;
+		}
+
+
+
+	};
+
+
 	class RenderPassCreateInfo : public VkRenderPassCreateInfo {
 
 	public:
@@ -1203,13 +1276,11 @@ namespace vkcpp {
 
 		std::vector<VkAttachmentDescription>	m_attachmentDescriptions;
 
-		//		VkAttachmentDescription m_colorAttachmentDescription{};
-		VkAttachmentReference m_colorAttachmentRef{};
+		VkAttachmentReference m_colorAttachmentReference{};
+		VkAttachmentReference m_depthAttachmentReference{};
 
-		//VkAttachmentDescription m_depthAttachmentDescription{};
-		VkAttachmentReference m_depthAttachmentRef{};
+		SubpassDescription m_subpassDescription;
 
-		VkSubpassDescription m_vkSubpassDescription{};
 		VkSubpassDependency m_vkSubpassDependency{};
 
 		RenderPassCreateInfo(VkFormat colorAttachmentVkFormat)
@@ -1228,18 +1299,18 @@ namespace vkcpp {
 			m_attachmentDescriptions.emplace_back(
 				AttachmentDescription::getColorAttachmentDescription(m_colorAttachmentVkFormat));
 			//	"attachment" really means "attachment index in the array of attachments"
-			m_colorAttachmentRef.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size() - 1);
-			m_colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			m_colorAttachmentReference.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size() - 1);
+			m_colorAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 			m_attachmentDescriptions.emplace_back(
 				AttachmentDescription::getDepthAttachmentDescription());
-			m_depthAttachmentRef.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size() - 1);
-			m_depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			m_depthAttachmentReference.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size() - 1);
+			m_depthAttachmentReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-			m_vkSubpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-			m_vkSubpassDescription.colorAttachmentCount = 1;
-			m_vkSubpassDescription.pColorAttachments = &m_colorAttachmentRef;
-			m_vkSubpassDescription.pDepthStencilAttachment = &m_depthAttachmentRef;
+
+			m_subpassDescription.setPipelineBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
+			m_subpassDescription.addColorAttachmentReference(m_colorAttachmentReference);
+			m_subpassDescription.setDepthStencilAttachmentReference(m_depthAttachmentReference);
 
 			m_vkSubpassDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
 			m_vkSubpassDependency.dstSubpass = 0;
@@ -1259,14 +1330,17 @@ namespace vkcpp {
 				| VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
 
-			//	TODO: need to make smarter when more subpasses and dependencies.
+			//	TODO:	need to make smarter when more subpasses and dependencies.
+			//	TODO:	hygiene
 			sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 
 			attachmentCount = static_cast<uint32_t>(m_attachmentDescriptions.size());
-			pAttachments = m_attachmentDescriptions.data();
+			if (attachmentCount > 0) {
+				pAttachments = m_attachmentDescriptions.data();
+			}
 
 			subpassCount = 1;
-			pSubpasses = &m_vkSubpassDescription;
+			pSubpasses = m_subpassDescription.assemble();
 
 			dependencyCount = 1;
 			pDependencies = &m_vkSubpassDependency;
