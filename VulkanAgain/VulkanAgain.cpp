@@ -677,8 +677,40 @@ vkcpp::RenderPass createRenderPass(
 	VkFormat swapchainImageFormat,
 	vkcpp::Device device
 ) {
-	vkcpp::RenderPassCreateInfo RenderPassCreateInfo(swapchainImageFormat);
-	return vkcpp::RenderPass(RenderPassCreateInfo, device);
+	vkcpp::RenderPassCreateInfo renderPassCreateInfo;
+
+	auto colorAttachmentReference = renderPassCreateInfo.addAttachment(
+		vkcpp::AttachmentDescription::simpleColorAttachmentDescription(swapchainImageFormat),
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+	);
+
+	auto depthAttachmentReference = renderPassCreateInfo.addAttachment(
+		vkcpp::AttachmentDescription::simpleDepthAttachmentDescription(),
+		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	);
+
+	renderPassCreateInfo.addSubpass()
+		.addColorAttachmentReference(colorAttachmentReference)
+		.setDepthStencilAttachmentReference(depthAttachmentReference);
+
+	renderPassCreateInfo.addSubpassDependency(VK_SUBPASS_EXTERNAL, 0)
+		.setSrc(
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+			| VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+			| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+			| VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
+		.setDst(
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+			| VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+			| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+			| VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+
+
+
+
+	return vkcpp::RenderPass(renderPassCreateInfo, device);
 }
 
 

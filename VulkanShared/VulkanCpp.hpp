@@ -1160,7 +1160,7 @@ namespace vkcpp {
 			: VkAttachmentDescription{} {
 		}
 
-		static AttachmentDescription getColorAttachmentDescription(
+		static AttachmentDescription simpleColorAttachmentDescription(
 			VkFormat	colorAttachmentVkFormat
 		) {
 			AttachmentDescription	colorAttachmentDescription;
@@ -1176,7 +1176,7 @@ namespace vkcpp {
 			return colorAttachmentDescription;
 		}
 
-		static AttachmentDescription getDepthAttachmentDescription() {
+		static AttachmentDescription simpleDepthAttachmentDescription() {
 			AttachmentDescription depthAttachmentDescription;
 			//	Reasonable defaults
 			depthAttachmentDescription.format = VK_FORMAT_D32_SFLOAT;
@@ -1229,20 +1229,24 @@ namespace vkcpp {
 			: VkSubpassDescription{} {
 		}
 
-		void setPipelineBindPoint(VkPipelineBindPoint vkPipelineBindPoint) {
+		SubpassDescription& setPipelineBindPoint(VkPipelineBindPoint vkPipelineBindPoint) {
 			pipelineBindPoint = vkPipelineBindPoint;
+			return *this;
 		}
 
-		void addInputAttachmentReference(VkAttachmentReference& vkAttachmentReference) {
+		SubpassDescription& addInputAttachmentReference(VkAttachmentReference& vkAttachmentReference) {
 			m_inputAttachmentReferences.push_back(vkAttachmentReference);
+			return *this;
 		}
 
-		void addColorAttachmentReference(VkAttachmentReference& vkAttachmentReference) {
+		SubpassDescription& addColorAttachmentReference(VkAttachmentReference& vkAttachmentReference) {
 			m_colorAttachmentReferences.push_back(vkAttachmentReference);
+			return *this;
 		}
 
-		void setDepthStencilAttachmentReference(VkAttachmentReference& vkDepthStencilAttachmentReference) {
+		SubpassDescription& setDepthStencilAttachmentReference(VkAttachmentReference& vkDepthStencilAttachmentReference) {
 			m_depthStencilAttachmentReference = vkDepthStencilAttachmentReference;
+			return *this;
 		}
 
 
@@ -1263,6 +1267,50 @@ namespace vkcpp {
 			return this;
 		}
 
+	};
+
+	class SubpassDependency : public VkSubpassDependency {
+
+		//uint32_t                srcSubpass;
+		//uint32_t                dstSubpass;
+		//VkPipelineStageFlags    srcStageMask;
+		//VkPipelineStageFlags    dstStageMask;
+		//VkAccessFlags           srcAccessMask;
+		//VkAccessFlags           dstAccessMask;
+		//VkDependencyFlags       dependencyFlags;
+
+	public:
+
+		SubpassDependency()
+			: VkSubpassDependency{} {
+		}
+
+		SubpassDependency& setDependency(
+			uint32_t	srcSubpassArg,
+			uint32_t	dstSubpassArg
+		) {
+			srcSubpass = srcSubpassArg;
+			dstSubpass = dstSubpassArg;
+			return *this;
+		}
+
+		SubpassDependency& setSrc(
+			VkPipelineStageFlags    srcStageMaskArg,
+			VkAccessFlags           srcAccessMaskArg
+		) {
+			srcStageMask = srcStageMaskArg;
+			srcAccessMask = srcAccessMaskArg;
+			return *this;
+		}
+
+		SubpassDependency& setDst(
+			VkPipelineStageFlags    dstStageMaskArg,
+			VkAccessFlags           dstAccessMaskArg
+		) {
+			dstStageMask = dstStageMaskArg;
+			dstAccessMask = dstAccessMaskArg;
+			return *this;
+		}
 
 
 	};
@@ -1270,67 +1318,54 @@ namespace vkcpp {
 
 	class RenderPassCreateInfo : public VkRenderPassCreateInfo {
 
-	public:
-
-		VkFormat								m_colorAttachmentVkFormat;
+		//		VkFormat	m_colorAttachmentVkFormat;
 
 		std::vector<VkAttachmentDescription>	m_attachmentDescriptions;
 
-		VkAttachmentReference m_colorAttachmentReference{};
-		VkAttachmentReference m_depthAttachmentReference{};
-
+		//	TODO: need to handle multiple subpasses
 		SubpassDescription m_subpassDescription;
 
-		VkSubpassDependency m_vkSubpassDependency{};
+		//	TODO: need to handle multiple dependencies
+		SubpassDependency m_subpassDependency;
 
-		RenderPassCreateInfo(VkFormat colorAttachmentVkFormat)
-			: VkRenderPassCreateInfo{}
-			, m_colorAttachmentVkFormat(colorAttachmentVkFormat) {
+	public:
+
+		RenderPassCreateInfo()
+			: VkRenderPassCreateInfo{} {
 		}
 
 		VkRenderPassCreateInfo* operator&() = delete;
 
+		VkAttachmentReference addAttachment(
+			const AttachmentDescription& attachmentDescription,
+			VkImageLayout	imageLayout
+		) {
+			m_attachmentDescriptions.emplace_back(attachmentDescription);
+			//	"attachment" really means "attachment index in the array of attachments"
+			VkAttachmentReference attachmentReference{};
+			attachmentReference.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size() - 1);
+			attachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			return attachmentReference;
+		}
+
+		SubpassDescription& addSubpass() {
+			m_subpassDescription.setPipelineBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
+			return m_subpassDescription;
+		}
+
+		SubpassDependency& addSubpassDependency(
+			uint32_t	srcSubpassArg,
+			uint32_t	dstSubpassArg
+		) {
+			m_subpassDependency.setDependency(srcSubpassArg, dstSubpassArg);
+			return m_subpassDependency;
+		}
+
+
 		VkRenderPassCreateInfo* assemble() {
 
-			//	TODO: split into configure operations, a simple default, and an assemble/build
 			//	TODO: where do these magic layout transitions happen?
 
-
-			m_attachmentDescriptions.emplace_back(
-				AttachmentDescription::getColorAttachmentDescription(m_colorAttachmentVkFormat));
-			//	"attachment" really means "attachment index in the array of attachments"
-			m_colorAttachmentReference.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size() - 1);
-			m_colorAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-			m_attachmentDescriptions.emplace_back(
-				AttachmentDescription::getDepthAttachmentDescription());
-			m_depthAttachmentReference.attachment = static_cast<uint32_t>(m_attachmentDescriptions.size() - 1);
-			m_depthAttachmentReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-
-			m_subpassDescription.setPipelineBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
-			m_subpassDescription.addColorAttachmentReference(m_colorAttachmentReference);
-			m_subpassDescription.setDepthStencilAttachmentReference(m_depthAttachmentReference);
-
-			m_vkSubpassDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-			m_vkSubpassDependency.dstSubpass = 0;
-			m_vkSubpassDependency.srcStageMask
-				= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-				| VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
-				| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-			m_vkSubpassDependency.srcAccessMask
-				= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-				| VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-			m_vkSubpassDependency.dstStageMask
-				= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-				| VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
-				| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-			m_vkSubpassDependency.dstAccessMask
-				= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-				| VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-
-			//	TODO:	need to make smarter when more subpasses and dependencies.
 			//	TODO:	hygiene
 			sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 
@@ -1343,7 +1378,7 @@ namespace vkcpp {
 			pSubpasses = m_subpassDescription.assemble();
 
 			dependencyCount = 1;
-			pDependencies = &m_vkSubpassDependency;
+			pDependencies = &m_subpassDependency;
 
 			return this;
 
@@ -1367,9 +1402,9 @@ namespace vkcpp {
 	public:
 
 		RenderPass() {}
-		RenderPass(RenderPassCreateInfo& vkRenderPassCreateInfo, VkDevice vkDevice) {
+		RenderPass(RenderPassCreateInfo& renderPassCreateInfo, VkDevice vkDevice) {
 			VkRenderPass	vkRenderPass;
-			VkResult vkResult = vkCreateRenderPass(vkDevice, vkRenderPassCreateInfo.assemble(), nullptr, &vkRenderPass);
+			VkResult vkResult = vkCreateRenderPass(vkDevice, renderPassCreateInfo.assemble(), nullptr, &vkRenderPass);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
