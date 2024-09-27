@@ -1200,7 +1200,8 @@ namespace vkcpp {
 
 		std::vector<VkAttachmentReference>	m_inputAttachmentReferences;
 		std::vector<VkAttachmentReference>	m_colorAttachmentReferences;
-		VkAttachmentReference				m_depthStencilAttachmentReference;
+		VkAttachmentReference				m_depthStencilAttachmentReference{};
+		bool								m_haveDepthStencilAttachmentReference{};
 
 		//typedef struct VkSubpassDescription {
 		//	VkSubpassDescriptionFlags       flags;
@@ -1246,7 +1247,7 @@ namespace vkcpp {
 
 		SubpassDescription& setDepthStencilAttachmentReference(VkAttachmentReference& vkDepthStencilAttachmentReference) {
 			m_depthStencilAttachmentReference = vkDepthStencilAttachmentReference;
-			pDepthStencilAttachment = &m_depthStencilAttachmentReference;
+			m_haveDepthStencilAttachmentReference = true;
 			return *this;
 		}
 
@@ -1264,6 +1265,10 @@ namespace vkcpp {
 				pColorAttachments = m_colorAttachmentReferences.data();
 			}
 
+			if (m_haveDepthStencilAttachmentReference) {
+				pDepthStencilAttachment = &m_depthStencilAttachmentReference;
+			}
+
 
 
 			//	TODO:	need to figure out which attachments to preserve.
@@ -1276,8 +1281,8 @@ namespace vkcpp {
 
 	};
 
-	class SubpassDependency : public VkSubpassDependency {
 
+	class SubpassDependency : public VkSubpassDependency {
 
 	public:
 
@@ -1333,19 +1338,20 @@ namespace vkcpp {
 		}
 
 	};
+	static_assert(sizeof(SubpassDependency) == sizeof(VkSubpassDependency));
 
 
 	class RenderPassCreateInfo : public VkRenderPassCreateInfo {
 
-		//		VkFormat	m_colorAttachmentVkFormat;
-
 		std::vector<VkAttachmentDescription>	m_attachmentDescriptions;
 
 		//	TODO: need to handle multiple subpasses
-		SubpassDescription m_subpassDescription;
+		std::vector<SubpassDescription> m_subpassDescriptions;
+		std::vector<VkSubpassDescription>	m_vkSubpassDescriptions;
 
 		//	TODO: need to handle multiple dependencies
-		SubpassDependency m_subpassDependency;
+		std::vector<SubpassDependency> m_subpassDependencies;
+		std::vector<VkSubpassDependency> m_vkSubpassDependencies;
 
 	public:
 
@@ -1368,16 +1374,18 @@ namespace vkcpp {
 		}
 
 		SubpassDescription& addSubpass() {
-			m_subpassDescription.setPipelineBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
-			return m_subpassDescription;
+			SubpassDescription& subpassDescription = m_subpassDescriptions.emplace_back();
+			subpassDescription.setPipelineBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
+			return subpassDescription;
 		}
 
 		SubpassDependency& addSubpassDependency(
 			uint32_t	srcSubpassArg,
 			uint32_t	dstSubpassArg
 		) {
-			m_subpassDependency.setDependency(srcSubpassArg, dstSubpassArg);
-			return m_subpassDependency;
+			SubpassDependency& subpassDependency = m_subpassDependencies.emplace_back();
+			subpassDependency.setDependency(srcSubpassArg, dstSubpassArg);
+			return subpassDependency;
 		}
 
 
@@ -1393,11 +1401,21 @@ namespace vkcpp {
 				pAttachments = m_attachmentDescriptions.data();
 			}
 
-			subpassCount = 1;
-			pSubpasses = m_subpassDescription.assemble();
+			subpassCount = m_subpassDescriptions.size();
+			if (subpassCount > 0) {
+				for (SubpassDescription& subpassDescription : m_subpassDescriptions) {
+					m_vkSubpassDescriptions.push_back(*subpassDescription.assemble());
+				}
+				pSubpasses = m_vkSubpassDescriptions.data();
+			}
 
-			dependencyCount = 1;
-			pDependencies = &m_subpassDependency;
+			dependencyCount = m_subpassDependencies.size();
+			if (dependencyCount > 0) {
+				for (SubpassDependency& subpassDependency : m_subpassDependencies) {
+					m_vkSubpassDependencies.push_back(subpassDependency);
+				}
+				pDependencies = m_vkSubpassDependencies.data();
+			}
 
 			return this;
 
@@ -2337,8 +2355,9 @@ namespace vkcpp {
 
 
 		std::vector<VkDynamicState> m_dynamicStates = {
-			VK_DYNAMIC_STATE_VIEWPORT,
-			VK_DYNAMIC_STATE_SCISSOR
+			VK_DYNAMIC_STATE_VIEWPORT
+			, VK_DYNAMIC_STATE_SCISSOR
+			//			, VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE
 		};
 
 		VkPipelineDynamicStateCreateInfo m_dynamicState{};
@@ -2381,7 +2400,7 @@ namespace vkcpp {
 		}
 
 
-		void addVertexBinding(VertexBinding& vertexBinding) {
+		void addVertexBinding(const VertexBinding& vertexBinding) {
 			m_vertexInputBindingDescriptions.push_back(vertexBinding.m_vkVertexInputBindingDescription);
 			for (const VkVertexInputAttributeDescription& vkVertexInputAttributeDescription
 				: vertexBinding.m_vkVertexInputAttributeDescriptions) {

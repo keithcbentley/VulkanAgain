@@ -689,6 +689,7 @@ vkcpp::RenderPass createRenderPass(
 		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 	);
 
+
 	renderPassCreateInfo.addSubpass()
 		.addColorAttachmentReference(colorAttachmentReference)
 		.setDepthStencilAttachmentReference(depthAttachmentReference);
@@ -710,15 +711,19 @@ vkcpp::RenderPass createRenderPass(
 			| VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 
 
-	//renderPassCreateInfo.addSubpassDependency(VK_SUBPASS_EXTERNAL, 0)
-	//	.setSrc(
-	//		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-	//		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-	//	)
-	//	.setDst(
-	//		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-	//		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-	//	);
+	renderPassCreateInfo.addSubpass()
+		.addColorAttachmentReference(colorAttachmentReference)
+		.setDepthStencilAttachmentReference(depthAttachmentReference);
+
+	renderPassCreateInfo.addSubpassDependency(0, 1)
+		.setSrc(
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+		)
+		.setDst(
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+		);
 
 
 	return vkcpp::RenderPass(renderPassCreateInfo, device);
@@ -846,10 +851,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 
 	vkcpp::GraphicsPipelineCreateInfo graphicsPipelineCreateInfo;
-	//	make a variable so we don't need an rvalue ref to add
-	vkcpp::VertexBinding vertexBinding = Point::getVertexBinding(MagicValues::VERTEX_BINDING_INDEX);
-	graphicsPipelineCreateInfo.addVertexBinding(vertexBinding);
-
+	graphicsPipelineCreateInfo.addVertexBinding(
+		Point::getVertexBinding(MagicValues::VERTEX_BINDING_INDEX));
 	graphicsPipelineCreateInfo.setViewportExtent(vkSurfaceCapabilities.currentExtent);
 	graphicsPipelineCreateInfo.setPipelineLayout(pipelineLayout);
 	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal);
@@ -991,6 +994,9 @@ void recordCommandBuffer(
 	scissor.extent = swapchainImageExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+	//vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
+	//vkCmdSetDepthTestEnable(commandBuffer, VK_TRUE);
+
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
 	vkCmdBindDescriptorSets(
@@ -1007,6 +1013,11 @@ void recordCommandBuffer(
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
 	vkCmdBindIndexBuffer(commandBuffer, vertexBuffer, 0, VK_INDEX_TYPE_UINT16);
 	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer.vertexCount(), 1, 0, 0, 0);
+
+	VkSubpassContents vkSubpassContents{};
+
+	vkCmdNextSubpass(commandBuffer, vkSubpassContents);
+	//	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer.vertexCount(), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
