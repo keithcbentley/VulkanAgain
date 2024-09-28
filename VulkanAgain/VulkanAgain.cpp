@@ -271,7 +271,8 @@ PointVertexBuffer g_squarePointVertexBuffer(g_squarePoints, g_squareVertices);
 Shape g_theSquare(g_squarePointVertexBuffer);
 
 
-PointVertexBuffer g_pointVertexBuffer;
+PointVertexBuffer g_pointVertexBuffer1;
+PointVertexBuffer g_pointVertexBuffer2;
 
 
 
@@ -499,8 +500,8 @@ public:
 	vkcpp::GraphicsPipeline	g_graphicsPipeline;
 	vkcpp::GraphicsPipeline	g_graphicsPipelineTest;
 
-	vkcpp::Buffer_DeviceMemory	g_pointBufferAndDeviceMemory;
-	vkcpp::Buffer_DeviceMemory	g_vertexBufferAndDeviceMemory;
+	vkcpp::Buffer_DeviceMemory	g_pointBufferAndDeviceMemory1;
+	vkcpp::Buffer_DeviceMemory	g_vertexBufferAndDeviceMemory1;
 
 	vkcpp::CommandPool		g_commandPoolOriginal;
 
@@ -803,19 +804,19 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	swapchainImageViewsFrameBuffers.recreateSwapchainImageViewsFrameBuffers();
 
 	//	Pay attention to the terminology change.
-	vkcpp::Buffer_DeviceMemory pointBufferAndDeviceMemory(
+	vkcpp::Buffer_DeviceMemory pointBufferAndDeviceMemory1(
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		g_pointVertexBuffer.pointsSizeof(),
-		g_pointVertexBuffer.pointData(),
+		g_pointVertexBuffer1.pointsSizeof(),
+		g_pointVertexBuffer1.pointData(),
 		deviceOriginal);
 
 	//	Pay attention to the terminology change.
-	vkcpp::Buffer_DeviceMemory vertexBufferAndDeviceMemory(
+	vkcpp::Buffer_DeviceMemory vertexBufferAndDeviceMemory1(
 		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		g_pointVertexBuffer.verticesSizeof(),
-		g_pointVertexBuffer.vertexData(),
+		g_pointVertexBuffer1.verticesSizeof(),
+		g_pointVertexBuffer1.vertexData(),
 		deviceOriginal);
 
 
@@ -893,8 +894,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_surfaceOriginal = std::move(surfaceOriginal);
 
 
-	globals.g_pointBufferAndDeviceMemory = std::move(pointBufferAndDeviceMemory);
-	globals.g_vertexBufferAndDeviceMemory = std::move(vertexBufferAndDeviceMemory);
+	globals.g_pointBufferAndDeviceMemory1 = std::move(pointBufferAndDeviceMemory1);
+	globals.g_vertexBufferAndDeviceMemory1 = std::move(vertexBufferAndDeviceMemory1);
 
 	globals.g_descriptorSetLayoutOriginal = std::move(descriptorSetLayoutOriginal);
 	globals.g_descriptorPoolOriginal = std::move(descriptorPoolOriginal);
@@ -959,6 +960,102 @@ void updateUniformBuffer(
 }
 
 
+class Renderer {
+
+public:
+
+	vkcpp::CommandBuffer	m_commandBuffer;
+
+	vkcpp::Buffer			m_pointBuffer;
+	vkcpp::Buffer			m_vertexBuffer;
+
+	VkDescriptorSet			m_vkDescriptorSet;
+
+	vkcpp::PipelineLayout		m_pipelineLayout;
+	vkcpp::GraphicsPipeline		m_graphicsPipeline;
+
+	//	TODO: use a pointer instead of a reference for now, until
+	//	we figure out the best structure for the pieces.  Maybe
+	//	encapsulate the renderpass in this class.
+	vkcpp::Swapchain_ImageViews_FrameBuffers* m_pSwapchainImageViewsFrameBuffers;
+	uint32_t									m_swapchainImageIndex;
+
+
+	void recordCommandBuffer(
+		vkcpp::CommandBuffer		commandBuffer
+	) {
+		const VkExtent2D swapchainImageExtent = m_pSwapchainImageViewsFrameBuffers->getImageExtent();
+
+		commandBuffer.reset();
+		commandBuffer.begin();
+
+		VkRenderPassBeginInfo vkRenderPassBeginInfo{};
+		vkRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		vkRenderPassBeginInfo.renderPass = m_pSwapchainImageViewsFrameBuffers->getRenderPass();
+		vkRenderPassBeginInfo.framebuffer = m_pSwapchainImageViewsFrameBuffers->getFrameBuffer(m_swapchainImageIndex);
+		vkRenderPassBeginInfo.renderArea.offset = { 0, 0 };
+		vkRenderPassBeginInfo.renderArea.extent = swapchainImageExtent;
+
+		std::array<VkClearValue, 2> clearValues{};
+		clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f } };
+		clearValues[1].depthStencil = { 1.0f, 0 };
+		vkRenderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+		vkRenderPassBeginInfo.pClearValues = clearValues.data();
+
+		vkCmdBeginRenderPass(commandBuffer, &vkRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		VkViewport viewport{};
+		viewport.x = 0.0f;
+		viewport.y = 0.0f;
+		viewport.width = static_cast<float>(swapchainImageExtent.width);
+		viewport.height = static_cast<float>(swapchainImageExtent.height);
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+		VkRect2D scissor{};
+		scissor.offset = { 0, 0 };
+		scissor.extent = swapchainImageExtent;
+		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
+		vkCmdBindDescriptorSets(
+			commandBuffer,
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			m_pipelineLayout,
+			0, 1,
+			&m_vkDescriptorSet,
+			0, nullptr);
+
+		VkBuffer vkPointBuffer = m_pointBuffer;
+		VkBuffer pointBuffers[] = { vkPointBuffer };
+		VkDeviceSize offsets[] = { 0 };
+		vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
+		vkCmdBindIndexBuffer(commandBuffer, m_vertexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+		vkCmdSetDepthTestEnable(commandBuffer, VK_TRUE);
+		vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer1.vertexCount(), 1, 0, 0, 0);
+
+		VkSubpassContents vkSubpassContents{};
+
+		vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
+		vkCmdNextSubpass(commandBuffer, vkSubpassContents);
+		//vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelineTest);
+		//	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer.vertexCount(), 1, 0, 0, 0);
+
+		vkCmdEndRenderPass(commandBuffer);
+
+		commandBuffer.end();
+
+	}
+
+
+};
+
+Renderer theRenderer;
+
+
 
 void recordCommandBuffer(
 	vkcpp::CommandBuffer		commandBuffer,
@@ -968,8 +1065,7 @@ void recordCommandBuffer(
 	vkcpp::Buffer			vertexBuffer,
 	VkDescriptorSet		vkDescriptorSet,
 	vkcpp::PipelineLayout	pipelineLayout,
-	vkcpp::GraphicsPipeline			graphicsPipeline,
-	vkcpp::GraphicsPipeline			graphicsPipelineTest
+	vkcpp::GraphicsPipeline			graphicsPipeline
 ) {
 	const VkExtent2D swapchainImageExtent = swapchainImageViewsFrameBuffers.getImageExtent();
 
@@ -1022,13 +1118,13 @@ void recordCommandBuffer(
 	vkCmdBindIndexBuffer(commandBuffer, vertexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
 	vkCmdSetDepthTestEnable(commandBuffer, VK_TRUE);
-	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer.vertexCount(), 1, 0, 0, 0);
+	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer1.vertexCount(), 1, 0, 0, 0);
 
 	VkSubpassContents vkSubpassContents{};
 
 	vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
 	vkCmdNextSubpass(commandBuffer, vkSubpassContents);
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelineTest);
+	//  vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelineTest);
 	//	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer.vertexCount(), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
@@ -1039,27 +1135,6 @@ void recordCommandBuffer(
 
 int64_t	g_drawFrameCalls;
 int64_t g_drawFrameDraws;
-
-
-//class DurationTimer {
-//
-//public:
-//
-//
-//	std::chrono::high_resolution_clock::time_point m_start = std::chrono::high_resolution_clock::now();
-//
-//	DurationTimer() {}
-//
-//	void finish(int limit, const char* msg) {
-//		auto end = std::chrono::high_resolution_clock::now();
-//		std::chrono::duration<double> diff = end - m_start;
-//		if (diff >= std::chrono::milliseconds{ limit }) {
-//			std::cout << msg << ": " << diff << "\n";
-//		}
-//
-//	}
-//
-//};
 
 
 std::chrono::high_resolution_clock::time_point g_nextFrameTime = std::chrono::high_resolution_clock::now();
@@ -1118,17 +1193,27 @@ void drawFrame(Globals& globals)
 		globals.g_swapchainImageViewsFrameBuffers.getImageExtent()
 	);
 
+	theRenderer.m_pointBuffer = globals.g_pointBufferAndDeviceMemory1.m_buffer;
+	theRenderer.m_vertexBuffer = globals.g_vertexBufferAndDeviceMemory1.m_buffer;
 
-	recordCommandBuffer(
-		commandBuffer,
-		globals.g_swapchainImageViewsFrameBuffers,
-		swapchainImageIndex,
-		globals.g_pointBufferAndDeviceMemory.m_buffer,
-		globals.g_vertexBufferAndDeviceMemory.m_buffer,
-		currentDrawingFrame.m_descriptorSet,
-		globals.g_pipelineLayout,
-		globals.g_graphicsPipeline,
-		globals.g_graphicsPipelineTest);
+	theRenderer.m_vkDescriptorSet = currentDrawingFrame.m_descriptorSet;
+	theRenderer.m_pipelineLayout = globals.g_pipelineLayout;
+	theRenderer.m_graphicsPipeline = globals.g_graphicsPipeline;
+
+	theRenderer.m_pSwapchainImageViewsFrameBuffers = &globals.g_swapchainImageViewsFrameBuffers;
+	theRenderer.m_swapchainImageIndex = swapchainImageIndex;
+
+	theRenderer.recordCommandBuffer(commandBuffer);
+
+	//recordCommandBuffer(
+	//	commandBuffer,
+	//	globals.g_swapchainImageViewsFrameBuffers,
+	//	swapchainImageIndex,
+	//	globals.g_pointBufferAndDeviceMemory1.m_buffer,
+	//	globals.g_vertexBufferAndDeviceMemory1.m_buffer,
+	//	currentDrawingFrame.m_descriptorSet,
+	//	globals.g_pipelineLayout,
+	//	globals.g_graphicsPipeline);
 
 
 	vkcpp::SubmitInfo2 submitInfo2;
@@ -1331,10 +1416,10 @@ int main()
 	RegisterMyWindowClass(hInstance);
 	HWND hWnd = CreateFirstWindow(hInstance);
 
-	Shape shape1 = g_pointVertexBuffer.add(g_theSquare);
+	Shape shape1 = g_pointVertexBuffer1.add(g_theSquare);
 	//shape1.scale(1.5, 1.5, 0.0);
 
-	Shape shape2 = g_pointVertexBuffer.add(g_theSquare);
+	Shape shape2 = g_pointVertexBuffer1.add(g_theSquare);
 	shape2.scale(0.5, 0.5, 0.0);
 	shape2.addOffset(1.0, 0.0, -0.5);
 
@@ -1369,5 +1454,27 @@ int main()
 	//	Wait for device to be idle before exiting and cleaning up globals.
 	g_globals.g_deviceOriginal.waitIdle();
 
-
 }
+
+
+//class DurationTimer {
+//
+//public:
+//
+//
+//	std::chrono::high_resolution_clock::time_point m_start = std::chrono::high_resolution_clock::now();
+//
+//	DurationTimer() {}
+//
+//	void finish(int limit, const char* msg) {
+//		auto end = std::chrono::high_resolution_clock::now();
+//		std::chrono::duration<double> diff = end - m_start;
+//		if (diff >= std::chrono::milliseconds{ limit }) {
+//			std::cout << msg << ": " << diff << "\n";
+//		}
+//
+//	}
+//
+//};
+
+
