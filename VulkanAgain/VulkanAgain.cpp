@@ -497,6 +497,7 @@ public:
 
 	vkcpp::PipelineLayout	g_pipelineLayout;
 	vkcpp::GraphicsPipeline	g_graphicsPipeline;
+	vkcpp::GraphicsPipeline	g_graphicsPipelineTest;
 
 	vkcpp::Buffer_DeviceMemory	g_pointBufferAndDeviceMemory;
 	vkcpp::Buffer_DeviceMemory	g_vertexBufferAndDeviceMemory;
@@ -680,7 +681,7 @@ vkcpp::RenderPass createRenderPass(
 	vkcpp::RenderPassCreateInfo renderPassCreateInfo;
 
 	auto colorAttachmentReference = renderPassCreateInfo.addAttachment(
-		vkcpp::AttachmentDescription::simpleColorAttachmentDescription(swapchainImageFormat),
+		vkcpp::AttachmentDescription::simpleColorAttachmentPresentDescription(swapchainImageFormat),
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 	);
 
@@ -851,16 +852,24 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 
 	vkcpp::GraphicsPipelineCreateInfo graphicsPipelineCreateInfo;
+	graphicsPipelineCreateInfo.addDynamicState(VK_DYNAMIC_STATE_VIEWPORT);
+	graphicsPipelineCreateInfo.addDynamicState(VK_DYNAMIC_STATE_SCISSOR);
+	graphicsPipelineCreateInfo.addDynamicState(VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE);
+
+
 	graphicsPipelineCreateInfo.addVertexBinding(
 		Point::getVertexBinding(MagicValues::VERTEX_BINDING_INDEX));
-	graphicsPipelineCreateInfo.setViewportExtent(vkSurfaceCapabilities.currentExtent);
+	//	graphicsPipelineCreateInfo.setViewportExtent(vkSurfaceCapabilities.currentExtent);
 	graphicsPipelineCreateInfo.setPipelineLayout(pipelineLayout);
-	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal);
+	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal, 0);
 	graphicsPipelineCreateInfo.addShaderModule(vertShaderModule, VK_SHADER_STAGE_VERTEX_BIT, "main");
 	graphicsPipelineCreateInfo.addShaderModule(textureFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 	//graphicsPipelineCreateInfo.addShaderModule(identityFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 
 	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineCreateInfo, deviceOriginal);
+
+	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal, 1);
+	vkcpp::GraphicsPipeline graphicsPipelineTest(graphicsPipelineCreateInfo, deviceOriginal);
 
 	g_allDrawingFrames.createDrawingFrames(
 		deviceOriginal,
@@ -892,6 +901,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	globals.g_pipelineLayout = std::move(pipelineLayout);
 	globals.g_graphicsPipeline = std::move(graphicsPipeline);
+	globals.g_graphicsPipelineTest = std::move(graphicsPipelineTest);
 
 
 	globals.g_commandPoolOriginal = std::move(commandPoolOriginal);
@@ -958,7 +968,8 @@ void recordCommandBuffer(
 	vkcpp::Buffer			vertexBuffer,
 	VkDescriptorSet		vkDescriptorSet,
 	vkcpp::PipelineLayout	pipelineLayout,
-	vkcpp::GraphicsPipeline			graphicsPipeline
+	vkcpp::GraphicsPipeline			graphicsPipeline,
+	vkcpp::GraphicsPipeline			graphicsPipelineTest
 ) {
 	const VkExtent2D swapchainImageExtent = swapchainImageViewsFrameBuffers.getImageExtent();
 
@@ -994,11 +1005,8 @@ void recordCommandBuffer(
 	scissor.extent = swapchainImageExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	//vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
-	//vkCmdSetDepthTestEnable(commandBuffer, VK_TRUE);
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-
 	vkCmdBindDescriptorSets(
 		commandBuffer,
 		VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1012,11 +1020,15 @@ void recordCommandBuffer(
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
 	vkCmdBindIndexBuffer(commandBuffer, vertexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+	vkCmdSetDepthTestEnable(commandBuffer, VK_TRUE);
 	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer.vertexCount(), 1, 0, 0, 0);
 
 	VkSubpassContents vkSubpassContents{};
 
+	vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
 	vkCmdNextSubpass(commandBuffer, vkSubpassContents);
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelineTest);
 	//	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer.vertexCount(), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
@@ -1115,7 +1127,8 @@ void drawFrame(Globals& globals)
 		globals.g_vertexBufferAndDeviceMemory.m_buffer,
 		currentDrawingFrame.m_descriptorSet,
 		globals.g_pipelineLayout,
-		globals.g_graphicsPipeline);
+		globals.g_graphicsPipeline,
+		globals.g_graphicsPipelineTest);
 
 
 	vkcpp::SubmitInfo2 submitInfo2;

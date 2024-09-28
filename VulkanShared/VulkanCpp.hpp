@@ -1160,7 +1160,7 @@ namespace vkcpp {
 			: VkAttachmentDescription{} {
 		}
 
-		static AttachmentDescription simpleColorAttachmentDescription(
+		static AttachmentDescription simpleColorAttachmentPresentDescription(
 			VkFormat	colorAttachmentVkFormat
 		) {
 			AttachmentDescription	colorAttachmentDescription;
@@ -1175,6 +1175,23 @@ namespace vkcpp {
 			colorAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 			return colorAttachmentDescription;
 		}
+
+		static AttachmentDescription simpleColorAttachmentDescription(
+			VkFormat	colorAttachmentVkFormat
+		) {
+			AttachmentDescription	colorAttachmentDescription;
+			//	Reasonable defaults
+			colorAttachmentDescription.format = colorAttachmentVkFormat;
+			colorAttachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
+			colorAttachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			colorAttachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+			colorAttachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			colorAttachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			colorAttachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			colorAttachmentDescription.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			return colorAttachmentDescription;
+		}
+
 
 		static AttachmentDescription simpleDepthAttachmentDescription() {
 			AttachmentDescription depthAttachmentDescription;
@@ -2343,46 +2360,85 @@ namespace vkcpp {
 
 	};
 
+	class PipelineDepthStencilStateCreateInfo : public VkPipelineDepthStencilStateCreateInfo {
+
+	public:
+
+		PipelineDepthStencilStateCreateInfo()
+			: VkPipelineDepthStencilStateCreateInfo{} {
+			//	Reasonable defaults
+			sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+			depthTestEnable = VK_TRUE;
+			depthWriteEnable = VK_TRUE;
+			depthCompareOp = VK_COMPARE_OP_LESS;	// Less depth means in front of
+			depthBoundsTestEnable = VK_FALSE;
+			stencilTestEnable = VK_FALSE;
+		}
+
+	};
+	static_assert(sizeof(PipelineDepthStencilStateCreateInfo) == sizeof(VkPipelineDepthStencilStateCreateInfo));
+
+
+	class PipelineDynamicStateCreateInfo : public VkPipelineDynamicStateCreateInfo {
+
+		std::vector<VkDynamicState> m_dynamicStates;
+
+	public:
+
+		VkPipelineDynamicStateCreateInfo* operator&() = delete;
+
+		PipelineDynamicStateCreateInfo()
+			: VkPipelineDynamicStateCreateInfo{} {
+		}
+
+		void addDynamicState(VkDynamicState vkDynamicState) {
+			m_dynamicStates.push_back(vkDynamicState);
+		}
+
+		VkPipelineDynamicStateCreateInfo* assemble() {
+			sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+			dynamicStateCount = static_cast<uint32_t>(m_dynamicStates.size());
+			pDynamicStates = nullptr;
+			if (dynamicStateCount > 0) {
+				pDynamicStates = m_dynamicStates.data();
+			}
+			return this;
+		}
+
+
+
+	};
+
 
 	class GraphicsPipelineCreateInfo {
 
 		std::vector<VkPipelineShaderStageCreateInfo> m_shaderStageCreateInfos;
 
 		PipelineInputAssemblyStateCreateInfo m_inputAssemblyStateCreateInfo{ VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST };
+
 		VkPipelineVertexInputStateCreateInfo m_vkPipelineVertexInputStateCreateInfo{};
 		std::vector<VkVertexInputBindingDescription>	m_vertexInputBindingDescriptions;
 		std::vector<VkVertexInputAttributeDescription> m_vertexInputAttributeDescriptions;
 
 
-		std::vector<VkDynamicState> m_dynamicStates = {
-			VK_DYNAMIC_STATE_VIEWPORT
-			, VK_DYNAMIC_STATE_SCISSOR
-			//			, VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE
-		};
-
-		VkPipelineDynamicStateCreateInfo m_dynamicState{};
+		PipelineDynamicStateCreateInfo m_pipelineDynamicStateCreateInfo;
 
 		VkViewport m_viewport{};
 		VkRect2D m_scissor{};
 
 		VkPipelineViewportStateCreateInfo m_viewportState{};
 
-
-
-		PipelineRasterizationStateCreateInfo m_pipelineRasterizationStateCreateInfo{};
-
-		PipelineMultisampleStateCreateInfo m_pipelineMultisampleStateCreateInfo{};
-
-		PipelineColorBlendAttachmentState m_pipelineColorBlendAttachmentState{};
-
-		PipelineColorBlendStateCreateInfo m_pipelineColorBlendStateCreateInfo{};
-
-		VkPipelineDepthStencilStateCreateInfo m_vkPipelineDepthStencilStateCreateInfo{};
+		PipelineRasterizationStateCreateInfo m_pipelineRasterizationStateCreateInfo;
+		PipelineMultisampleStateCreateInfo m_pipelineMultisampleStateCreateInfo;
+		PipelineColorBlendAttachmentState m_pipelineColorBlendAttachmentState;
+		PipelineColorBlendStateCreateInfo m_pipelineColorBlendStateCreateInfo;
+		PipelineDepthStencilStateCreateInfo m_vkPipelineDepthStencilStateCreateInfo;
 
 		VkGraphicsPipelineCreateInfo m_vkGraphicsPipelineCreateInfo{};
 
-		vkcpp::PipelineLayout	m_pipelineLayout;
-		vkcpp::RenderPass		m_renderPass;
+		PipelineLayout	m_pipelineLayout;
+		RenderPass		m_renderPass;
+		int				m_subpassNumber;
 
 	public:
 
@@ -2408,6 +2464,9 @@ namespace vkcpp {
 			}
 		}
 
+		void addDynamicState(VkDynamicState vkDynamicState) {
+			m_pipelineDynamicStateCreateInfo.addDynamicState(vkDynamicState);
+		}
 
 		void setViewportExtent(VkExtent2D extent) {
 			m_viewport.width = static_cast<float>(extent.width);
@@ -2418,12 +2477,13 @@ namespace vkcpp {
 			m_scissor.extent = extent;
 		}
 
-		void setPipelineLayout(vkcpp::PipelineLayout pipelineLayout) {
+		void setPipelineLayout(PipelineLayout pipelineLayout) {
 			m_pipelineLayout = pipelineLayout;
 		}
 
-		void setRenderPass(vkcpp::RenderPass renderPass) {
+		void setRenderPass(RenderPass renderPass, int subpassNumber) {
 			m_renderPass = renderPass;
+			m_subpassNumber = subpassNumber;
 		}
 
 
@@ -2436,8 +2496,9 @@ namespace vkcpp {
 			//	Assemble pipeline create info
 			m_vkGraphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 
+			//	Shaders
 			m_vkGraphicsPipelineCreateInfo.stageCount = static_cast<uint32_t>(m_shaderStageCreateInfos.size());
-			if (m_vkGraphicsPipelineCreateInfo.stageCount) {
+			if (m_vkGraphicsPipelineCreateInfo.stageCount > 0) {
 				m_vkGraphicsPipelineCreateInfo.pStages = m_shaderStageCreateInfos.data();
 			}
 
@@ -2479,27 +2540,15 @@ namespace vkcpp {
 			m_pipelineColorBlendStateCreateInfo.pAttachments = &m_pipelineColorBlendAttachmentState;
 			m_vkGraphicsPipelineCreateInfo.pColorBlendState = &m_pipelineColorBlendStateCreateInfo;
 
-
-			// TODO make this smarter?
-			m_dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-			m_dynamicState.dynamicStateCount = static_cast<uint32_t>(m_dynamicStates.size());
-			m_dynamicState.pDynamicStates = m_dynamicStates.data();
-			m_vkGraphicsPipelineCreateInfo.pDynamicState = &m_dynamicState;
+			m_vkGraphicsPipelineCreateInfo.pDynamicState = m_pipelineDynamicStateCreateInfo.assemble();
 
 
-			//	TODO: make structure with reasonable default settings
-			m_vkPipelineDepthStencilStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-			m_vkPipelineDepthStencilStateCreateInfo.depthTestEnable = VK_TRUE;
-			m_vkPipelineDepthStencilStateCreateInfo.depthWriteEnable = VK_TRUE;
-			m_vkPipelineDepthStencilStateCreateInfo.depthCompareOp = VK_COMPARE_OP_LESS;	// Less depth means in front of
-			m_vkPipelineDepthStencilStateCreateInfo.depthBoundsTestEnable = VK_FALSE;
-			m_vkPipelineDepthStencilStateCreateInfo.stencilTestEnable = VK_FALSE;
 			m_vkGraphicsPipelineCreateInfo.pDepthStencilState = &m_vkPipelineDepthStencilStateCreateInfo;
 
 
 			m_vkGraphicsPipelineCreateInfo.layout = m_pipelineLayout;
 			m_vkGraphicsPipelineCreateInfo.renderPass = m_renderPass;
-			m_vkGraphicsPipelineCreateInfo.subpass = 0;
+			m_vkGraphicsPipelineCreateInfo.subpass = m_subpassNumber;
 			m_vkGraphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
 			m_vkGraphicsPipelineCreateInfo.basePipelineIndex = -1; // Optional
 
