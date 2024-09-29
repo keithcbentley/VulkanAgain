@@ -33,13 +33,18 @@ public:
 	static const int MAX_FRAMES_IN_FLIGHT = 3;
 	static const int SWAP_CHAIN_IMAGE_COUNT = 5;
 
-	static const int VERTEX_BINDING_INDEX = 0;
-
 	static const uint32_t	GRAPHICS_QUEUE_FAMILY_INDEX = 0;
 	static const uint32_t	GRAPHICS_QUEUE_INDEX = 0;
 
 	static const uint32_t	PRESENTATION_QUEUE_FAMILY_INDEX = 0;
 	static const uint32_t	PRESENTATION_QUEUE_INDEX = 0;
+
+	static const int VERTEX_BINDING_INDEX = 0;
+
+	static const int	UBO_DESCRIPTOR_BINDING_INDEX = 0;
+	static const int	TEXTURE_DESCRIPTOR_BINDING_INDEX = 1;
+
+
 
 };
 
@@ -89,6 +94,9 @@ struct Point {
 //	we can draw triangles around the center.)
 class PointVertexBuffer {
 
+	//	TODO: is using an int16_t instead of int32_t really
+	//	saving us anything.  Does vulkan care about the
+	//	size of a vertex index?  If so, where?
 	std::vector<Point>		m_points;
 	std::vector<int16_t>	m_vertices;
 
@@ -175,6 +183,9 @@ public:
 
 	friend class PointVertexBuffer;
 
+	//	TODO: maybe allow moving if we need to save shapes somewhere.
+	//	Copying might be a bit problematic since it would allow
+	//	modifying the "shape" from two different places.
 	Shape(const Shape&) = delete;
 	Shape& operator=(const Shape&) = delete;
 	Shape(Shape&&) noexcept = delete;
@@ -241,9 +252,9 @@ Shape PointVertexBuffer::add(const Shape& shape) {
 
 
 const std::vector<Point> g_rightTrianglePoints{
-	{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-	{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}} };
+	{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
+	{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+	{{0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}} };
 
 const std::vector<int16_t> g_rightTriangleVertices{
 	0, 1, 2 };
@@ -252,7 +263,7 @@ PointVertexBuffer g_rightTrianglePointVertexBuffer(g_rightTrianglePoints, g_righ
 Shape g_theRightTriangle(g_rightTrianglePointVertexBuffer);
 
 
-const std::vector<Point> g_squarePoints{
+const std::vector<Point> g_squareCenterPoints{
 	{{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
 	{{1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
 	{{1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
@@ -260,15 +271,95 @@ const std::vector<Point> g_squarePoints{
 	{{0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f}}
 };
 
-const std::vector<int16_t> g_squareVertices{
+const std::vector<int16_t> g_squareCenterVertices{
 	0, 1, 4,
 	1, 2, 4,
 	2, 3, 4,
 	3, 0, 4
 };
 
-PointVertexBuffer g_squarePointVertexBuffer(g_squarePoints, g_squareVertices);
-Shape g_theSquare(g_squarePointVertexBuffer);
+PointVertexBuffer g_squareCenterPointVertexBuffer(g_squareCenterPoints, g_squareCenterVertices);
+Shape g_theSquareCenter(g_squareCenterPointVertexBuffer);
+
+
+const std::vector<Point> g_cubeCenterPoints{
+	{{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},		//	0
+	{{1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+	{{1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f}},
+
+	{{1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},		//	5
+	{{1.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+	{{1.0f, 1.0f, -1.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{1.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+	{{1.0f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f}},
+
+	{{1.0f, 0.0f, -1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},	//	10
+	{{0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+	{{0.0f, 1.0f, -1.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{1.0f, 1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.5f, 0.5f, -1.0f}, {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f}},
+
+	{{0.0f, 0.0f, -1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},	//	15
+	{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+	{{0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.0f, 1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.0f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f}},
+
+	{{0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},		//	20
+	{{1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+	{{1.0f, 1.0f, -1.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.0f, 1.0f, -1.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.5f, 1.0f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f}},
+
+	{{0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},	//	25
+	{{1.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+	{{1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.5f, 0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f}},
+
+
+
+};
+
+const std::vector<int16_t> g_cubeCenterVertices{
+	0, 1, 4,
+	1, 2, 4,
+	2, 3, 4,
+	3, 0, 4,
+
+	5, 6, 9,
+	6, 7, 9,
+	7, 8, 9,
+	8, 5, 9,
+
+	10, 11, 14,
+	11, 12, 14,
+	12, 13, 14,
+	13, 10, 14,
+
+	15, 16, 19,
+	16, 17, 19,
+	17, 18, 19,
+	18, 15, 19,
+
+	20, 21, 24,
+	21, 22, 24,
+	22, 23, 24,
+	23, 20, 24,
+
+	25, 26, 29,
+	26, 27, 29,
+	27, 28, 29,
+	28, 25, 29
+
+
+};
+
+
+PointVertexBuffer g_cubeCenterPointVertexBuffer(g_cubeCenterPoints, g_cubeCenterVertices);
+Shape g_theCubeCenter(g_cubeCenterPointVertexBuffer);
 
 
 PointVertexBuffer g_pointVertexBuffer1;
@@ -329,12 +420,12 @@ class DrawingFrame {
 		vkcpp::DescriptorSet descriptorSet(descriptorSetLayout, descriptorPool);
 		vkcpp::DescriptorSetUpdater descriptorSetUpdater(descriptorSet);
 		descriptorSetUpdater.addWriteDescriptor(
-			0,
+			MagicValues::UBO_DESCRIPTOR_BINDING_INDEX,
 			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			m_uniformBufferMemory.m_buffer,
 			sizeof(ModelViewProjTransform));
 		descriptorSetUpdater.addWriteDescriptor(
-			1,
+			MagicValues::TEXTURE_DESCRIPTOR_BINDING_INDEX,
 			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			textureImageView,
 			textureSampler);
@@ -502,6 +593,10 @@ public:
 
 	vkcpp::Buffer_DeviceMemory	g_pointBufferAndDeviceMemory1;
 	vkcpp::Buffer_DeviceMemory	g_vertexBufferAndDeviceMemory1;
+
+	vkcpp::Buffer_DeviceMemory	g_pointBufferAndDeviceMemory2;
+	vkcpp::Buffer_DeviceMemory	g_vertexBufferAndDeviceMemory2;
+
 
 	vkcpp::CommandPool		g_commandPoolOriginal;
 
@@ -803,6 +898,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	swapchainImageViewsFrameBuffers.recreateSwapchainImageViewsFrameBuffers();
 
+	//	TODO: combine point and vertex device memory into one object.
 	//	Pay attention to the terminology change.
 	vkcpp::Buffer_DeviceMemory pointBufferAndDeviceMemory1(
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -818,6 +914,25 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		g_pointVertexBuffer1.verticesSizeof(),
 		g_pointVertexBuffer1.vertexData(),
 		deviceOriginal);
+
+	//	Pay attention to the terminology change.
+	vkcpp::Buffer_DeviceMemory pointBufferAndDeviceMemory2(
+		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		g_pointVertexBuffer2.pointsSizeof(),
+		g_pointVertexBuffer2.pointData(),
+		deviceOriginal);
+
+	//	Pay attention to the terminology change.
+	vkcpp::Buffer_DeviceMemory vertexBufferAndDeviceMemory2(
+		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		g_pointVertexBuffer2.verticesSizeof(),
+		g_pointVertexBuffer2.vertexData(),
+		deviceOriginal);
+
+
+
 
 
 	vkcpp::ShaderModule	vertShaderModule =
@@ -860,6 +975,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	graphicsPipelineCreateInfo.addVertexBinding(
 		Point::getVertexBinding(MagicValues::VERTEX_BINDING_INDEX));
+
 	//	graphicsPipelineCreateInfo.setViewportExtent(vkSurfaceCapabilities.currentExtent);
 	graphicsPipelineCreateInfo.setPipelineLayout(pipelineLayout);
 	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal, 0);
@@ -896,6 +1012,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	globals.g_pointBufferAndDeviceMemory1 = std::move(pointBufferAndDeviceMemory1);
 	globals.g_vertexBufferAndDeviceMemory1 = std::move(vertexBufferAndDeviceMemory1);
+
+	globals.g_pointBufferAndDeviceMemory2 = std::move(pointBufferAndDeviceMemory2);
+	globals.g_vertexBufferAndDeviceMemory2 = std::move(vertexBufferAndDeviceMemory2);
+
 
 	globals.g_descriptorSetLayoutOriginal = std::move(descriptorSetLayoutOriginal);
 	globals.g_descriptorPoolOriginal = std::move(descriptorPoolOriginal);
@@ -942,7 +1062,7 @@ void updateUniformBuffer(
 			time * glm::radians(10.0f),
 			glm::vec3(0.0f, 1.0f, 0.0f));
 	modelViewProjTransform.viewTransform = glm::lookAt(
-		glm::vec3(0.0f, 2.0f, 2.0f),
+		glm::vec3(0.0f, -2.0f, 2.0f),
 		glm::vec3(0.0f, 0.0f, 0.0f),
 		glm::vec3(0.0f, 1.0f, 0.0f));
 	modelViewProjTransform.projTransform = glm::perspective(
@@ -951,7 +1071,6 @@ void updateUniformBuffer(
 		0.1f,
 		10.0f);
 	modelViewProjTransform.projTransform[1][1] *= -1.0;
-	//	modelViewProjTransform.projTransform[2][2] *= -1.0;
 
 	memcpy(
 		uniformBufferMemory.m_mappedMemory,
@@ -966,8 +1085,12 @@ public:
 
 	vkcpp::CommandBuffer	m_commandBuffer;
 
-	vkcpp::Buffer			m_pointBuffer;
-	vkcpp::Buffer			m_vertexBuffer;
+	vkcpp::Buffer			m_pointBuffer1;
+	vkcpp::Buffer			m_vertexBuffer1;
+
+	vkcpp::Buffer			m_pointBuffer2;
+	vkcpp::Buffer			m_vertexBuffer2;
+
 
 	VkDescriptorSet			m_vkDescriptorSet;
 
@@ -1028,21 +1151,35 @@ public:
 			&m_vkDescriptorSet,
 			0, nullptr);
 
-		VkBuffer vkPointBuffer = m_pointBuffer;
-		VkBuffer pointBuffers[] = { vkPointBuffer };
-		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
-		vkCmdBindIndexBuffer(commandBuffer, m_vertexBuffer, 0, VK_INDEX_TYPE_UINT16);
-
 		vkCmdSetDepthTestEnable(commandBuffer, VK_TRUE);
-		vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer1.vertexCount(), 1, 0, 0, 0);
+
+		//	TODO: encapsulate binding of points and vertices and
+		//	maybe the draw indexed call
+		{
+			VkBuffer vkPointBuffer = m_pointBuffer1;
+			VkBuffer pointBuffers[] = { vkPointBuffer };
+			VkDeviceSize offsets[] = { 0 };
+			vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
+			vkCmdBindIndexBuffer(commandBuffer, m_vertexBuffer1, 0, VK_INDEX_TYPE_UINT16);
+			//	TODO: need to track vertext count along with buffer info.
+			vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer1.vertexCount(), 1, 0, 0, 0);
+		}
 
 		VkSubpassContents vkSubpassContents{};
 
 		vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
 		vkCmdNextSubpass(commandBuffer, vkSubpassContents);
-		//vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelineTest);
-		//	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer.vertexCount(), 1, 0, 0, 0);
+		//		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelineTest);
+
+		{
+			VkBuffer vkPointBuffer = m_pointBuffer2;
+			VkBuffer pointBuffers[] = { vkPointBuffer };
+			VkDeviceSize offsets[] = { 0 };
+			vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
+			vkCmdBindIndexBuffer(commandBuffer, m_vertexBuffer2, 0, VK_INDEX_TYPE_UINT16);
+			vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer2.vertexCount(), 1, 0, 0, 0);
+		}
+
 
 		vkCmdEndRenderPass(commandBuffer);
 
@@ -1055,83 +1192,6 @@ public:
 
 Renderer theRenderer;
 
-
-
-void recordCommandBuffer(
-	vkcpp::CommandBuffer		commandBuffer,
-	vkcpp::Swapchain_ImageViews_FrameBuffers& swapchainImageViewsFrameBuffers,
-	uint32_t			swapchainImageIndex,
-	vkcpp::Buffer			pointBuffer,
-	vkcpp::Buffer			vertexBuffer,
-	VkDescriptorSet		vkDescriptorSet,
-	vkcpp::PipelineLayout	pipelineLayout,
-	vkcpp::GraphicsPipeline			graphicsPipeline
-) {
-	const VkExtent2D swapchainImageExtent = swapchainImageViewsFrameBuffers.getImageExtent();
-
-	commandBuffer.reset();
-	commandBuffer.begin();
-
-	VkRenderPassBeginInfo vkRenderPassBeginInfo{};
-	vkRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	vkRenderPassBeginInfo.renderPass = swapchainImageViewsFrameBuffers.getRenderPass();
-	vkRenderPassBeginInfo.framebuffer = swapchainImageViewsFrameBuffers.getFrameBuffer(swapchainImageIndex);
-	vkRenderPassBeginInfo.renderArea.offset = { 0, 0 };
-	vkRenderPassBeginInfo.renderArea.extent = swapchainImageExtent;
-
-	std::array<VkClearValue, 2> clearValues{};
-	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f } };
-	clearValues[1].depthStencil = { 1.0f, 0 };
-	vkRenderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-	vkRenderPassBeginInfo.pClearValues = clearValues.data();
-
-	vkCmdBeginRenderPass(commandBuffer, &vkRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-	VkViewport viewport{};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = static_cast<float>(swapchainImageExtent.width);
-	viewport.height = static_cast<float>(swapchainImageExtent.height);
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-	VkRect2D scissor{};
-	scissor.offset = { 0, 0 };
-	scissor.extent = swapchainImageExtent;
-	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-	vkCmdBindDescriptorSets(
-		commandBuffer,
-		VK_PIPELINE_BIND_POINT_GRAPHICS,
-		pipelineLayout,
-		0, 1,
-		&vkDescriptorSet,
-		0, nullptr);
-
-	VkBuffer vkPointBuffer = pointBuffer;
-	VkBuffer pointBuffers[] = { vkPointBuffer };
-	VkDeviceSize offsets[] = { 0 };
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
-	vkCmdBindIndexBuffer(commandBuffer, vertexBuffer, 0, VK_INDEX_TYPE_UINT16);
-
-	vkCmdSetDepthTestEnable(commandBuffer, VK_TRUE);
-	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer1.vertexCount(), 1, 0, 0, 0);
-
-	VkSubpassContents vkSubpassContents{};
-
-	vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
-	vkCmdNextSubpass(commandBuffer, vkSubpassContents);
-	//  vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelineTest);
-	//	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer.vertexCount(), 1, 0, 0, 0);
-
-	vkCmdEndRenderPass(commandBuffer);
-
-	commandBuffer.end();
-
-}
 
 int64_t	g_drawFrameCalls;
 int64_t g_drawFrameDraws;
@@ -1193,8 +1253,11 @@ void drawFrame(Globals& globals)
 		globals.g_swapchainImageViewsFrameBuffers.getImageExtent()
 	);
 
-	theRenderer.m_pointBuffer = globals.g_pointBufferAndDeviceMemory1.m_buffer;
-	theRenderer.m_vertexBuffer = globals.g_vertexBufferAndDeviceMemory1.m_buffer;
+	theRenderer.m_pointBuffer1 = globals.g_pointBufferAndDeviceMemory1.m_buffer;
+	theRenderer.m_vertexBuffer1 = globals.g_vertexBufferAndDeviceMemory1.m_buffer;
+
+	theRenderer.m_pointBuffer2 = globals.g_pointBufferAndDeviceMemory2.m_buffer;
+	theRenderer.m_vertexBuffer2 = globals.g_vertexBufferAndDeviceMemory2.m_buffer;
 
 	theRenderer.m_vkDescriptorSet = currentDrawingFrame.m_descriptorSet;
 	theRenderer.m_pipelineLayout = globals.g_pipelineLayout;
@@ -1205,15 +1268,6 @@ void drawFrame(Globals& globals)
 
 	theRenderer.recordCommandBuffer(commandBuffer);
 
-	//recordCommandBuffer(
-	//	commandBuffer,
-	//	globals.g_swapchainImageViewsFrameBuffers,
-	//	swapchainImageIndex,
-	//	globals.g_pointBufferAndDeviceMemory1.m_buffer,
-	//	globals.g_vertexBufferAndDeviceMemory1.m_buffer,
-	//	currentDrawingFrame.m_descriptorSet,
-	//	globals.g_pipelineLayout,
-	//	globals.g_graphicsPipeline);
 
 
 	vkcpp::SubmitInfo2 submitInfo2;
@@ -1416,15 +1470,18 @@ int main()
 	RegisterMyWindowClass(hInstance);
 	HWND hWnd = CreateFirstWindow(hInstance);
 
-	Shape shape1 = g_pointVertexBuffer1.add(g_theSquare);
+	Shape shape1 = g_pointVertexBuffer1.add(g_theCubeCenter);
+	//shape1.addOffset(0.0, -0.5, 0.0);
 	//shape1.scale(1.5, 1.5, 0.0);
 
-	Shape shape2 = g_pointVertexBuffer1.add(g_theSquare);
-	shape2.scale(0.5, 0.5, 0.0);
-	shape2.addOffset(1.0, 0.0, -0.5);
+	//Shape shape2 = g_pointVertexBuffer1.add(g_theSquareCenter);
+	//shape2.scale(0.5, 0.5, 0.0);
+	//shape2.addOffset(1.0, 0.0, -0.5);
 
-	//Shape shape3 = g_pointVertexBuffer.add(g_theRightTriangle);
-	//shape3.addOffset(0.5, 0.5, 0.2);
+
+	Shape shape3 = g_pointVertexBuffer2.add(g_theRightTriangle);
+	shape3.addOffset(0.5, 0.5, -0.2);
+	shape3.scale(0.1, 0.1, 0.1);
 
 	//Shape shape4 = g_pointVertexBuffer.add(g_theRightTriangle);
 	//shape4.addOffset(0.75, 0.75, 0.3);
