@@ -1362,11 +1362,9 @@ namespace vkcpp {
 
 		std::vector<VkAttachmentDescription>	m_attachmentDescriptions;
 
-		//	TODO: need to handle multiple subpasses
 		std::vector<SubpassDescription> m_subpassDescriptions;
 		std::vector<VkSubpassDescription>	m_vkSubpassDescriptions;
 
-		//	TODO: need to handle multiple dependencies
 		std::vector<SubpassDependency> m_subpassDependencies;
 		std::vector<VkSubpassDependency> m_vkSubpassDependencies;
 
@@ -1410,14 +1408,16 @@ namespace vkcpp {
 
 			//	TODO: where do these magic layout transitions happen?
 
-			//	TODO:	hygiene
 			sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 
+			pAttachments = nullptr;
 			attachmentCount = static_cast<uint32_t>(m_attachmentDescriptions.size());
 			if (attachmentCount > 0) {
 				pAttachments = m_attachmentDescriptions.data();
 			}
 
+			pSubpasses = nullptr;
+			m_vkSubpassDescriptions.clear();
 			subpassCount = m_subpassDescriptions.size();
 			if (subpassCount > 0) {
 				for (SubpassDescription& subpassDescription : m_subpassDescriptions) {
@@ -1426,6 +1426,8 @@ namespace vkcpp {
 				pSubpasses = m_vkSubpassDescriptions.data();
 			}
 
+			pDependencies = nullptr;
+			m_vkSubpassDependencies.clear();
 			dependencyCount = m_subpassDependencies.size();
 			if (dependencyCount > 0) {
 				for (SubpassDependency& subpassDependency : m_subpassDependencies) {
@@ -1441,6 +1443,18 @@ namespace vkcpp {
 
 	};
 
+
+	//	TODO: do we really need this yet?
+	class RenderPassCreateInfo2 : public VkRenderPassCreateInfo2 {
+
+	public:
+
+		VkRenderPassCreateInfo2* operator&() = delete;
+
+		VkRenderPassCreateInfo2* assemble() {
+			return this;
+		}
+	};
 
 
 	class RenderPass : public HandleWithOwner<VkRenderPass> {
@@ -1465,7 +1479,15 @@ namespace vkcpp {
 			new(this)RenderPass(vkRenderPass, vkDevice, &destroy);
 		}
 
-		//		RenderPass(RenderPassCreateIfo2&)
+		//	TODO: do we really need this yet?
+		//RenderPass(RenderPassCreateInfo2& renderPassCreateInfo2, VkDevice vkDevice) {
+		//	VkRenderPass	vkRenderPass;
+		//	VkResult vkResult = vkCreateRenderPass2(vkDevice, renderPassCreateInfo2.assemble(), nullptr, &vkRenderPass);
+		//	if (vkResult != VK_SUCCESS) {
+		//		throw Exception(vkResult);
+		//	}
+		//	new(this)RenderPass(vkRenderPass, vkDevice, &destroy);
+		//}
 
 	};
 
@@ -1598,6 +1620,7 @@ namespace vkcpp {
 
 	class DependencyInfo : public VkDependencyInfo {
 
+		//	TODO: need to add the other dependency types.
 		std::vector<ImageMemoryBarrier2>	m_imageMemoryBarriers;
 
 
@@ -1614,7 +1637,7 @@ namespace vkcpp {
 			sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
 		}
 
-		void addImageMemoryBarrier(ImageMemoryBarrier2 imageMemoryBarrier) {
+		void addImageMemoryBarrier(const ImageMemoryBarrier2& imageMemoryBarrier) {
 			m_imageMemoryBarriers.push_back(imageMemoryBarrier);
 		}
 
@@ -1723,7 +1746,7 @@ namespace vkcpp {
 
 		}
 
-		void copyBufferToImage(
+		void cmdCopyBufferToImage(
 			Buffer buffer,
 			Image image,
 			uint32_t	width,
@@ -1747,7 +1770,7 @@ namespace vkcpp {
 			vkCmdCopyBufferToImage(*this, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 		}
 
-		void pipelineBarrier2(
+		void cmdPipelineBarrier2(
 			DependencyInfo& dependencyInfo
 		) {
 			vkCmdPipelineBarrier2(*this, dependencyInfo.assemble());
@@ -1756,61 +1779,61 @@ namespace vkcpp {
 	};
 
 
-	class SubmitInfo : public VkSubmitInfo {
+	//class SubmitInfo : public VkSubmitInfo {
 
-		//	TODO: modify to handle more semaphores and command buffers?
-		//	TODO: error checking? e.g., no command buffer?
-		VkSemaphore	m_vkSemaphoreWait = nullptr;
-		VkPipelineStageFlags	m_waitPipelineStageFlags{};
-		VkCommandBuffer	m_commandBuffer = nullptr;
-		VkSemaphore m_vkSemaphoreSignal = nullptr;
+	//	//	TODO: modify to handle more semaphores and command buffers?
+	//	//	TODO: error checking? e.g., no command buffer?
+	//	VkSemaphore	m_vkSemaphoreWait = nullptr;
+	//	VkPipelineStageFlags	m_waitPipelineStageFlags{};
+	//	VkCommandBuffer	m_commandBuffer = nullptr;
+	//	VkSemaphore m_vkSemaphoreSignal = nullptr;
 
 
-	public:
-		SubmitInfo()
-			: VkSubmitInfo{} {
-			sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		}
+	//public:
+	//	SubmitInfo()
+	//		: VkSubmitInfo{} {
+	//		sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	//	}
 
-		SubmitInfo* operator&() = delete;
+	//	SubmitInfo* operator&() = delete;
 
-		void addWaitSemaphore(
-			Semaphore	semaphore,
-			VkPipelineStageFlags waitPipelineStateFlags) {
-			m_vkSemaphoreWait = semaphore;
-			m_waitPipelineStageFlags = waitPipelineStateFlags;
-		}
+	//	void addWaitSemaphore(
+	//		Semaphore	semaphore,
+	//		VkPipelineStageFlags waitPipelineStateFlags) {
+	//		m_vkSemaphoreWait = semaphore;
+	//		m_waitPipelineStageFlags = waitPipelineStateFlags;
+	//	}
 
-		void addCommandBuffer(vkcpp::CommandBuffer commandBuffer) {
-			m_commandBuffer = commandBuffer;
-		}
+	//	void addCommandBuffer(vkcpp::CommandBuffer commandBuffer) {
+	//		m_commandBuffer = commandBuffer;
+	//	}
 
-		void addSignalSemaphore(vkcpp::Semaphore semaphore) {
-			m_vkSemaphoreSignal = semaphore;
-		}
+	//	void addSignalSemaphore(vkcpp::Semaphore semaphore) {
+	//		m_vkSemaphoreSignal = semaphore;
+	//	}
 
-		VkSubmitInfo* assemble() {
-			if (m_vkSemaphoreWait) {
-				waitSemaphoreCount = 1;
-				pWaitSemaphores = &m_vkSemaphoreWait;
-				pWaitDstStageMask = &m_waitPipelineStageFlags;
-			}
+	//	VkSubmitInfo* assemble() {
+	//		if (m_vkSemaphoreWait) {
+	//			waitSemaphoreCount = 1;
+	//			pWaitSemaphores = &m_vkSemaphoreWait;
+	//			pWaitDstStageMask = &m_waitPipelineStageFlags;
+	//		}
 
-			if (m_commandBuffer) {
-				commandBufferCount = 1;
-				pCommandBuffers = &m_commandBuffer;
-			}
+	//		if (m_commandBuffer) {
+	//			commandBufferCount = 1;
+	//			pCommandBuffers = &m_commandBuffer;
+	//		}
 
-			if (m_vkSemaphoreSignal) {
-				signalSemaphoreCount = 1;
-				pSignalSemaphores = &m_vkSemaphoreSignal;
-			}
+	//		if (m_vkSemaphoreSignal) {
+	//			signalSemaphoreCount = 1;
+	//			pSignalSemaphores = &m_vkSemaphoreSignal;
+	//		}
 
-			return this;
+	//		return this;
 
-		}
+	//	}
 
-	};
+	//};
 
 	class SubmitInfo2 : public VkSubmitInfo2 {
 

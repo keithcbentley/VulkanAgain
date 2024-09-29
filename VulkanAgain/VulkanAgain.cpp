@@ -588,8 +588,8 @@ public:
 	vkcpp::DescriptorSetLayout		g_descriptorSetLayoutOriginal;
 
 	vkcpp::PipelineLayout	g_pipelineLayout;
-	vkcpp::GraphicsPipeline	g_graphicsPipeline;
-	vkcpp::GraphicsPipeline	g_graphicsPipelineTest;
+	vkcpp::GraphicsPipeline	g_graphicsPipeline0;
+	vkcpp::GraphicsPipeline	g_graphicsPipeline1;
 
 	vkcpp::Buffer_DeviceMemory	g_pointBufferAndDeviceMemory1;
 	vkcpp::Buffer_DeviceMemory	g_vertexBufferAndDeviceMemory1;
@@ -653,7 +653,7 @@ void transitionImageLayout(
 	vkcpp::ImageMemoryBarrier2 imageMemoryBarrier(oldLayout, newLayout, image);
 	vkcpp::DependencyInfo dependencyInfo;
 	dependencyInfo.addImageMemoryBarrier(imageMemoryBarrier);
-	commandBuffer.pipelineBarrier2(dependencyInfo);
+	commandBuffer.cmdPipelineBarrier2(dependencyInfo);
 
 	commandBuffer.end();
 
@@ -675,7 +675,7 @@ void copyBufferToImage(
 
 	vkcpp::CommandBuffer commandBuffer(commandPool);
 	commandBuffer.beginOneTimeSubmit();
-	commandBuffer.copyBufferToImage(buffer, image, width, height);
+	commandBuffer.cmdCopyBufferToImage(buffer, image, width, height);
 	commandBuffer.end();
 
 	vkcpp::Fence completedFence(commandPool.getVkDevice());
@@ -770,6 +770,8 @@ vkcpp::Image_Memory_View createTextureFromFile(
 
 
 
+//	TODO: need to tie together pipelines and subpasses better.
+//	Right now, it's just magic numbers from the subpass number.
 vkcpp::RenderPass createRenderPass(
 	VkFormat swapchainImageFormat,
 	vkcpp::Device device
@@ -932,9 +934,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		deviceOriginal);
 
 
-
-
-
 	vkcpp::ShaderModule	vertShaderModule =
 		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert4.spv", deviceOriginal);
 	vkcpp::ShaderModule	textureFragShaderModule =
@@ -983,10 +982,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	graphicsPipelineCreateInfo.addShaderModule(textureFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 	//graphicsPipelineCreateInfo.addShaderModule(identityFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 
-	vkcpp::GraphicsPipeline graphicsPipeline(graphicsPipelineCreateInfo, deviceOriginal);
+	vkcpp::GraphicsPipeline graphicsPipeline0(graphicsPipelineCreateInfo, deviceOriginal);
 
 	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal, 1);
-	vkcpp::GraphicsPipeline graphicsPipelineTest(graphicsPipelineCreateInfo, deviceOriginal);
+	vkcpp::GraphicsPipeline graphicsPipeline1(graphicsPipelineCreateInfo, deviceOriginal);
 
 	g_allDrawingFrames.createDrawingFrames(
 		deviceOriginal,
@@ -1021,8 +1020,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_descriptorPoolOriginal = std::move(descriptorPoolOriginal);
 
 	globals.g_pipelineLayout = std::move(pipelineLayout);
-	globals.g_graphicsPipeline = std::move(graphicsPipeline);
-	globals.g_graphicsPipelineTest = std::move(graphicsPipelineTest);
+	globals.g_graphicsPipeline0 = std::move(graphicsPipeline0);
+	globals.g_graphicsPipeline1 = std::move(graphicsPipeline1);
 
 
 	globals.g_commandPoolOriginal = std::move(commandPoolOriginal);
@@ -1094,8 +1093,14 @@ public:
 
 	VkDescriptorSet			m_vkDescriptorSet;
 
-	vkcpp::PipelineLayout		m_pipelineLayout;
-	vkcpp::GraphicsPipeline		m_graphicsPipeline;
+	//	TODO:	pipelines should remember their layouts,
+	//	or vice-versa, or both.
+	vkcpp::PipelineLayout		m_pipelineLayout0;
+	vkcpp::GraphicsPipeline		m_graphicsPipeline0;
+
+	vkcpp::PipelineLayout		m_pipelineLayout1;
+	vkcpp::GraphicsPipeline		m_graphicsPipeline1;
+
 
 	//	TODO: use a pointer instead of a reference for now, until
 	//	we figure out the best structure for the pieces.  Maybe
@@ -1142,11 +1147,11 @@ public:
 		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline0);
 		vkCmdBindDescriptorSets(
 			commandBuffer,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			m_pipelineLayout,
+			m_pipelineLayout0,
 			0, 1,
 			&m_vkDescriptorSet,
 			0, nullptr);
@@ -1166,10 +1171,18 @@ public:
 		}
 
 		VkSubpassContents vkSubpassContents{};
+		vkCmdNextSubpass(commandBuffer, vkSubpassContents);
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline1);
+		vkCmdBindDescriptorSets(
+			commandBuffer,
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			m_pipelineLayout1,
+			0, 1,
+			&m_vkDescriptorSet,
+			0, nullptr);
+
 
 		vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
-		vkCmdNextSubpass(commandBuffer, vkSubpassContents);
-		//		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelineTest);
 
 		{
 			VkBuffer vkPointBuffer = m_pointBuffer2;
@@ -1260,8 +1273,12 @@ void drawFrame(Globals& globals)
 	theRenderer.m_vertexBuffer2 = globals.g_vertexBufferAndDeviceMemory2.m_buffer;
 
 	theRenderer.m_vkDescriptorSet = currentDrawingFrame.m_descriptorSet;
-	theRenderer.m_pipelineLayout = globals.g_pipelineLayout;
-	theRenderer.m_graphicsPipeline = globals.g_graphicsPipeline;
+	theRenderer.m_pipelineLayout0 = globals.g_pipelineLayout;
+	theRenderer.m_graphicsPipeline0 = globals.g_graphicsPipeline0;
+
+	theRenderer.m_pipelineLayout1 = globals.g_pipelineLayout;
+	theRenderer.m_graphicsPipeline1 = globals.g_graphicsPipeline1;
+
 
 	theRenderer.m_pSwapchainImageViewsFrameBuffers = &globals.g_swapchainImageViewsFrameBuffers;
 	theRenderer.m_swapchainImageIndex = swapchainImageIndex;
