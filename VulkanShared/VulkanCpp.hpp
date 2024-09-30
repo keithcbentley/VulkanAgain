@@ -1931,16 +1931,21 @@ namespace vkcpp {
 		}
 
 		VkPresentInfoKHR* assemble() {
+			pWaitSemaphores = nullptr;	//	Hygiene
 			if (m_vkSemaphoreWait) {
 				waitSemaphoreCount = 1;
 				pWaitSemaphores = &m_vkSemaphoreWait;
 			}
 
+			pSwapchains = nullptr;
+			pImageIndices = nullptr;
 			if (m_vkSwapchain) {
 				swapchainCount = 1;
 				pSwapchains = &m_vkSwapchain;
 				pImageIndices = &m_swapchainImageIndex;
 			}
+
+			pResults = nullptr;
 
 			return this;
 		}
@@ -2643,6 +2648,9 @@ namespace vkcpp {
 		}
 
 	public:
+
+		//	TODO: need to start remembering some info about the image and how the
+		//	imageview was created to make things easier to use later.
 		ImageView() {}
 
 		ImageView(const VkImageViewCreateInfo& vkImageViewCreateInfo, VkDevice vkDevice) {

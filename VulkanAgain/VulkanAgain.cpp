@@ -778,12 +778,15 @@ vkcpp::RenderPass createRenderPass(
 ) {
 	vkcpp::RenderPassCreateInfo renderPassCreateInfo;
 
-	auto colorAttachmentReference = renderPassCreateInfo.addAttachment(
+	//	Note that the index of the attachment can be pulled out
+	//	of the returned attachment reference to use in other
+	//	attachment references.
+	VkAttachmentReference colorAttachmentReference = renderPassCreateInfo.addAttachment(
 		vkcpp::AttachmentDescription::simpleColorAttachmentPresentDescription(swapchainImageFormat),
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 	);
 
-	auto depthAttachmentReference = renderPassCreateInfo.addAttachment(
+	VkAttachmentReference depthAttachmentReference = renderPassCreateInfo.addAttachment(
 		vkcpp::AttachmentDescription::simpleDepthAttachmentDescription(),
 		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 	);
@@ -793,37 +796,22 @@ vkcpp::RenderPass createRenderPass(
 		.addColorAttachmentReference(colorAttachmentReference)
 		.setDepthStencilAttachmentReference(depthAttachmentReference);
 
+	VkPipelineStageFlags bothFragmentTests
+		= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+		| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 	renderPassCreateInfo.addSubpassDependency(VK_SUBPASS_EXTERNAL, 0)
-		.setSrc(
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-			| VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
-			| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
-			,
-			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-			| VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
-		.setDst(
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-			| VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
-			| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
-			,
-			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-			| VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
-
+		.addSrc(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+		.addSrc(bothFragmentTests, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
+		.addDst(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+		.addDst(bothFragmentTests, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 
 	renderPassCreateInfo.addSubpass()
 		.addColorAttachmentReference(colorAttachmentReference)
 		.setDepthStencilAttachmentReference(depthAttachmentReference);
 
 	renderPassCreateInfo.addSubpassDependency(0, 1)
-		.setSrc(
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-		)
-		.setDst(
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-		);
-
+		.addSrc(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+		.addDst(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
 
 	return vkcpp::RenderPass(renderPassCreateInfo, device);
 }
@@ -1286,7 +1274,6 @@ void drawFrame(Globals& globals)
 	theRenderer.recordCommandBuffer(commandBuffer);
 
 
-
 	vkcpp::SubmitInfo2 submitInfo2;
 	//	Command can proceed but wait for the image to
 	//	actually be available before writing, i.e.,
@@ -1305,6 +1292,10 @@ void drawFrame(Globals& globals)
 	g_drawFrameDraws++;
 
 	globals.g_graphicsQueue.submit2(submitInfo2, currentDrawingFrame.m_inFlightFence);
+
+	//	TODO: Is this where we are supposed to add an image memory barrier
+	//	to avoid the present after write error?
+
 
 	vkcpp::PresentInfo presentInfo;
 	presentInfo.addWaitSemaphore(currentDrawingFrame.m_renderFinishedSemaphore);
