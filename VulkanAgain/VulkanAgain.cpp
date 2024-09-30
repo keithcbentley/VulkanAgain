@@ -96,7 +96,9 @@ class PointVertexBuffer {
 
 	//	TODO: is using an int16_t instead of int32_t really
 	//	saving us anything.  Does vulkan care about the
-	//	size of a vertex index?  If so, where?
+	//	size of a vertex index?  Index size is used
+	//	in draw indexed command.
+	//	TODO: swith to int32_t or templatize.
 	std::vector<Point>		m_points;
 	std::vector<int16_t>	m_vertices;
 
@@ -1421,6 +1423,47 @@ void showStats() {
 
 }
 
+
+class CommandBuffer {
+
+public:
+
+
+};
+
+
+
+WNDPROC OldWndProc;
+
+LRESULT CALLBACK CommandWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+	std::cout << "message\n";
+	return (*OldWndProc)(hWnd, message, wParam, lParam);
+}
+
+#include <richedit.h>
+
+
+
+HWND createCommandBufferHwnd(HINSTANCE hInstance) {
+
+	// Create Edit control for typing to be sent to server
+	HWND hWnd = CreateWindowExW(
+		0L,
+		MSFTEDIT_CLASS,
+		NULL,
+		WS_OVERLAPPED | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_VISIBLE | ES_MULTILINE,
+		100, 100, 200, 200,
+		NULL,
+		NULL,
+		hInstance,
+		NULL);
+	std::cout << "hWnd: " << hWnd << "\n";
+	OldWndProc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)CommandWndProc);
+
+
+	return hWnd;
+}
+
 void MessageLoop(Globals& globals) {
 
 	MSG msg;
@@ -1435,11 +1478,11 @@ void MessageLoop(Globals& globals) {
 				break;
 			}
 
-			if (msg.message == WM_KEYDOWN) {
-				if (msg.wParam == 'D') {
-					std::cout << "Dump Vulkan Info\n";
-				}
-			}
+			//if (msg.message == WM_KEYDOWN) {
+			//	if (msg.wParam == 'D') {
+			//		std::cout << "Dump Vulkan Info\n";
+			//	}
+			//}
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
@@ -1460,6 +1503,11 @@ int main()
 {
 	std::cout << "Hello World!\n";
 
+	HMODULE hModule = LoadLibraryW(TEXT("msftedit.dll"));
+	std::cout << "hModule: " << hModule << "\n";
+
+
+
 	std::cout.imbue(std::locale(""));
 
 	VkRect2D	vkRect2D;
@@ -1477,6 +1525,9 @@ int main()
 	HINSTANCE hInstance = GetModuleHandle(NULL);
 	RegisterMyWindowClass(hInstance);
 	HWND hWnd = CreateFirstWindow(hInstance);
+
+	HWND commandBufferHwnd = createCommandBufferHwnd(hInstance);
+
 
 	Shape shape1 = g_pointVertexBuffer1.add(g_theCubeCenter);
 	//shape1.addOffset(0.0, -0.5, 0.0);
