@@ -405,7 +405,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::PhysicalDevice physicalDevice = vulkanInstance.getPhysicalDevice(0);
 
-	//auto allQueueFamilyProperties = physicalDevice.getAllQueueFamilyProperties();
 
 	vkcpp::DeviceCreateInfo deviceCreateInfo;
 	//	deviceCreateInfo.addExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
@@ -514,6 +513,23 @@ std::string MemoryHeapFlagsString(VkMemoryHeapFlags bitField) {
 
 }
 
+std::string DeviceQueueFlagsString(VkMemoryHeapFlags bitField) {
+
+	static const std::unordered_map<VkMemoryHeapFlags, const char*>
+		s_bitFieldNames{
+			{valueStringPair(VK_QUEUE_GRAPHICS_BIT)},
+			{valueStringPair(VK_QUEUE_COMPUTE_BIT)},
+			{valueStringPair(VK_QUEUE_TRANSFER_BIT)},
+			{valueStringPair(VK_QUEUE_SPARSE_BINDING_BIT)},
+			{valueStringPair(VK_QUEUE_PROTECTED_BIT)},
+			{valueStringPair(VK_QUEUE_VIDEO_DECODE_BIT_KHR)},
+			{valueStringPair(VK_QUEUE_VIDEO_ENCODE_BIT_KHR)},
+			{valueStringPair(VK_QUEUE_OPTICAL_FLOW_BIT_NV)} };
+
+	return BitFieldNamesAppender(bitField, s_bitFieldNames);
+
+}
+
 
 
 void DumpPhysicalDeviceMemoryInfo(vkcpp::PhysicalDevice physicalDevice) {
@@ -547,8 +563,22 @@ void DumpPhysicalDeviceMemoryInfo(vkcpp::PhysicalDevice physicalDevice) {
 
 }
 
+void DumpPhysicalDeviceQueueInfo(vkcpp::PhysicalDevice physicalDevice) {
 
+	std::cout << "PhysicalDeviceQueueInfo\n";
+	std::vector<VkQueueFamilyProperties> allQueueFamilyProperties = physicalDevice.getAllQueueFamilyProperties();
+	int	index = 0;
+	for (const VkQueueFamilyProperties& vkQueueFamilyProperties : allQueueFamilyProperties) {
+		std::cout << "  Queue family index: " << index << "\n";
+		std::cout << "     flags: "
+			<< DeviceQueueFlagsString(vkQueueFamilyProperties.queueFlags) << "\n";
+		std::cout << "     count: " << vkQueueFamilyProperties.queueCount << "\n";
+		std::cout << "     timestampValidBits: " << vkQueueFamilyProperties.timestampValidBits << "\n";
+		//		std::cout << "     minImageTransferGranularity: " << vkQueueFamilyProperties.minImageTransferGranularity;
+		index++;
+	}
 
+}
 
 std::chrono::high_resolution_clock::time_point g_nextFrameTime = std::chrono::high_resolution_clock::now();
 
@@ -688,6 +718,7 @@ int main()
 
 	VulkanStuff(hInstance, hWnd, g_globals);
 	DumpPhysicalDeviceMemoryInfo(g_globals.g_physicalDevice);
+	DumpPhysicalDeviceQueueInfo(g_globals.g_physicalDevice);
 
 	MessageLoop(g_globals);
 
