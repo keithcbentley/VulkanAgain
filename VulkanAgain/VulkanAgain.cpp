@@ -770,6 +770,24 @@ vkcpp::Image_Memory_View createTextureFromFile(
 }
 
 
+std::vector<uint32_t> g_imageData;
+
+
+void makeImageFromBitmap() {
+
+	const VkDeviceSize imageSize = g_imageData.size() * sizeof(uint32_t);
+
+	//	Make a device (gpu) staging buffer and copy the pixels into it.
+	vkcpp::Buffer_DeviceMemory stagingBuffer_DeviceMemoryMapped(
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		imageSize,
+		g_imageData.data(),
+		g_globals.g_deviceOriginal);
+
+
+}
+
 
 
 //	TODO: need to tie together pipelines and subpasses better.
@@ -1433,35 +1451,110 @@ public:
 
 
 
-WNDPROC OldWndProc;
+WNDPROC g_oldWndProc;
+HWND g_commandBufferHwnd;
 
 LRESULT CALLBACK CommandWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	std::cout << "message\n";
-	return (*OldWndProc)(hWnd, message, wParam, lParam);
+	return (*g_oldWndProc)(hWnd, message, wParam, lParam);
 }
 
 #include <richedit.h>
 
 
 
-HWND createCommandBufferHwnd(HINSTANCE hInstance) {
+HWND createCommandBufferHwnd(HINSTANCE hInstance, HWND hwndParent) {
 
 	// Create Edit control for typing to be sent to server
-	HWND hWnd = CreateWindowExW(
+	HWND hwnd = CreateWindowExW(
 		0L,
 		MSFTEDIT_CLASS,
 		NULL,
 		WS_OVERLAPPED | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_VISIBLE | ES_MULTILINE,
 		100, 100, 200, 200,
-		NULL,
+		hwndParent,
 		NULL,
 		hInstance,
 		NULL);
-	std::cout << "hWnd: " << hWnd << "\n";
-	OldWndProc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)CommandWndProc);
+
+	g_commandBufferHwnd = hwnd;
+	g_oldWndProc = (WNDPROC)SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)CommandWndProc);
+
+	return hwnd;
+}
 
 
-	return hWnd;
+
+void snapCommandWindow() {
+	HDC commandWindowDC = GetDC(g_commandBufferHwnd);
+
+	RECT	clientRect;
+	GetClientRect(g_commandBufferHwnd, &clientRect);
+	const int clientWidth = clientRect.right - clientRect.left;
+	const int clientHeight = clientRect.bottom - clientRect.top;
+
+	RECT windowRect;
+	GetWindowRect(g_commandBufferHwnd, &windowRect);
+	const int windowWidth = windowRect.right - windowRect.left;
+	const int windowHeight = windowRect.bottom - windowRect.top;
+
+
+	//std::cout << clientRect.left << " " << clientRect.right << " "
+	//	<< clientRect.top << " " << clientRect.bottom << "\n";
+
+	HBITMAP bitmapHandle = (HBITMAP)GetCurrentObject(commandWindowDC, OBJ_BITMAP);
+	//	std::cout << bitmapHandle << "\n";
+
+	BITMAP	bitmap;
+	GetObject(bitmapHandle, sizeof(bitmap), &bitmap);
+	std::cout << "bmType: " << bitmap.bmType << "\n";
+	std::cout << "bmWidth: " << bitmap.bmWidth << " bmHeight: " << bitmap.bmHeight << "\n";
+	std::cout << "bmWidthBytes: " << bitmap.bmWidthBytes << "\n";
+	std::cout << "bmPlanes: " << bitmap.bmPlanes << "\n";
+	std::cout << "bmBitsPixel: " << bitmap.bmBitsPixel << "\n";
+	std::cout << "bmBits: " << bitmap.bmBits << "\n";
+	std::cout << "\n";
+
+	struct MyBitmapInfo {
+		BITMAPINFOHEADER	bmiHeader;
+		uint32_t	m_buffer[32];
+
+		BITMAPINFO* operator&() {
+			return (BITMAPINFO*)this;
+		}
+	};
+
+	MyBitmapInfo	bitmapInfo{};
+	bitmapInfo.bmiHeader.biSize = sizeof(bitmapInfo.bmiHeader);
+	int returnCode = GetDIBits(
+		commandWindowDC,
+		bitmapHandle,
+		0,
+		windowHeight,
+		NULL,
+		&bitmapInfo,
+		DIB_RGB_COLORS
+	);
+	std::cout << "returnCode: " << returnCode << "\n";
+
+	std::cout << "biSizeImage: " << bitmapInfo.bmiHeader.biSizeImage << "\n";
+
+	g_imageData.resize(bitmapInfo.bmiHeader.biSizeImage / sizeof(uint32_t));
+
+	returnCode = GetDIBits(
+		commandWindowDC,
+		bitmapHandle,
+		0,
+		windowHeight,
+		g_imageData.data(),
+		&bitmapInfo,
+		DIB_RGB_COLORS
+	);
+
+	std::cout << "returnCode: " << returnCode << "\n";
+
+	ReleaseDC(g_commandBufferHwnd, commandWindowDC);
+
 }
 
 void MessageLoop(Globals& globals) {
@@ -1478,15 +1571,16 @@ void MessageLoop(Globals& globals) {
 				break;
 			}
 
-			//if (msg.message == WM_KEYDOWN) {
-			//	if (msg.wParam == 'D') {
-			//		std::cout << "Dump Vulkan Info\n";
-			//	}
-			//}
+			if (msg.message == WM_KEYDOWN) {
+				if (msg.wParam == 'S') {
+					snapCommandWindow();
+				}
+			}
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
 
+		//		snapCommandWindow();
 		try {
 			drawFrame(globals);
 		}
@@ -1504,8 +1598,6 @@ int main()
 	std::cout << "Hello World!\n";
 
 	HMODULE hModule = LoadLibraryW(TEXT("msftedit.dll"));
-	std::cout << "hModule: " << hModule << "\n";
-
 
 
 	std::cout.imbue(std::locale(""));
@@ -1526,7 +1618,7 @@ int main()
 	RegisterMyWindowClass(hInstance);
 	HWND hWnd = CreateFirstWindow(hInstance);
 
-	HWND commandBufferHwnd = createCommandBufferHwnd(hInstance);
+	HWND commandBufferHwnd = createCommandBufferHwnd(hInstance, hWnd);
 
 
 	Shape shape1 = g_pointVertexBuffer1.add(g_theCubeCenter);
@@ -1570,6 +1662,73 @@ int main()
 	//	Wait for device to be idle before exiting and cleaning up globals.
 	g_globals.g_deviceOriginal.waitIdle();
 
+}
+
+int CaptureAnImage(HWND hWnd)
+{
+
+	// Retrieve the handle to a display device context for the client 
+	// area of the window. 
+	HDC windowDC = GetDC(hWnd);
+
+	// Get the client area for size calculation.
+	RECT windowClientRect;
+	GetClientRect(hWnd, &windowClientRect);
+	const int windowClientWidth = windowClientRect.right - windowClientRect.left;
+	const int windowClientHeight = windowClientRect.bottom - windowClientRect.top;
+	HBITMAP windowBitmapHandle = CreateCompatibleBitmap(windowDC, windowClientWidth, windowClientHeight);
+
+
+	//	Now get the actual bitmap bits from the memory bitmap.
+	BITMAP windowBitmap;
+	GetObject(windowBitmapHandle, sizeof(BITMAP), &windowBitmap);
+
+	BITMAPINFOHEADER   bi;
+
+	bi.biSize = sizeof(BITMAPINFOHEADER);
+	bi.biWidth = windowBitmap.bmWidth;
+	bi.biHeight = windowBitmap.bmHeight;
+	bi.biPlanes = 1;
+	bi.biBitCount = 32;
+	bi.biCompression = BI_RGB;
+	bi.biSizeImage = 0;
+	bi.biXPelsPerMeter = 0;
+	bi.biYPelsPerMeter = 0;
+	bi.biClrUsed = 0;
+	bi.biClrImportant = 0;
+
+	DWORD bitmapSize = ((windowBitmap.bmWidth * bi.biBitCount + 31) / 32) * 4 * windowBitmap.bmHeight;
+
+	HANDLE hDIB = GlobalAlloc(GHND, bitmapSize);
+	char* lpbitmap = (char*)GlobalLock(hDIB);
+
+	// Gets the "bits" from the bitmap, and copies them into a buffer 
+	// that's pointed to by lpbitmap.
+	GetDIBits(
+		windowDC,
+		windowBitmapHandle,
+		0,
+		(UINT)windowBitmap.bmHeight,
+		lpbitmap,
+		(BITMAPINFO*)&bi,
+		DIB_RGB_COLORS);
+
+	makeImageFromBitmap();
+
+
+	// Unlock and Free the DIB from the heap.
+	GlobalUnlock(hDIB);
+	GlobalFree(hDIB);
+
+
+	// Clean up.
+done:
+	//DeleteObject(hbmScreen);
+	//DeleteObject(hdcMemDC);
+	//ReleaseDC(NULL, hdcScreen);
+	//ReleaseDC(hWnd, hdcWindow);
+
+	return 0;
 }
 
 

@@ -434,7 +434,11 @@ namespace vkcpp {
 			return vkPhysicalDeviceFeatures2;
 		}
 
-
+		VkPhysicalDeviceMemoryProperties getPhysicalDeviceMemoryProperties() {
+			VkPhysicalDeviceMemoryProperties vkPhysicalDeviceMemoryProperties;
+			vkGetPhysicalDeviceMemoryProperties(m_vkPhysicalDevice, &vkPhysicalDeviceMemoryProperties);
+			return vkPhysicalDeviceMemoryProperties;
+		}
 
 		uint32_t findMemoryTypeIndex(
 			uint32_t usableMemoryIndexBits,
