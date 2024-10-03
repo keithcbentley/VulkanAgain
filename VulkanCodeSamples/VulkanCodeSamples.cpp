@@ -32,9 +32,6 @@ class MagicValues {
 
 public:
 
-	static const uint32_t	TRANSFER_QUEUE_FAMILY_INDEX = 0;
-	static const uint32_t	TRANSFER_QUEUE_COUNT = 1;
-
 	static const inline std::vector<vkcpp::AddDeviceQueueInfo> ADD_DEVICE_QUEUES{
 		{.queueFamilyIndex = 0, .count = 1 },
 		{.queueFamilyIndex = 1, .count = 1 },
@@ -43,6 +40,9 @@ public:
 		{.queueFamilyIndex = 4, .count = 1 },
 		{.queueFamilyIndex = 5, .count = 1 }
 	};
+
+	static const uint32_t	TRANSFER_QUEUE_FAMILY_INDEX = 1;
+	static const uint32_t	TRANSFER_QUEUE_INDEX = 0;
 
 
 	//static const uint32_t	GRAPHICS_QUEUE_FAMILY_INDEX = 0;
@@ -257,17 +257,17 @@ public:
 	vkcpp::PhysicalDevice	g_physicalDevice;
 	vkcpp::Device			g_deviceOriginal;
 
+	vkcpp::Queue			g_transferQueue;
+
 	//vkcpp::Queue				g_graphicsQueue;
 	//vkcpp::Queue				g_presentationQueue;
 
-	vkcpp::CommandPool		g_commandPoolOriginal;
+	vkcpp::CommandPool		g_transferCommandPoolOriginal;
 
 
 };
 
 Globals g_globals;
-
-//AllDrawingFrames g_allDrawingFrames(MagicValues::MAX_FRAMES_IN_FLIGHT);
 
 
 
@@ -422,6 +422,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::Device deviceOriginal(deviceCreateInfo, physicalDevice);
 
+	vkcpp::Queue transferQueue = deviceOriginal.getDeviceQueue(
+		MagicValues::TRANSFER_QUEUE_FAMILY_INDEX,
+		MagicValues::TRANSFER_QUEUE_INDEX);
+
 	//vkcpp::Queue graphicsQueue = deviceOriginal.getDeviceQueue(
 	//	MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
 	//	MagicValues::GRAPHICS_QUEUE_INDEX);
@@ -431,14 +435,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	//	MagicValues::PRESENTATION_QUEUE_INDEX);
 
 
-
-
-
-	//VkCommandPoolCreateInfo commandPoolCreateInfo{};
-	//commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	//commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	//commandPoolCreateInfo.queueFamilyIndex = MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX;
-	//vkcpp::CommandPool commandPoolOriginal(commandPoolCreateInfo, deviceOriginal);
+	vkcpp::CommandPool transferCommandPoolOriginal(
+		VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+		MagicValues::TRANSFER_QUEUE_FAMILY_INDEX,
+		deviceOriginal);
 
 
 
@@ -451,9 +451,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_physicalDevice = std::move(physicalDevice);
 	globals.g_deviceOriginal = std::move(deviceOriginal);
 
-
-
-	//	globals.g_commandPoolOriginal = std::move(commandPoolOriginal);
+	globals.g_transferCommandPoolOriginal = std::move(transferCommandPoolOriginal);
 
 
 }
@@ -722,6 +720,14 @@ int main()
 
 
 	VulkanStuff(hInstance, hWnd, g_globals);
+
+	std::cout << "\n";
+	std::cout << "\n";
+	std::cout << "\n";
+	std::cout << "\n";
+	std::cout << "\n";
+	std::cout << "\n";
+
 	DumpPhysicalDeviceMemoryInfo(g_globals.g_physicalDevice);
 	DumpPhysicalDeviceQueueInfo(g_globals.g_physicalDevice);
 

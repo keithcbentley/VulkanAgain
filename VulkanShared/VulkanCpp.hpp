@@ -1708,6 +1708,21 @@ namespace vkcpp {
 			new(this)CommandPool(vkCommandPool, vkDevice, &destroy);
 		}
 
+		CommandPool(
+			VkCommandPoolCreateFlags	vkCommandPoolCreateFlags,
+			uint32_t					queueFamilyIndex,
+			VkDevice					vkDevice
+		) {
+			VkCommandPoolCreateInfo commandPoolCreateInfo{};
+			commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+			commandPoolCreateInfo.flags = vkCommandPoolCreateFlags;
+			commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
+			new(this)CommandPool(commandPoolCreateInfo, vkDevice);
+
+		}
+
+
+
 
 
 
