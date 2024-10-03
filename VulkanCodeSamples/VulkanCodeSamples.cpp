@@ -535,7 +535,7 @@ std::string DeviceQueueFlagsString(VkMemoryHeapFlags bitField) {
 
 
 
-void DumpPhysicalDeviceMemoryInfo(vkcpp::PhysicalDevice physicalDevice) {
+void dumpPhysicalDeviceMemoryInfo(vkcpp::PhysicalDevice physicalDevice) {
 
 	std::cout << "PhysicalDeviceMemoryInfo\n";
 
@@ -566,7 +566,7 @@ void DumpPhysicalDeviceMemoryInfo(vkcpp::PhysicalDevice physicalDevice) {
 
 }
 
-void DumpPhysicalDeviceQueueInfo(vkcpp::PhysicalDevice physicalDevice) {
+void dumpPhysicalDeviceQueueInfo(vkcpp::PhysicalDevice physicalDevice) {
 
 	std::cout << "PhysicalDeviceQueueInfo\n";
 	std::vector<VkQueueFamilyProperties> allQueueFamilyProperties = physicalDevice.getAllQueueFamilyProperties();
@@ -580,6 +580,29 @@ void DumpPhysicalDeviceQueueInfo(vkcpp::PhysicalDevice physicalDevice) {
 		//		std::cout << "     minImageTransferGranularity: " << vkQueueFamilyProperties.minImageTransferGranularity;
 		index++;
 	}
+
+}
+
+
+void copyBufferTest1(const Globals& globals) {
+
+	const VkDeviceSize	memorySize = 1024 * 1024;
+	vkcpp::Buffer_DeviceMemory srcBuffer(
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		memorySize,
+		MagicValues::TRANSFER_QUEUE_FAMILY_INDEX,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		globals.g_deviceOriginal
+	);
+
+	vkcpp::Buffer_DeviceMemory dstBuffer(
+		VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		memorySize,
+		MagicValues::TRANSFER_QUEUE_FAMILY_INDEX,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		globals.g_deviceOriginal
+	);
+
 
 }
 
@@ -709,15 +732,11 @@ int main()
 {
 	std::cout << "Hello World!\n";
 
-
 	std::cout.imbue(std::locale(""));
-
-
 
 	HINSTANCE hInstance = GetModuleHandle(NULL);
 	RegisterMyWindowClass(hInstance);
 	HWND hWnd = CreateFirstWindow(hInstance);
-
 
 	VulkanStuff(hInstance, hWnd, g_globals);
 
@@ -728,8 +747,11 @@ int main()
 	std::cout << "\n";
 	std::cout << "\n";
 
-	DumpPhysicalDeviceMemoryInfo(g_globals.g_physicalDevice);
-	DumpPhysicalDeviceQueueInfo(g_globals.g_physicalDevice);
+	dumpPhysicalDeviceMemoryInfo(g_globals.g_physicalDevice);
+	dumpPhysicalDeviceQueueInfo(g_globals.g_physicalDevice);
+
+	copyBufferTest1(g_globals);
+
 
 	MessageLoop(g_globals);
 

@@ -401,8 +401,9 @@ class DrawingFrame {
 		m_uniformBufferMemory = std::move(
 			vkcpp::Buffer_DeviceMemory(
 				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 				sizeof(ModelViewProjTransform),
+				MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 				m_device
 			));
 	}
@@ -709,8 +710,9 @@ vkcpp::Image_Memory_View createTextureFromFile(
 	//	Make a device (gpu) staging buffer and copy the pixels into it.
 	vkcpp::Buffer_DeviceMemory stagingBuffer_DeviceMemoryMapped(
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		imageSize,
+		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		pixels,
 		device);
 
@@ -780,8 +782,9 @@ void makeImageFromBitmap() {
 	//	Make a device (gpu) staging buffer and copy the pixels into it.
 	vkcpp::Buffer_DeviceMemory stagingBuffer_DeviceMemoryMapped(
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		imageSize,
+		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		g_imageData.data(),
 		g_globals.g_deviceOriginal);
 
@@ -912,32 +915,36 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	//	Pay attention to the terminology change.
 	vkcpp::Buffer_DeviceMemory pointBufferAndDeviceMemory1(
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		g_pointVertexBuffer1.pointsSizeof(),
+		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		g_pointVertexBuffer1.pointData(),
 		deviceOriginal);
 
 	//	Pay attention to the terminology change.
 	vkcpp::Buffer_DeviceMemory vertexBufferAndDeviceMemory1(
 		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		g_pointVertexBuffer1.verticesSizeof(),
+		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		g_pointVertexBuffer1.vertexData(),
 		deviceOriginal);
 
 	//	Pay attention to the terminology change.
 	vkcpp::Buffer_DeviceMemory pointBufferAndDeviceMemory2(
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		g_pointVertexBuffer2.pointsSizeof(),
+		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		g_pointVertexBuffer2.pointData(),
 		deviceOriginal);
 
 	//	Pay attention to the terminology change.
 	vkcpp::Buffer_DeviceMemory vertexBufferAndDeviceMemory2(
 		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		g_pointVertexBuffer2.verticesSizeof(),
+		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		g_pointVertexBuffer2.vertexData(),
 		deviceOriginal);
 

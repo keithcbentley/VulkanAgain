@@ -998,6 +998,20 @@ namespace vkcpp {
 			new(this)DeviceMemory(vkDeviceMemory, vkDevice, &destroy);
 		}
 
+		DeviceMemory(
+			VkMemoryRequirements vkMemoryRequirements,
+			VkMemoryPropertyFlags vkRequiredMemoryPropertyFlags,
+			Device	device
+		) {
+			VkMemoryAllocateInfo vkMemoryAllocateInfo{};
+			vkMemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			vkMemoryAllocateInfo.allocationSize = vkMemoryRequirements.size;
+			vkMemoryAllocateInfo.memoryTypeIndex =
+				device.findMemoryTypeIndex(vkMemoryRequirements.memoryTypeBits, vkRequiredMemoryPropertyFlags);
+			new(this)DeviceMemory(vkMemoryAllocateInfo, device);
+		}
+
+
 	};
 
 
@@ -1011,10 +1025,7 @@ namespace vkcpp {
 			: HandleWithOwner(vkBuffer, device, pfnDestroy) {
 		}
 
-	public:
-
-		Buffer() {}
-		Buffer(VkBufferCreateInfo& vkBufferCreateInfo, Device device) {
+		Buffer(const VkBufferCreateInfo& vkBufferCreateInfo, Device device) {
 			VkBuffer vkBuffer;
 			VkResult vkResult = vkCreateBuffer(device, &vkBufferCreateInfo, nullptr, &vkBuffer);
 			if (vkResult != VK_SUCCESS) {
@@ -1023,21 +1034,36 @@ namespace vkcpp {
 			new(this)Buffer(vkBuffer, device, &destroy);
 		}
 
+	public:
+
+		Buffer() {}
+
+		Buffer(
+			VkBufferUsageFlags	vkBufferUsageFlags,
+			VkDeviceSize		size,
+			uint32_t			queueFamilyIndex,
+			Device				device
+		) {
+			VkBufferCreateInfo vkBufferCreateInfo{};
+			vkBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			vkBufferCreateInfo.usage = vkBufferUsageFlags;
+			vkBufferCreateInfo.size = size;
+			vkBufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			uint32_t	queueFamilyIndexLocal = queueFamilyIndex;
+			vkBufferCreateInfo.pQueueFamilyIndices = &queueFamilyIndexLocal;
+			new(this)Buffer(vkBufferCreateInfo, device);
+
+		}
+
 		VkMemoryRequirements  getMemoryRequirements() {
 			VkMemoryRequirements vkMemoryRequirements;
 			vkGetBufferMemoryRequirements(getVkDevice(), *this, &vkMemoryRequirements);
 			return vkMemoryRequirements;
 		}
 
-		DeviceMemory allocateDeviceMemory(VkMemoryPropertyFlags vkRequiredProperties) {
+		DeviceMemory allocateDeviceMemory(VkMemoryPropertyFlags vkRequiredMemoryPropertyFlags) {
 			VkMemoryRequirements vkMemoryRequirements = getMemoryRequirements();
-
-			VkMemoryAllocateInfo vkMemoryAllocateInfo{};
-			vkMemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			vkMemoryAllocateInfo.allocationSize = vkMemoryRequirements.size;
-			vkMemoryAllocateInfo.memoryTypeIndex =
-				getOwner().findMemoryTypeIndex(vkMemoryRequirements.memoryTypeBits, vkRequiredProperties);
-			return vkcpp::DeviceMemory(vkMemoryAllocateInfo, getOwner());
+			return DeviceMemory(vkMemoryRequirements, vkRequiredMemoryPropertyFlags, getOwner());
 		}
 
 	};
@@ -1078,20 +1104,17 @@ namespace vkcpp {
 		}
 
 
+
 		Buffer_DeviceMemory(
-			VkBufferUsageFlags usage,
-			VkMemoryPropertyFlags properties,
-			int64_t size,
+			VkBufferUsageFlags vkBufferUsageFlags,
+			VkDeviceSize size,
+			uint32_t	queueFamilyIndex,
+			VkMemoryPropertyFlags vkMemoryPropertyFlags,
 			Device device
 		) {
-			VkBufferCreateInfo vkBufferCreateInfo{};
-			vkBufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-			vkBufferCreateInfo.size = size;
-			vkBufferCreateInfo.usage = usage;
-			vkBufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			Buffer buffer(vkBufferUsageFlags, size, queueFamilyIndex, device);
 
-			vkcpp::Buffer buffer(vkBufferCreateInfo, device);
-			DeviceMemory deviceMemory = buffer.allocateDeviceMemory(properties);
+			DeviceMemory deviceMemory = buffer.allocateDeviceMemory(vkMemoryPropertyFlags);
 
 			VkResult vkResult = vkBindBufferMemory(device, buffer, deviceMemory, 0);
 			if (vkResult != VK_SUCCESS) {
@@ -1100,23 +1123,28 @@ namespace vkcpp {
 
 			// TODO: should this be a method on DeviceMemory?
 			void* mappedMemory;
-			vkMapMemory(device, deviceMemory, 0, size, 0, &mappedMemory);
+			vkResult = vkMapMemory(device, deviceMemory, 0, size, 0, &mappedMemory);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
 
 			new(this) Buffer_DeviceMemory(std::move(buffer), std::move(deviceMemory), mappedMemory);
 
 		}
 
 		Buffer_DeviceMemory(
-			VkBufferUsageFlags usage,
-			VkMemoryPropertyFlags properties,
+			VkBufferUsageFlags vkBufferUsageFlags,
 			int64_t size,
+			uint32_t	queueFamilyIndex,
+			VkMemoryPropertyFlags vkRequiredMemoryPropertyFlags,
 			void* pSrcMem,
 			Device device
 		) {
 			new(this)Buffer_DeviceMemory(
-				usage,
-				properties,
+				vkBufferUsageFlags,
 				size,
+				queueFamilyIndex,
+				vkRequiredMemoryPropertyFlags,
 				device
 			);
 			memcpy(m_mappedMemory, pSrcMem, size);
