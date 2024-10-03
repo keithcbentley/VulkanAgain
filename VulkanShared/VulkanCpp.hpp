@@ -1842,6 +1842,16 @@ namespace vkcpp {
 			vkCmdCopyBufferToImage(*this, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 		}
 
+		void cmdCopyBuffer(
+			Buffer	srcBuffer,
+			Buffer	dstBuffer,
+			VkDeviceSize	size
+		) {
+			VkBufferCopy	vkBufferCopy{ .srcOffset = 0, .dstOffset = 0, .size = size };
+
+			vkCmdCopyBuffer(*this, srcBuffer, dstBuffer, 1, &vkBufferCopy);
+		}
+
 		void cmdPipelineBarrier2(
 			DependencyInfo& dependencyInfo
 		) {
@@ -2077,7 +2087,7 @@ namespace vkcpp {
 		//	}
 		//}
 
-		void submit2(CommandBuffer commandBuffer) {
+		void submit2(CommandBuffer commandBuffer) const {
 			SubmitInfo2 submitInfo2;
 			submitInfo2.addCommandBuffer(commandBuffer);
 			VkResult vkResult = vkQueueSubmit2(*this, 1, submitInfo2.assemble(), VK_NULL_HANDLE);
@@ -2086,7 +2096,7 @@ namespace vkcpp {
 			}
 		}
 
-		void submit2(CommandBuffer commandBuffer, vkcpp::Fence fence) {
+		void submit2(CommandBuffer commandBuffer, Fence fence) const {
 			SubmitInfo2 submitInfo2;
 			submitInfo2.addCommandBuffer(commandBuffer);
 			VkResult vkResult = vkQueueSubmit2(*this, 1, submitInfo2.assemble(), fence);
@@ -2095,7 +2105,7 @@ namespace vkcpp {
 			}
 		}
 
-		void submit2(SubmitInfo2& submitInfo2, Fence fence) {
+		void submit2(SubmitInfo2& submitInfo2, Fence fence) const {
 			VkResult vkResult = vkQueueSubmit2(*this, 1, submitInfo2.assemble(), fence);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);

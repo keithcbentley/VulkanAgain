@@ -450,6 +450,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_vulkanInstance = std::move(vulkanInstance);
 	globals.g_physicalDevice = std::move(physicalDevice);
 	globals.g_deviceOriginal = std::move(deviceOriginal);
+	globals.g_transferQueue = std::move(transferQueue);
 
 	globals.g_transferCommandPoolOriginal = std::move(transferCommandPoolOriginal);
 
@@ -602,6 +603,28 @@ void copyBufferTest1(const Globals& globals) {
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		globals.g_deviceOriginal
 	);
+
+	//	Clear source memory
+	uint8_t* const pSrcMemory = (uint8_t*)srcBuffer.m_mappedMemory;
+	for (int i = 0; i < memorySize; i++) {
+		*(pSrcMemory+i) = 0;
+	}
+
+	//	Dirty dest memory
+	uint8_t* const pDstMemory = (uint8_t*)dstBuffer.m_mappedMemory;
+	for (int i = 0; i < memorySize; i++) {
+		*(pDstMemory+i) = 0x55;
+	}
+
+	vkcpp::CommandBuffer commandBuffer(globals.g_transferCommandPoolOriginal);
+	commandBuffer.beginOneTimeSubmit();
+	commandBuffer.cmdCopyBuffer(srcBuffer.m_buffer, dstBuffer.m_buffer, memorySize);
+	commandBuffer.end();
+
+	vkcpp::Fence completedFence(globals.g_transferCommandPoolOriginal.getVkDevice());
+	globals.g_transferQueue.submit2(commandBuffer, completedFence);
+	completedFence.wait();
+
 
 
 }
