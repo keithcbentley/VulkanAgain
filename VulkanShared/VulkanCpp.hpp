@@ -621,17 +621,28 @@ namespace vkcpp {
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
-			std::vector<VkPhysicalDevice> allPhysicalDevices(physicalDeviceCount);
-			vkResult = vkEnumeratePhysicalDevices(*this, &physicalDeviceCount, allPhysicalDevices.data());
+			std::vector<VkPhysicalDevice> vkPhysicalDevices(physicalDeviceCount);
+			vkResult = vkEnumeratePhysicalDevices(*this, &physicalDeviceCount, vkPhysicalDevices.data());
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
-			return allPhysicalDevices;
+			//	IMPORTANT: this is crazy.  If we don't call
+			//	vkGetPhysicalDeviceQueueFamilyProperties to get the number
+			//	of queue families, we can't create device queues later without
+			//	the validation layer spitting out an error.  Just calling the function
+			//	(and throwing away the value) seems to be sufficient.
+			for (VkPhysicalDevice vkPhysicalDevice : vkPhysicalDevices) {
+				uint32_t queueFamilyCount = 0;
+				vkGetPhysicalDeviceQueueFamilyProperties(vkPhysicalDevice, &queueFamilyCount, nullptr);
+
+			}
+
+			return vkPhysicalDevices;
 		}
 
 		PhysicalDevice getPhysicalDevice(int physicalDeviceIndex) const {
-			std::vector<VkPhysicalDevice> physicalDevices = getAllPhysicalDevices();
-			return PhysicalDevice(physicalDevices.at(physicalDeviceIndex));
+			std::vector<VkPhysicalDevice> vkPhysicalDevices = getAllPhysicalDevices();
+			return PhysicalDevice(vkPhysicalDevices.at(physicalDeviceIndex));
 		}
 
 	};
@@ -725,7 +736,8 @@ namespace vkcpp {
 
 		static const inline int	MAX_DEVICE_QUEUES = 8;
 
-		static const inline std::array<float, MAX_DEVICE_QUEUES> s_queuePriorities{ 1.0f,1.0f,1.0f,1.0f,1.0f,1.0f,1.0f,1.0f };
+		static const inline std::array<float, MAX_DEVICE_QUEUES>
+			s_queuePriorities{ 1.0f,1.0f,1.0f,1.0f,1.0f,1.0f,1.0f,1.0f };
 
 	public:
 		DeviceQueueCreateInfo(const DeviceQueueCreateInfo&) = delete;
@@ -743,6 +755,12 @@ namespace vkcpp {
 
 	};
 	static_assert(sizeof(DeviceQueueCreateInfo) == sizeof(VkDeviceQueueCreateInfo));
+
+	//	TODO: do we need a better name for this? or a better location?
+	struct AddDeviceQueueInfo {
+		int	queueFamilyIndex;
+		int	count;
+	};
 
 	class DeviceCreateInfo : public VkDeviceCreateInfo {
 
@@ -804,7 +822,7 @@ namespace vkcpp {
 				}
 			}
 
-			//	TODO: hygiene in case we are called twice.
+			//	TODO: add hygiene in case we are called twice.
 			queueCreateInfoCount = m_deviceQueueCreateInfos.size();
 			if (queueCreateInfoCount > 0) {
 				pQueueCreateInfos = m_deviceQueueCreateInfos.data();
@@ -826,6 +844,13 @@ namespace vkcpp {
 		void addDeviceQueue(uint32_t deviceQueueFamilyIndex, int numberOfQueues) {
 			m_deviceQueueCounts.at(deviceQueueFamilyIndex) += numberOfQueues;
 		}
+
+		void addDeviceQueues(const std::vector<AddDeviceQueueInfo>& addDeviceQueueInfos) {
+			for (const AddDeviceQueueInfo& addDeviceQueueInfo : addDeviceQueueInfos) {
+				addDeviceQueue(addDeviceQueueInfo.queueFamilyIndex, addDeviceQueueInfo.count);
+			}
+		}
+
 	};
 
 	class Queue;

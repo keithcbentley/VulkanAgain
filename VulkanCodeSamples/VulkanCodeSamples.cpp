@@ -35,6 +35,15 @@ public:
 	static const uint32_t	TRANSFER_QUEUE_FAMILY_INDEX = 0;
 	static const uint32_t	TRANSFER_QUEUE_COUNT = 1;
 
+	static const inline std::vector<vkcpp::AddDeviceQueueInfo> ADD_DEVICE_QUEUES{
+		{.queueFamilyIndex = 0, .count = 1 },
+		{.queueFamilyIndex = 1, .count = 1 },
+		{.queueFamilyIndex = 2, .count = 1 },
+		{.queueFamilyIndex = 3, .count = 1 },
+		{.queueFamilyIndex = 4, .count = 1 },
+		{.queueFamilyIndex = 5, .count = 1 }
+	};
+
 
 	//static const uint32_t	GRAPHICS_QUEUE_FAMILY_INDEX = 0;
 	//static const uint32_t	GRAPHICS_QUEUE_INDEX = 0;
@@ -407,11 +416,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 
 	vkcpp::DeviceCreateInfo deviceCreateInfo;
-	//	deviceCreateInfo.addExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-
-		//deviceCreateInfo.addDeviceQueue(MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX, 1);
-		//deviceCreateInfo.addDeviceQueue(MagicValues::PRESENTATION_QUEUE_FAMILY_INDEX, 1);
-
+	deviceCreateInfo.addDeviceQueues(MagicValues::ADD_DEVICE_QUEUES);
 	VkPhysicalDeviceFeatures2 vkPhysicalDeviceFeatures2 = physicalDevice.getPhysicalDeviceFeatures2();
 	deviceCreateInfo.pNext = &vkPhysicalDeviceFeatures2;
 
