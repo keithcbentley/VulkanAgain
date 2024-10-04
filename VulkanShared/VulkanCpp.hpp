@@ -978,25 +978,32 @@ namespace vkcpp {
 
 	class DeviceMemory : public HandleWithOwner<VkDeviceMemory> {
 
-		DeviceMemory(VkDeviceMemory vkDeviceMemory, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(vkDeviceMemory, vkDevice, pfnDestroy) {
-		}
-
 		static void destroy(VkDeviceMemory vkDeviceMemory, VkDevice vkDevice) {
 			vkFreeMemory(vkDevice, vkDeviceMemory, nullptr);
 		}
 
+
+		DeviceMemory(VkDeviceMemory vkDeviceMemory, VkDevice vkDevice, VkDeviceSize size, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkDeviceMemory, vkDevice, pfnDestroy)
+			, m_size(size) {
+		}
+
+
+		VkDeviceSize	m_size = 0;
+
 	public:
 
 		DeviceMemory() {}
+
 		DeviceMemory(const VkMemoryAllocateInfo& vkMemoryAllocateInfo, VkDevice vkDevice) {
 			VkDeviceMemory vkDeviceMemory;
 			VkResult vkResult = vkAllocateMemory(vkDevice, &vkMemoryAllocateInfo, nullptr, &vkDeviceMemory);
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
-			new(this)DeviceMemory(vkDeviceMemory, vkDevice, &destroy);
+			new(this)DeviceMemory(vkDeviceMemory, vkDevice, vkMemoryAllocateInfo.allocationSize, &destroy);
 		}
+
 
 		DeviceMemory(
 			VkMemoryRequirements vkMemoryRequirements,
@@ -1021,8 +1028,9 @@ namespace vkcpp {
 			vkDestroyBuffer(device, vkBuffer, nullptr);
 		}
 
-		Buffer(VkBuffer vkBuffer, Device device, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(vkBuffer, device, pfnDestroy) {
+		Buffer(VkBuffer vkBuffer, Device device, VkDeviceSize size, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkBuffer, device, pfnDestroy)
+			, m_size(size) {
 		}
 
 		Buffer(const VkBufferCreateInfo& vkBufferCreateInfo, Device device) {
@@ -1031,8 +1039,11 @@ namespace vkcpp {
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
-			new(this)Buffer(vkBuffer, device, &destroy);
+			new(this)Buffer(vkBuffer, device, vkBufferCreateInfo.size, &destroy);
 		}
+
+		VkDeviceSize	m_size = 0;
+
 
 	public:
 
@@ -1053,6 +1064,10 @@ namespace vkcpp {
 			vkBufferCreateInfo.pQueueFamilyIndices = &queueFamilyIndexLocal;
 			new(this)Buffer(vkBufferCreateInfo, device);
 
+		}
+
+		VkDeviceSize size() const {
+			return m_size;
 		}
 
 		VkMemoryRequirements  getMemoryRequirements() {
@@ -1276,24 +1291,6 @@ namespace vkcpp {
 		std::vector<VkAttachmentReference>	m_colorAttachmentReferences;
 		VkAttachmentReference				m_depthStencilAttachmentReference{};
 		bool								m_haveDepthStencilAttachmentReference{};
-
-		//typedef struct VkSubpassDescription {
-		//	VkSubpassDescriptionFlags       flags;
-		//	VkPipelineBindPoint             pipelineBindPoint;
-		// 
-		//	uint32_t                        inputAttachmentCount;
-		//	const VkAttachmentReference* pInputAttachments;
-		// 
-		//	uint32_t                        colorAttachmentCount;
-		//	const VkAttachmentReference* pColorAttachments;
-		// 
-		//	const VkAttachmentReference* pResolveAttachments;
-		// 
-		//	const VkAttachmentReference* pDepthStencilAttachment;
-		// 
-		//	uint32_t                        preserveAttachmentCount;
-		//	const uint32_t* pPreserveAttachments;
-		//} VkSubpassDescription;
 
 
 	public:
@@ -1674,6 +1671,8 @@ namespace vkcpp {
 			subresourceRange.baseArrayLayer = 0;
 			subresourceRange.layerCount = 1;
 
+			//	TODO: This is an image memory/layout barrier. Why does
+			//	this use other parts of the pipeline?
 			//	TODO: do we need a more general way to do this?
 			//	Note that this grabs oldLayout and newLayout from the structure, not the args.
 			if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
@@ -1884,9 +1883,17 @@ namespace vkcpp {
 			Buffer	dstBuffer,
 			VkDeviceSize	size
 		) {
+			//	TODO: maybe do some size checking on the destination to avoid overwriting.
 			VkBufferCopy	vkBufferCopy{ .srcOffset = 0, .dstOffset = 0, .size = size };
 
 			vkCmdCopyBuffer(*this, srcBuffer, dstBuffer, 1, &vkBufferCopy);
+		}
+
+		void cmdCopyBuffer(
+			Buffer	srcBuffer,
+			Buffer	dstBuffer
+		) {
+			cmdCopyBuffer(srcBuffer, dstBuffer, srcBuffer.size());
 		}
 
 		void cmdPipelineBarrier2(

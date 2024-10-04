@@ -622,7 +622,7 @@ void copyBufferTest1(const Globals& globals) {
 	//	Even though we are copying a buffer, we can use just a memory barrier
 	//	instead of a buffer memory barrier since we aren't doing a queue transfer.
 	//	Image memory barrier is not applicable since this isn't an image.
-	commandBuffer.cmdCopyBuffer(buffer1.m_buffer, buffer2.m_buffer, memorySize);	//	Writes to buffer2
+	commandBuffer.cmdCopyBuffer(buffer1.m_buffer, buffer2.m_buffer);	//	Writes to buffer2
 	vkcpp::DependencyInfo dependencyInfo;
 	dependencyInfo.addMemoryBarrier(
 		vkcpp::MemoryBarrier2(
@@ -630,7 +630,7 @@ void copyBufferTest1(const Globals& globals) {
 			VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_MEMORY_READ_BIT)
 	);
 	commandBuffer.cmdPipelineBarrier2(dependencyInfo);
-	commandBuffer.cmdCopyBuffer(buffer2.m_buffer, buffer3.m_buffer, memorySize);	//	Reads from buffer2
+	commandBuffer.cmdCopyBuffer(buffer2.m_buffer, buffer3.m_buffer);	//	Reads from buffer2
 	commandBuffer.end();
 
 	globals.g_transferQueue.submit2Fenced(commandBuffer);
