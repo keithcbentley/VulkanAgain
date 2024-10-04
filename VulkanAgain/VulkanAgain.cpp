@@ -660,9 +660,7 @@ void transitionImageLayout(
 
 	commandBuffer.end();
 
-	vkcpp::Fence completedFence(commandPool.getVkDevice());
-	graphicsQueue.submit2(commandBuffer, completedFence);
-	completedFence.wait();
+	graphicsQueue.submit2Fenced(commandBuffer);
 
 }
 
@@ -681,9 +679,7 @@ void copyBufferToImage(
 	commandBuffer.cmdCopyBufferToImage(buffer, image, width, height);
 	commandBuffer.end();
 
-	vkcpp::Fence completedFence(commandPool.getVkDevice());
-	graphicsQueue.submit2(commandBuffer, completedFence);
-	completedFence.wait();
+	graphicsQueue.submit2Fenced(commandBuffer);
 }
 
 
@@ -819,22 +815,29 @@ vkcpp::RenderPass createRenderPass(
 		.addColorAttachmentReference(colorAttachmentReference)
 		.setDepthStencilAttachmentReference(depthAttachmentReference);
 
-	VkPipelineStageFlags bothFragmentTests
+	//	Just a handy abbreviation
+	const VkPipelineStageFlags bothFragmentTests
 		= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
 		| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+
+	//	All depth stencil attachment writes have to finish before
+	//	any new depth stencil attachment reads or writes.
+	renderPassCreateInfo.addSubpassDependency(VK_SUBPASS_EXTERNAL, 0)
+		.addSrc(bothFragmentTests, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
+		.addDst(bothFragmentTests, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT);
+
 	renderPassCreateInfo.addSubpassDependency(VK_SUBPASS_EXTERNAL, 0)
 		.addSrc(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
-		.addSrc(bothFragmentTests, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
-		.addDst(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
-		.addDst(bothFragmentTests, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+		.addDst(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT);
 
-	renderPassCreateInfo.addSubpass()
-		.addColorAttachmentReference(colorAttachmentReference)
-		.setDepthStencilAttachmentReference(depthAttachmentReference);
 
-	renderPassCreateInfo.addSubpassDependency(0, 1)
-		.addSrc(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
-		.addDst(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+	//renderPassCreateInfo.addSubpass()
+	//	.addColorAttachmentReference(colorAttachmentReference)
+	//	.setDepthStencilAttachmentReference(depthAttachmentReference);
+
+	//renderPassCreateInfo.addSubpassDependency(0, 1)
+	//	.addSrc(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+	//	.addDst(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
 
 	return vkcpp::RenderPass(renderPassCreateInfo, device);
 }
@@ -999,8 +1002,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::GraphicsPipeline graphicsPipeline0(graphicsPipelineCreateInfo, deviceOriginal);
 
-	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal, 1);
-	vkcpp::GraphicsPipeline graphicsPipeline1(graphicsPipelineCreateInfo, deviceOriginal);
+	//graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal, 1);
+	//vkcpp::GraphicsPipeline graphicsPipeline1(graphicsPipelineCreateInfo, deviceOriginal);
 
 	g_allDrawingFrames.createDrawingFrames(
 		deviceOriginal,
@@ -1036,7 +1039,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	globals.g_pipelineLayout = std::move(pipelineLayout);
 	globals.g_graphicsPipeline0 = std::move(graphicsPipeline0);
-	globals.g_graphicsPipeline1 = std::move(graphicsPipeline1);
+	//	globals.g_graphicsPipeline1 = std::move(graphicsPipeline1);
 
 
 	globals.g_commandPoolOriginal = std::move(commandPoolOriginal);
@@ -1086,6 +1089,8 @@ void updateUniformBuffer(
 		10.0f);
 	modelViewProjTransform.projTransform[1][1] *= -1.0;
 
+	//	TODO: shouldn't this just be a simple assignment?
+	//	Maybe use some kind of templated version of the mapped memory?
 	memcpy(
 		uniformBufferMemory.m_mappedMemory,
 		&modelViewProjTransform,
@@ -1129,8 +1134,6 @@ public:
 	) {
 		const VkExtent2D swapchainImageExtent = m_pSwapchainImageViewsFrameBuffers->getImageExtent();
 
-		commandBuffer.reset();
-		commandBuffer.begin();
 
 		VkRenderPassBeginInfo vkRenderPassBeginInfo{};
 		vkRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1145,7 +1148,7 @@ public:
 		vkRenderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 		vkRenderPassBeginInfo.pClearValues = clearValues.data();
 
-		vkCmdBeginRenderPass(commandBuffer, &vkRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+		commandBuffer.cmdBeginRenderPass(vkRenderPassBeginInfo);
 
 		VkViewport viewport{};
 		viewport.x = 0.0f;
@@ -1185,33 +1188,32 @@ public:
 			vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer1.vertexCount(), 1, 0, 0, 0);
 		}
 
-		VkSubpassContents vkSubpassContents{};
-		vkCmdNextSubpass(commandBuffer, vkSubpassContents);
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline1);
-		vkCmdBindDescriptorSets(
-			commandBuffer,
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			m_pipelineLayout1,
-			0, 1,
-			&m_vkDescriptorSet,
-			0, nullptr);
+		//VkSubpassContents vkSubpassContents{};
+		//vkCmdNextSubpass(commandBuffer, vkSubpassContents);
+		//vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline1);
+		//vkCmdBindDescriptorSets(
+		//	commandBuffer,
+		//	VK_PIPELINE_BIND_POINT_GRAPHICS,
+		//	m_pipelineLayout1,
+		//	0, 1,
+		//	&m_vkDescriptorSet,
+		//	0, nullptr);
 
 
-		vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
+		//vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
 
-		{
-			VkBuffer vkPointBuffer = m_pointBuffer2;
-			VkBuffer pointBuffers[] = { vkPointBuffer };
-			VkDeviceSize offsets[] = { 0 };
-			vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
-			vkCmdBindIndexBuffer(commandBuffer, m_vertexBuffer2, 0, VK_INDEX_TYPE_UINT16);
-			vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer2.vertexCount(), 1, 0, 0, 0);
-		}
+		//{
+		//	VkBuffer vkPointBuffer = m_pointBuffer2;
+		//	VkBuffer pointBuffers[] = { vkPointBuffer };
+		//	VkDeviceSize offsets[] = { 0 };
+		//	vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
+		//	vkCmdBindIndexBuffer(commandBuffer, m_vertexBuffer2, 0, VK_INDEX_TYPE_UINT16);
+		//	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer2.vertexCount(), 1, 0, 0, 0);
+		//}
 
 
-		vkCmdEndRenderPass(commandBuffer);
+		commandBuffer.cmdEndRenderPass();
 
-		commandBuffer.end();
 
 	}
 
@@ -1250,14 +1252,17 @@ void drawFrame(Globals& globals)
 	}
 
 	DrawingFrame& currentDrawingFrame = g_allDrawingFrames.getNextFrameToDraw();
+	//	Wait for this drawing frame to be free
+	//	TODO: does this need a warning timer?
+	currentDrawingFrame.m_inFlightFence.wait();
+
 
 	vkcpp::Device device = currentDrawingFrame.getDevice();
 	vkcpp::CommandBuffer commandBuffer = currentDrawingFrame.m_commandBuffer;
 
+	commandBuffer.reset();
+	commandBuffer.begin();
 
-	//	Wait for this drawing frame to be free
-	//	TODO: does this need a warning timer?
-	currentDrawingFrame.m_inFlightFence.wait();
 
 	uint32_t	swapchainImageIndex;
 	//	Try to get the next image available index.  Don't wait though.
@@ -1281,6 +1286,7 @@ void drawFrame(Globals& globals)
 		globals.g_swapchainImageViewsFrameBuffers.getImageExtent()
 	);
 
+	//	TODO: this is kind of clunky
 	theRenderer.m_pointBuffer1 = globals.g_pointBufferAndDeviceMemory1.m_buffer;
 	theRenderer.m_vertexBuffer1 = globals.g_vertexBufferAndDeviceMemory1.m_buffer;
 
@@ -1299,6 +1305,10 @@ void drawFrame(Globals& globals)
 	theRenderer.m_swapchainImageIndex = swapchainImageIndex;
 
 	theRenderer.recordCommandBuffer(commandBuffer);
+
+
+
+	commandBuffer.end();
 
 
 	vkcpp::SubmitInfo2 submitInfo2;
@@ -1364,7 +1374,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case WM_WINDOWPOSCHANGED:
-		std::cout << "WM_WINDOWPOSCHANGED\n";
 		g_globals.g_swapchainImageViewsFrameBuffers.stale();
 		break;
 
@@ -1462,7 +1471,7 @@ WNDPROC g_oldWndProc;
 HWND g_commandBufferHwnd;
 
 LRESULT CALLBACK CommandWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-	std::cout << "message\n";
+	//	std::cout << "message\n";
 	return (*g_oldWndProc)(hWnd, message, wParam, lParam);
 }
 

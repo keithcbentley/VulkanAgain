@@ -1478,6 +1478,9 @@ namespace vkcpp {
 			subpassCount = m_subpassDescriptions.size();
 			if (subpassCount > 0) {
 				for (SubpassDescription& subpassDescription : m_subpassDescriptions) {
+					//	TODO: investigate.  This is either really clever or really risky.
+					//	We assemble the the subpass description and then push back
+					//	a copy of the VkSubpassDescription part of our structure.
 					m_vkSubpassDescriptions.push_back(*subpassDescription.assemble());
 				}
 				pSubpasses = m_vkSubpassDescriptions.data();
@@ -1632,7 +1635,26 @@ namespace vkcpp {
 
 	};
 
+	class MemoryBarrier2 : public VkMemoryBarrier2 {
 
+	public:
+		MemoryBarrier2(
+			VkPipelineStageFlags2    srcStageMaskArg,
+			VkAccessFlags2           srcAccessMaskArg,
+			VkPipelineStageFlags2    dstStageMaskArg,
+			VkAccessFlags2           dstAccessMaskArg
+		)
+			: VkMemoryBarrier2{} {
+			sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+
+			srcStageMask = srcStageMaskArg;
+			srcAccessMask = srcAccessMaskArg;
+			dstStageMask = dstStageMaskArg;
+			dstAccessMask = dstAccessMaskArg;
+		}
+
+
+	};
 
 	class ImageMemoryBarrier2 : public VkImageMemoryBarrier2 {
 
@@ -1672,12 +1694,15 @@ namespace vkcpp {
 		}
 
 	};
+
+
 	static_assert(sizeof(ImageMemoryBarrier2) == sizeof(VkImageMemoryBarrier2));
 
 
 	class DependencyInfo : public VkDependencyInfo {
 
 		//	TODO: need to add the other dependency types.
+		std::vector<MemoryBarrier2>			m_memoryBarriers;
 		std::vector<ImageMemoryBarrier2>	m_imageMemoryBarriers;
 
 
@@ -1698,12 +1723,24 @@ namespace vkcpp {
 			m_imageMemoryBarriers.push_back(imageMemoryBarrier);
 		}
 
+		void addMemoryBarrier(const MemoryBarrier2& memoryBarrier) {
+			m_memoryBarriers.push_back(memoryBarrier);
+		}
+
 		VkDependencyInfo* assemble() {
-			imageMemoryBarrierCount = m_imageMemoryBarriers.size();
+
+			pMemoryBarriers = nullptr;
+			memoryBarrierCount = m_memoryBarriers.size();
+			if (memoryBarrierCount > 0) {
+				pMemoryBarriers = m_memoryBarriers.data();
+			}
+
 			pImageMemoryBarriers = nullptr;
+			imageMemoryBarrierCount = m_imageMemoryBarriers.size();
 			if (imageMemoryBarrierCount > 0) {
 				pImageMemoryBarriers = m_imageMemoryBarriers.data();
 			}
+
 			return this;
 		}
 
@@ -1858,64 +1895,17 @@ namespace vkcpp {
 			vkCmdPipelineBarrier2(*this, dependencyInfo.assemble());
 		}
 
+		void cmdBeginRenderPass(const VkRenderPassBeginInfo& vkRenderPassBeginInfo) {
+			vkCmdBeginRenderPass(*this, &vkRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+		}
+
+		void cmdEndRenderPass() {
+			vkCmdEndRenderPass(*this);
+		}
+
 	};
 
 
-	//class SubmitInfo : public VkSubmitInfo {
-
-	//	//	TODO: modify to handle more semaphores and command buffers?
-	//	//	TODO: error checking? e.g., no command buffer?
-	//	VkSemaphore	m_vkSemaphoreWait = nullptr;
-	//	VkPipelineStageFlags	m_waitPipelineStageFlags{};
-	//	VkCommandBuffer	m_commandBuffer = nullptr;
-	//	VkSemaphore m_vkSemaphoreSignal = nullptr;
-
-
-	//public:
-	//	SubmitInfo()
-	//		: VkSubmitInfo{} {
-	//		sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	//	}
-
-	//	SubmitInfo* operator&() = delete;
-
-	//	void addWaitSemaphore(
-	//		Semaphore	semaphore,
-	//		VkPipelineStageFlags waitPipelineStateFlags) {
-	//		m_vkSemaphoreWait = semaphore;
-	//		m_waitPipelineStageFlags = waitPipelineStateFlags;
-	//	}
-
-	//	void addCommandBuffer(vkcpp::CommandBuffer commandBuffer) {
-	//		m_commandBuffer = commandBuffer;
-	//	}
-
-	//	void addSignalSemaphore(vkcpp::Semaphore semaphore) {
-	//		m_vkSemaphoreSignal = semaphore;
-	//	}
-
-	//	VkSubmitInfo* assemble() {
-	//		if (m_vkSemaphoreWait) {
-	//			waitSemaphoreCount = 1;
-	//			pWaitSemaphores = &m_vkSemaphoreWait;
-	//			pWaitDstStageMask = &m_waitPipelineStageFlags;
-	//		}
-
-	//		if (m_commandBuffer) {
-	//			commandBufferCount = 1;
-	//			pCommandBuffers = &m_commandBuffer;
-	//		}
-
-	//		if (m_vkSemaphoreSignal) {
-	//			signalSemaphoreCount = 1;
-	//			pSignalSemaphores = &m_vkSemaphoreSignal;
-	//		}
-
-	//		return this;
-
-	//	}
-
-	//};
 
 	class SubmitInfo2 : public VkSubmitInfo2 {
 
@@ -1961,20 +1951,20 @@ namespace vkcpp {
 
 		SubmitInfo2* assemble() {
 
-			waitSemaphoreInfoCount = m_waitSemaphoreInfos.size();
 			pWaitSemaphoreInfos = nullptr;
+			waitSemaphoreInfoCount = m_waitSemaphoreInfos.size();
 			if (waitSemaphoreInfoCount > 0) {
 				pWaitSemaphoreInfos = m_waitSemaphoreInfos.data();
 			}
 
-			commandBufferInfoCount = m_commandBufferInfos.size();
 			pCommandBufferInfos = nullptr;
+			commandBufferInfoCount = m_commandBufferInfos.size();
 			if (commandBufferInfoCount > 0) {
 				pCommandBufferInfos = m_commandBufferInfos.data();
 			}
 
-			signalSemaphoreInfoCount = m_signalSemaphoreInfos.size();
 			pSignalSemaphoreInfos = nullptr;
+			signalSemaphoreInfoCount = m_signalSemaphoreInfos.size();
 			if (signalSemaphoreInfoCount > 0) {
 				pSignalSemaphoreInfos = m_signalSemaphoreInfos.data();
 			}
@@ -2044,6 +2034,7 @@ namespace vkcpp {
 			: HandleWithOwner{} {
 		}
 
+		//	Queues always come from the device and are never (explicitly) destroyed
 		Queue(VkQueue vkQueue, Device device)
 			: HandleWithOwner(vkQueue, device, nullptr) {
 		}
@@ -2061,31 +2052,6 @@ namespace vkcpp {
 			vkQueueWaitIdle(*this);
 		}
 
-		//void submit(CommandBuffer commandBuffer) {
-		//	SubmitInfo submitInfo;
-		//	submitInfo.addCommandBuffer(commandBuffer);
-		//	VkResult vkResult = vkQueueSubmit(*this, 1, submitInfo.assemble(), VK_NULL_HANDLE);
-		//	if (vkResult != VK_SUCCESS) {
-		//		throw Exception(vkResult);
-		//	}
-		//}
-
-		//void submit(CommandBuffer commandBuffer, vkcpp::Fence fence) {
-		//	SubmitInfo submitInfo;
-		//	submitInfo.addCommandBuffer(commandBuffer);
-		//	VkResult vkResult = vkQueueSubmit(*this, 1, submitInfo.assemble(), fence);
-		//	if (vkResult != VK_SUCCESS) {
-		//		throw Exception(vkResult);
-		//	}
-		//}
-
-
-		//void submit(SubmitInfo& submitInfo, Fence fence) {
-		//	VkResult vkResult = vkQueueSubmit(*this, 1, submitInfo.assemble(), fence);
-		//	if (vkResult != VK_SUCCESS) {
-		//		throw Exception(vkResult);
-		//	}
-		//}
 
 		void submit2(CommandBuffer commandBuffer) const {
 			SubmitInfo2 submitInfo2;
@@ -2112,7 +2078,16 @@ namespace vkcpp {
 			}
 		}
 
-
+		void submit2Fenced(CommandBuffer commandBuffer) const {
+			SubmitInfo2 submitInfo2;
+			submitInfo2.addCommandBuffer(commandBuffer);
+			vkcpp::Fence completedFence(getVkDevice());
+			VkResult vkResult = vkQueueSubmit2(*this, 1, submitInfo2.assemble(), completedFence);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			completedFence.wait();
+		}
 
 
 		VkResult present(PresentInfo& presentInfo) {

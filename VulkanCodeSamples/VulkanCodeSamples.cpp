@@ -588,43 +588,52 @@ void dumpPhysicalDeviceQueueInfo(vkcpp::PhysicalDevice physicalDevice) {
 void copyBufferTest1(const Globals& globals) {
 
 	const VkDeviceSize	memorySize = 1024 * 1024;
-	vkcpp::Buffer_DeviceMemory srcBuffer(
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	vkcpp::Buffer_DeviceMemory buffer1(
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 		memorySize,
 		MagicValues::TRANSFER_QUEUE_FAMILY_INDEX,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		globals.g_deviceOriginal
 	);
 
-	vkcpp::Buffer_DeviceMemory dstBuffer(
-		VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	vkcpp::Buffer_DeviceMemory buffer2(
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 		memorySize,
 		MagicValues::TRANSFER_QUEUE_FAMILY_INDEX,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		globals.g_deviceOriginal
 	);
 
-	//	Clear source memory
-	uint8_t* const pSrcMemory = (uint8_t*)srcBuffer.m_mappedMemory;
-	for (int i = 0; i < memorySize; i++) {
-		*(pSrcMemory+i) = 0;
-	}
+	vkcpp::Buffer_DeviceMemory buffer3(
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		memorySize,
+		MagicValues::TRANSFER_QUEUE_FAMILY_INDEX,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		globals.g_deviceOriginal
+	);
 
-	//	Dirty dest memory
-	uint8_t* const pDstMemory = (uint8_t*)dstBuffer.m_mappedMemory;
-	for (int i = 0; i < memorySize; i++) {
-		*(pDstMemory+i) = 0x55;
-	}
+
+	//	Don't really care what the memory contents are since this
+	//	test is about sync and pipelines.
 
 	vkcpp::CommandBuffer commandBuffer(globals.g_transferCommandPoolOriginal);
 	commandBuffer.beginOneTimeSubmit();
-	commandBuffer.cmdCopyBuffer(srcBuffer.m_buffer, dstBuffer.m_buffer, memorySize);
+	//	Need to make sure that buffer2 writes finish before next buffer2 read.
+	//	Even though we are copying a buffer, we can use just a memory barrier
+	//	instead of a buffer memory barrier since we aren't doing a queue transfer.
+	//	Image memory barrier is not applicable since this isn't an image.
+	commandBuffer.cmdCopyBuffer(buffer1.m_buffer, buffer2.m_buffer, memorySize);	//	Writes to buffer2
+	vkcpp::DependencyInfo dependencyInfo;
+	dependencyInfo.addMemoryBarrier(
+		vkcpp::MemoryBarrier2(
+			VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT,
+			VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_MEMORY_READ_BIT)
+	);
+	commandBuffer.cmdPipelineBarrier2(dependencyInfo);
+	commandBuffer.cmdCopyBuffer(buffer2.m_buffer, buffer3.m_buffer, memorySize);	//	Reads from buffer2
 	commandBuffer.end();
 
-	vkcpp::Fence completedFence(globals.g_transferCommandPoolOriginal.getVkDevice());
-	globals.g_transferQueue.submit2(commandBuffer, completedFence);
-	completedFence.wait();
-
+	globals.g_transferQueue.submit2Fenced(commandBuffer);
 
 
 }
