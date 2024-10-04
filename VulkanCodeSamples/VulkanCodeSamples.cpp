@@ -44,9 +44,8 @@ public:
 	static const uint32_t	TRANSFER_QUEUE_FAMILY_INDEX = 1;
 	static const uint32_t	TRANSFER_QUEUE_INDEX = 0;
 
-
-	//static const uint32_t	GRAPHICS_QUEUE_FAMILY_INDEX = 0;
-	//static const uint32_t	GRAPHICS_QUEUE_INDEX = 0;
+	static const uint32_t	GRAPHICS_QUEUE_FAMILY_INDEX = 0;
+	static const uint32_t	GRAPHICS_QUEUE_INDEX = 0;
 
 	//static const uint32_t	PRESENTATION_QUEUE_FAMILY_INDEX = 0;
 	//static const uint32_t	PRESENTATION_QUEUE_INDEX = 0;
@@ -258,11 +257,11 @@ public:
 	vkcpp::Device			g_deviceOriginal;
 
 	vkcpp::Queue			g_transferQueue;
-
-	//vkcpp::Queue				g_graphicsQueue;
+	vkcpp::Queue			g_graphicsQueue;
 	//vkcpp::Queue				g_presentationQueue;
 
 	vkcpp::CommandPool		g_transferCommandPoolOriginal;
+	vkcpp::CommandPool		g_graphicsCommandPoolOriginal;
 
 
 };
@@ -272,135 +271,6 @@ Globals g_globals;
 
 
 
-
-
-//void transitionImageLayout(
-//	vkcpp::Image image,
-//	VkFormat format,
-//	VkImageLayout oldLayout,
-//	VkImageLayout newLayout,
-//	vkcpp::CommandPool commandPool,
-//	vkcpp::Queue graphicsQueue
-//) {
-//	vkcpp::CommandBuffer commandBuffer(commandPool);
-//	commandBuffer.beginOneTimeSubmit();
-//
-//	vkcpp::ImageMemoryBarrier2 imageMemoryBarrier(oldLayout, newLayout, image);
-//	vkcpp::DependencyInfo dependencyInfo;
-//	dependencyInfo.addImageMemoryBarrier(imageMemoryBarrier);
-//	commandBuffer.cmdPipelineBarrier2(dependencyInfo);
-//
-//	commandBuffer.end();
-//
-//	vkcpp::Fence completedFence(commandPool.getVkDevice());
-//	graphicsQueue.submit2(commandBuffer, completedFence);
-//	completedFence.wait();
-//
-//}
-//
-//
-//void copyBufferToImage(
-//	vkcpp::Buffer buffer,
-//	vkcpp::Image image,
-//	int width,
-//	int height,
-//	vkcpp::CommandPool commandPool,
-//	vkcpp::Queue graphicsQueue
-//) {
-//
-//	vkcpp::CommandBuffer commandBuffer(commandPool);
-//	commandBuffer.beginOneTimeSubmit();
-//	commandBuffer.cmdCopyBufferToImage(buffer, image, width, height);
-//	commandBuffer.end();
-//
-//	vkcpp::Fence completedFence(commandPool.getVkDevice());
-//	graphicsQueue.submit2(commandBuffer, completedFence);
-//	completedFence.wait();
-//}
-
-
-
-//vkcpp::Image_Memory_View createTextureFromFile(
-//	const char* fileName,
-//	vkcpp::Device device,
-//	vkcpp::CommandPool commandPool,
-//	vkcpp::Queue graphicsQueue
-//) {
-//	const VkFormat targetFormat = VK_FORMAT_R8G8B8A8_SRGB;
-//
-//	int texWidth;
-//	int texHeight;
-//	int texChannels;
-//
-//	stbi_uc* pixels = stbi_load(fileName, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-//	if (!pixels) {
-//		throw std::runtime_error("failed to load texture image!");
-//	}
-//
-//	const VkDeviceSize imageSize = texWidth * texHeight * 4;
-//
-//	//	Make a device (gpu) staging buffer and copy the pixels into it.
-//	vkcpp::Buffer_DeviceMemory stagingBuffer_DeviceMemoryMapped(
-//		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-//		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-//		imageSize,
-//		pixels,
-//		device);
-//
-//	stbi_image_free(pixels);	//	Don't need these anymore.  Pixels are on gpu now.
-//
-//	//	Make our target image and memory.
-//	VkExtent2D texExtent;
-//	texExtent.width = texWidth;
-//	texExtent.height = texHeight;
-//	vkcpp::Image_Memory textureImage_DeviceMemory(
-//		texExtent,
-//		targetFormat,
-//		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-//		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-//		device);
-//
-//	//	Change image format to be best target for transfer into.
-//	transitionImageLayout(
-//		textureImage_DeviceMemory.m_image,
-//		targetFormat,
-//		VK_IMAGE_LAYOUT_UNDEFINED,
-//		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-//		commandPool,
-//		graphicsQueue);
-//
-//	//	Copy image pixels from staging buffer into image memory.
-//	copyBufferToImage(
-//		stagingBuffer_DeviceMemoryMapped.m_buffer,
-//		textureImage_DeviceMemory.m_image,
-//		texWidth,
-//		texHeight,
-//		commandPool,
-//		graphicsQueue);
-//
-//	//	Now transition the image layout to best for shader images.
-//	transitionImageLayout(
-//		textureImage_DeviceMemory.m_image,
-//		targetFormat,
-//		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-//		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-//		commandPool,
-//		graphicsQueue);
-//
-//	//	Shaders are accessed through image views, not directly from images.
-//	vkcpp::ImageViewCreateInfo textureImageViewCreateInfo(
-//		VK_IMAGE_VIEW_TYPE_2D,
-//		targetFormat,
-//		VK_IMAGE_ASPECT_COLOR_BIT);
-//	textureImageViewCreateInfo.image = textureImage_DeviceMemory.m_image;
-//	vkcpp::ImageView textureImageView(textureImageViewCreateInfo, device);
-//
-//	//	Package everything up for use as a shader.
-//	return vkcpp::Image_Memory_View(
-//		std::move(textureImage_DeviceMemory.m_image),
-//		std::move(textureImage_DeviceMemory.m_deviceMemory),
-//		std::move(textureImageView));
-//}
 
 
 
@@ -426,9 +296,9 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		MagicValues::TRANSFER_QUEUE_FAMILY_INDEX,
 		MagicValues::TRANSFER_QUEUE_INDEX);
 
-	//vkcpp::Queue graphicsQueue = deviceOriginal.getDeviceQueue(
-	//	MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-	//	MagicValues::GRAPHICS_QUEUE_INDEX);
+	vkcpp::Queue graphicsQueue = deviceOriginal.getDeviceQueue(
+		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+		MagicValues::GRAPHICS_QUEUE_INDEX);
 
 	//vkcpp::Queue presentationQueue = deviceOriginal.getDeviceQueue(
 	//	MagicValues::PRESENTATION_QUEUE_FAMILY_INDEX,
@@ -440,6 +310,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		MagicValues::TRANSFER_QUEUE_FAMILY_INDEX,
 		deviceOriginal);
 
+	vkcpp::CommandPool graphicsCommandPoolOriginal(
+		VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+		deviceOriginal);
 
 
 #undef globals
@@ -451,8 +325,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_physicalDevice = std::move(physicalDevice);
 	globals.g_deviceOriginal = std::move(deviceOriginal);
 	globals.g_transferQueue = std::move(transferQueue);
+	globals.g_graphicsQueue = std::move(graphicsQueue);
 
 	globals.g_transferCommandPoolOriginal = std::move(transferCommandPoolOriginal);
+	globals.g_graphicsCommandPoolOriginal = std::move(graphicsCommandPoolOriginal);
 
 
 }
@@ -638,6 +514,94 @@ void copyBufferTest1(const Globals& globals) {
 
 }
 
+
+void makeImageTest1(const Globals& globals) {
+
+	const int	width = 64;
+	const int	height = 64;
+	const VkFormat targetFormat = VK_FORMAT_R8G8B8A8_SRGB;
+
+	uint32_t* pBitmapBits = new uint32_t[width * height];
+
+	std::cout << "pBitmapBits: " << pBitmapBits << "\n";
+
+	const VkDeviceSize bitmapSize = width * height * sizeof(uint32_t);
+
+	//	Make a device (gpu) staging buffer and copy the pixels into it.
+	vkcpp::Buffer_DeviceMemory stagingBuffer_DeviceMemoryMapped(
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		bitmapSize,
+		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		pBitmapBits,
+		globals.g_deviceOriginal);
+
+	//	TODO: could we look at GPU memory and verify against bitmap memory?
+
+	//	Bits are on GPU now, don't need this memory anymore.
+	delete[] pBitmapBits;
+	pBitmapBits = nullptr;
+
+
+	//	Make our target image and memory.  Bits are copied later.
+	vkcpp::Extent2D extent(width, height);
+	vkcpp::Image_Memory image_memory(
+		extent,
+		targetFormat,
+		VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		globals.g_deviceOriginal);
+
+	//	Change image layout to be best target for transfer into.
+	//	TODO: should this be packaged up into one command buffer method?
+	{
+		vkcpp::CommandBuffer commandBuffer(globals.g_graphicsCommandPoolOriginal);
+		commandBuffer.beginOneTimeSubmit();
+		vkcpp::ImageMemoryBarrier2 imageMemoryBarrier(
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			image_memory.m_image);
+		vkcpp::DependencyInfo dependencyInfo;
+		dependencyInfo.addImageMemoryBarrier(imageMemoryBarrier);
+		commandBuffer.cmdPipelineBarrier2(dependencyInfo);
+		commandBuffer.end();
+		globals.g_graphicsQueue.submit2Fenced(commandBuffer);
+	}
+
+	{
+		//	Copy bitmap bits from staging buffer into image memory.
+		//	TODO: should images remember their width and height?
+		vkcpp::CommandBuffer commandBuffer(globals.g_graphicsCommandPoolOriginal);
+		commandBuffer.beginOneTimeSubmit();
+		commandBuffer.cmdCopyBufferToImage(
+			stagingBuffer_DeviceMemoryMapped.m_buffer,
+			image_memory.m_image,
+			width, height);
+		commandBuffer.end();
+		globals.g_graphicsQueue.submit2Fenced(commandBuffer);
+	}
+
+	{
+		//	Change image layout to whatever is appropriate for use.
+		vkcpp::CommandBuffer commandBuffer(globals.g_graphicsCommandPoolOriginal);
+		commandBuffer.beginOneTimeSubmit();
+		vkcpp::ImageMemoryBarrier2 imageMemoryBarrier(
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_GENERAL,
+			image_memory.m_image);
+		vkcpp::DependencyInfo dependencyInfo;
+		dependencyInfo.addImageMemoryBarrier(imageMemoryBarrier);
+		commandBuffer.cmdPipelineBarrier2(dependencyInfo);
+		commandBuffer.end();
+		globals.g_graphicsQueue.submit2Fenced(commandBuffer);
+	}
+
+
+
+}
+
+
+
 std::chrono::high_resolution_clock::time_point g_nextFrameTime = std::chrono::high_resolution_clock::now();
 
 
@@ -764,7 +728,7 @@ int main()
 {
 	std::cout << "Hello World!\n";
 
-	std::cout.imbue(std::locale(""));
+	//	std::cout.imbue(std::locale(""));
 
 	HINSTANCE hInstance = GetModuleHandle(NULL);
 	RegisterMyWindowClass(hInstance);
@@ -783,7 +747,7 @@ int main()
 	dumpPhysicalDeviceQueueInfo(g_globals.g_physicalDevice);
 
 	copyBufferTest1(g_globals);
-
+	makeImageTest1(g_globals);
 
 	MessageLoop(g_globals);
 

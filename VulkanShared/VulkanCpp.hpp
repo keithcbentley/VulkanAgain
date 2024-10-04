@@ -53,6 +53,8 @@ namespace vkcpp {
 	};
 
 
+	//	Use this to make pre-existing type act like
+	//	another (smarter) type.
 	template<typename Real_t, typename ActsLike_t>
 		requires (sizeof(Real_t) == sizeof(ActsLike_t))
 	ActsLike_t& wrapToRef(Real_t& real)
@@ -61,10 +63,14 @@ namespace vkcpp {
 		return *p;
 	}
 
-	class Extent2D : public VkExtent2D {};
-	//	uint32_t    width;
-	//	uint32_t    height;
-	//} VkExtent2D;
+	class Extent2D : public VkExtent2D {
+
+	public:
+		Extent2D(int widthArg, int heightArg) {
+			width = widthArg;
+			height = heightArg;
+		}
+	};
 
 	class Extent3D : public VkExtent3D {};
 	//	uint32_t    width;
@@ -1674,22 +1680,23 @@ namespace vkcpp {
 			//	TODO: This is an image memory/layout barrier. Why does
 			//	this use other parts of the pipeline?
 			//	TODO: do we need a more general way to do this?
+			//	TODO: does any of this matter if we are doing a standalone image layout transition?
 			//	Note that this grabs oldLayout and newLayout from the structure, not the args.
-			if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-				srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
-				srcAccessMask = 0;
-				dstStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
-				dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			}
-			else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-				srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
-				srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-				dstStageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
-				dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-			}
-			else {
-				throw std::invalid_argument("unsupported layout transition!");
-			}
+			//if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+			//	srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+			//	srcAccessMask = 0;
+			//	dstStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+			//	dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			//}
+			//else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+			//	srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+			//	srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			//	dstStageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
+			//	dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			//}
+			//else {
+			//	throw std::invalid_argument("unsupported layout transition!");
+			//}
 		}
 
 	};
@@ -1745,6 +1752,8 @@ namespace vkcpp {
 
 	};
 
+	//	TODO: should we make some object that has contains a queue and command pool
+	//	and whatever else needed so we don't have to pass the info around as pairs?
 	class CommandPool : public HandleWithOwner<VkCommandPool> {
 
 		CommandPool(VkCommandPool vkCommandPool, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
@@ -1878,6 +1887,7 @@ namespace vkcpp {
 			vkCmdCopyBufferToImage(*this, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 		}
 
+		//	TODO: do we need to implement cmdCopyBuffer2?
 		void cmdCopyBuffer(
 			Buffer	srcBuffer,
 			Buffer	dstBuffer,

@@ -713,6 +713,7 @@ vkcpp::Image_Memory_View createTextureFromFile(
 		device);
 
 	stbi_image_free(pixels);	//	Don't need these anymore.  Pixels are on gpu now.
+	pixels = nullptr;
 
 	//	Make our target image and memory.
 	VkExtent2D texExtent;
