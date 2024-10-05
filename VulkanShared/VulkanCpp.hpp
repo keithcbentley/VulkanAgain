@@ -2946,6 +2946,7 @@ namespace vkcpp {
 
 		Swapchain	m_swapchain;
 		bool m_swapchainUpToDate{};
+		std::vector<VkImage> m_swapchainImages;
 		std::vector<ImageView>		m_swapchainImageViews;
 		std::vector<VkFramebuffer>	m_swapchainFrameBuffers;
 		Image_Memory_View	m_depthBuffer;
@@ -2983,12 +2984,12 @@ namespace vkcpp {
 		void createSwapchainImageViews(
 			VkFormat	swapchainImageFormat
 		) {
-			std::vector<VkImage> swapchainImages = m_swapchain.getImages();
+			m_swapchainImages = m_swapchain.getImages();
 			ImageViewCreateInfo imageViewCreateInfo(
 				VK_IMAGE_VIEW_TYPE_2D,
 				swapchainImageFormat,
 				VK_IMAGE_ASPECT_COLOR_BIT);
-			m_swapchainImageViews = ImageView::createImageViews(swapchainImages, imageViewCreateInfo, m_swapchain.getOwner());
+			m_swapchainImageViews = ImageView::createImageViews(m_swapchainImages, imageViewCreateInfo, m_swapchain.getOwner());
 		}
 
 

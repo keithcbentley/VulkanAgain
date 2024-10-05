@@ -770,9 +770,14 @@ vkcpp::Image_Memory_View createTextureFromFile(
 
 
 std::vector<uint32_t> g_imageData;
+uint32_t	g_width;
+uint32_t	g_height;
+vkcpp::Image_Memory g_image_memory;
 
 
 void makeImageFromBitmap() {
+
+	const VkFormat targetFormat = VK_FORMAT_R8G8B8A8_SRGB;
 
 	const VkDeviceSize imageSize = g_imageData.size() * sizeof(uint32_t);
 
@@ -784,6 +789,62 @@ void makeImageFromBitmap() {
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		g_imageData.data(),
 		g_globals.g_deviceOriginal);
+
+
+	//	Make our target image and memory.  Bits are copied later.
+	vkcpp::Extent2D extent(g_width, g_height);
+	vkcpp::Image_Memory image_memory(
+		extent,
+		targetFormat,
+		VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		g_globals.g_deviceOriginal);
+
+	//	Change image layout to be best target for transfer into.
+	//	TODO: should this be packaged up into one command buffer method?
+	{
+		vkcpp::CommandBuffer commandBuffer(g_globals.g_commandPoolOriginal);
+		commandBuffer.beginOneTimeSubmit();
+		vkcpp::ImageMemoryBarrier2 imageMemoryBarrier(
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			image_memory.m_image);
+		vkcpp::DependencyInfo dependencyInfo;
+		dependencyInfo.addImageMemoryBarrier(imageMemoryBarrier);
+		commandBuffer.cmdPipelineBarrier2(dependencyInfo);
+		commandBuffer.end();
+		g_globals.g_graphicsQueue.submit2Fenced(commandBuffer);
+	}
+
+	{
+		//	Copy bitmap bits from staging buffer into image memory.
+		//	TODO: should images remember their width and height?
+		vkcpp::CommandBuffer commandBuffer(g_globals.g_commandPoolOriginal);
+		commandBuffer.beginOneTimeSubmit();
+		commandBuffer.cmdCopyBufferToImage(
+			stagingBuffer_DeviceMemoryMapped.m_buffer,
+			image_memory.m_image,
+			g_width, g_height);
+		commandBuffer.end();
+		g_globals.g_graphicsQueue.submit2Fenced(commandBuffer);
+	}
+
+	{
+		//	Change image layout to whatever is appropriate for use.
+		vkcpp::CommandBuffer commandBuffer(g_globals.g_commandPoolOriginal);
+		commandBuffer.beginOneTimeSubmit();
+		vkcpp::ImageMemoryBarrier2 imageMemoryBarrier(
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_GENERAL,
+			image_memory.m_image);
+		vkcpp::DependencyInfo dependencyInfo;
+		dependencyInfo.addImageMemoryBarrier(imageMemoryBarrier);
+		commandBuffer.cmdPipelineBarrier2(dependencyInfo);
+		commandBuffer.end();
+		g_globals.g_graphicsQueue.submit2Fenced(commandBuffer);
+	}
+
+	g_image_memory = std::move(image_memory);
 
 
 }
@@ -832,13 +893,13 @@ vkcpp::RenderPass createRenderPass(
 		.addDst(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT);
 
 
-	//renderPassCreateInfo.addSubpass()
-	//	.addColorAttachmentReference(colorAttachmentReference)
-	//	.setDepthStencilAttachmentReference(depthAttachmentReference);
+	renderPassCreateInfo.addSubpass()
+		.addColorAttachmentReference(colorAttachmentReference)
+		.setDepthStencilAttachmentReference(depthAttachmentReference);
 
-	//renderPassCreateInfo.addSubpassDependency(0, 1)
-	//	.addSrc(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
-	//	.addDst(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+	renderPassCreateInfo.addSubpassDependency(0, 1)
+		.addSrc(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+		.addDst(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
 
 	return vkcpp::RenderPass(renderPassCreateInfo, device);
 }
@@ -1003,8 +1064,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::GraphicsPipeline graphicsPipeline0(graphicsPipelineCreateInfo, deviceOriginal);
 
-	//graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal, 1);
-	//vkcpp::GraphicsPipeline graphicsPipeline1(graphicsPipelineCreateInfo, deviceOriginal);
+	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal, 1);
+	vkcpp::GraphicsPipeline graphicsPipeline1(graphicsPipelineCreateInfo, deviceOriginal);
 
 	g_allDrawingFrames.createDrawingFrames(
 		deviceOriginal,
@@ -1040,7 +1101,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	globals.g_pipelineLayout = std::move(pipelineLayout);
 	globals.g_graphicsPipeline0 = std::move(graphicsPipeline0);
-	//	globals.g_graphicsPipeline1 = std::move(graphicsPipeline1);
+	globals.g_graphicsPipeline1 = std::move(graphicsPipeline1);
 
 
 	globals.g_commandPoolOriginal = std::move(commandPoolOriginal);
@@ -1113,6 +1174,8 @@ public:
 
 
 	VkDescriptorSet			m_vkDescriptorSet;
+
+	VkImage	m_image;
 
 	//	TODO:	pipelines should remember their layouts,
 	//	or vice-versa, or both.
@@ -1189,9 +1252,10 @@ public:
 			vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer1.vertexCount(), 1, 0, 0, 0);
 		}
 
-		//VkSubpassContents vkSubpassContents{};
-		//vkCmdNextSubpass(commandBuffer, vkSubpassContents);
-		//vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline1);
+		VkSubpassContents vkSubpassContents{};
+		vkCmdNextSubpass(commandBuffer, vkSubpassContents);
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline1);
+
 		//vkCmdBindDescriptorSets(
 		//	commandBuffer,
 		//	VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1201,16 +1265,61 @@ public:
 		//	0, nullptr);
 
 
-		//vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
+		vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
 
-		//{
-		//	VkBuffer vkPointBuffer = m_pointBuffer2;
-		//	VkBuffer pointBuffers[] = { vkPointBuffer };
-		//	VkDeviceSize offsets[] = { 0 };
-		//	vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
-		//	vkCmdBindIndexBuffer(commandBuffer, m_vertexBuffer2, 0, VK_INDEX_TYPE_UINT16);
-		//	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer2.vertexCount(), 1, 0, 0, 0);
-		//}
+		VkImageSubresourceLayers    srcSubresource{
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.mipLevel = 0,
+			.baseArrayLayer = 0,
+			.layerCount = 1
+		};
+
+		VkImageSubresourceLayers    dstSubresource{
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.mipLevel = 0,
+			.baseArrayLayer = 0,
+			.layerCount = 1
+		};
+
+
+		VkExtent3D                  extent{
+			.width = g_width,
+			.height = g_height,
+			.depth = 1
+		};
+
+		VkImageCopy vkImageCopy{};
+		vkImageCopy.srcSubresource = srcSubresource;
+		vkImageCopy.dstSubresource = dstSubresource;
+		vkImageCopy.extent = extent;
+
+		// Provided by VK_VERSION_1_0
+		if (g_image_memory.m_image) {
+			vkCmdCopyImage(
+				commandBuffer,
+				g_image_memory.m_image,
+				VK_IMAGE_LAYOUT_GENERAL,
+				m_image,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				1,
+				&vkImageCopy
+			);
+		}
+		//VkCommandBuffer                             commandBuffer,
+		//VkImage                                     srcImage,
+		//VkImageLayout                               srcImageLayout,
+		//VkImage                                     dstImage,
+		//VkImageLayout                               dstImageLayout,
+		//uint32_t                                    regionCount,
+		//const VkImageCopy * pRegions);
+	//{
+	//	VkBuffer vkPointBuffer = m_pointBuffer2;
+	//	VkBuffer pointBuffers[] = { vkPointBuffer };
+	//	VkDeviceSize offsets[] = { 0 };
+	//	vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
+	//	vkCmdBindIndexBuffer(commandBuffer, m_vertexBuffer2, 0, VK_INDEX_TYPE_UINT16);
+	//	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer2.vertexCount(), 1, 0, 0, 0);
+	//}
 
 
 		commandBuffer.cmdEndRenderPass();
@@ -1282,6 +1391,9 @@ void drawFrame(Globals& globals)
 		return;
 	}
 
+
+	VkImage swapchainImage = globals.g_swapchainImageViewsFrameBuffers.m_swapchainImages[swapchainImageIndex];
+
 	updateUniformBuffer(
 		currentDrawingFrame.m_uniformBufferMemory,
 		globals.g_swapchainImageViewsFrameBuffers.getImageExtent()
@@ -1304,6 +1416,7 @@ void drawFrame(Globals& globals)
 
 	theRenderer.m_pSwapchainImageViewsFrameBuffers = &globals.g_swapchainImageViewsFrameBuffers;
 	theRenderer.m_swapchainImageIndex = swapchainImageIndex;
+	theRenderer.m_image = swapchainImage;
 
 	theRenderer.recordCommandBuffer(commandBuffer);
 
@@ -1532,6 +1645,8 @@ void snapCommandWindow() {
 	std::cout << "bmBits: " << bitmap.bmBits << "\n";
 	std::cout << "\n";
 
+
+
 	struct MyBitmapInfo {
 		BITMAPINFOHEADER	bmiHeader;
 		uint32_t	m_buffer[32];
@@ -1557,6 +1672,8 @@ void snapCommandWindow() {
 	std::cout << "biSizeImage: " << bitmapInfo.bmiHeader.biSizeImage << "\n";
 
 	g_imageData.resize(bitmapInfo.bmiHeader.biSizeImage / sizeof(uint32_t));
+	g_width = bitmap.bmWidth;
+	g_height = bitmap.bmHeight;
 
 	returnCode = GetDIBits(
 		commandWindowDC,
@@ -1591,6 +1708,7 @@ void MessageLoop(Globals& globals) {
 			if (msg.message == WM_KEYDOWN) {
 				if (msg.wParam == 'S') {
 					snapCommandWindow();
+					makeImageFromBitmap();
 				}
 			}
 			TranslateMessage(&msg);
@@ -1618,18 +1736,6 @@ int main()
 
 
 	std::cout.imbue(std::locale(""));
-
-	VkRect2D	vkRect2D;
-	vkRect2D.extent.width = 640;
-	vkRect2D.extent.height = 480;
-	vkcpp::Rect2D& rect2D = vkcpp::wrapToRef<VkRect2D, vkcpp::Rect2D>(vkRect2D);
-	std::cout << rect2D.extent.width << "\n";
-	std::cout << rect2D.extent.height << "\n";
-	rect2D.extent.width = 512;
-	rect2D.extent.height = 513;
-	std::cout << vkRect2D.extent.width << "\n";
-	std::cout << vkRect2D.extent.height << "\n";
-
 
 	HINSTANCE hInstance = GetModuleHandle(NULL);
 	RegisterMyWindowClass(hInstance);
@@ -1686,25 +1792,25 @@ int CaptureAnImage(HWND hWnd)
 
 	// Retrieve the handle to a display device context for the client 
 	// area of the window. 
-	HDC windowDC = GetDC(hWnd);
+	HDC clientDC = GetDC(hWnd);
 
 	// Get the client area for size calculation.
 	RECT windowClientRect;
 	GetClientRect(hWnd, &windowClientRect);
 	const int windowClientWidth = windowClientRect.right - windowClientRect.left;
 	const int windowClientHeight = windowClientRect.bottom - windowClientRect.top;
-	HBITMAP windowBitmapHandle = CreateCompatibleBitmap(windowDC, windowClientWidth, windowClientHeight);
+	HBITMAP bitmapHandle = CreateCompatibleBitmap(clientDC, windowClientWidth, windowClientHeight);
 
 
 	//	Now get the actual bitmap bits from the memory bitmap.
-	BITMAP windowBitmap;
-	GetObject(windowBitmapHandle, sizeof(BITMAP), &windowBitmap);
+	BITMAP bitmap;
+	GetObject(bitmapHandle, sizeof(BITMAP), &bitmap);
 
 	BITMAPINFOHEADER   bi;
 
 	bi.biSize = sizeof(BITMAPINFOHEADER);
-	bi.biWidth = windowBitmap.bmWidth;
-	bi.biHeight = windowBitmap.bmHeight;
+	bi.biWidth = bitmap.bmWidth;
+	bi.biHeight = bitmap.bmHeight;
 	bi.biPlanes = 1;
 	bi.biBitCount = 32;
 	bi.biCompression = BI_RGB;
@@ -1714,7 +1820,7 @@ int CaptureAnImage(HWND hWnd)
 	bi.biClrUsed = 0;
 	bi.biClrImportant = 0;
 
-	DWORD bitmapSize = ((windowBitmap.bmWidth * bi.biBitCount + 31) / 32) * 4 * windowBitmap.bmHeight;
+	DWORD bitmapSize = ((bitmap.bmWidth * bi.biBitCount + 31) / 32) * 4 * bitmap.bmHeight;
 
 	HANDLE hDIB = GlobalAlloc(GHND, bitmapSize);
 	char* lpbitmap = (char*)GlobalLock(hDIB);
@@ -1722,10 +1828,10 @@ int CaptureAnImage(HWND hWnd)
 	// Gets the "bits" from the bitmap, and copies them into a buffer 
 	// that's pointed to by lpbitmap.
 	GetDIBits(
-		windowDC,
-		windowBitmapHandle,
+		clientDC,
+		bitmapHandle,
 		0,
-		(UINT)windowBitmap.bmHeight,
+		(UINT)bitmap.bmHeight,
 		lpbitmap,
 		(BITMAPINFO*)&bi,
 		DIB_RGB_COLORS);
@@ -1736,6 +1842,8 @@ int CaptureAnImage(HWND hWnd)
 	// Unlock and Free the DIB from the heap.
 	GlobalUnlock(hDIB);
 	GlobalFree(hDIB);
+	DeleteObject(bitmapHandle);
+	ReleaseDC(hWnd, clientDC);
 
 
 	// Clean up.
