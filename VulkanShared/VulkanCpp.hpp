@@ -2753,6 +2753,37 @@ namespace vkcpp {
 	};
 
 
+	class SwapchainCreateInfo : public VkSwapchainCreateInfoKHR {
+
+	public:
+
+		SwapchainCreateInfo(
+			Surface				surfaceArg,
+			uint32_t			minImageCountArg,
+			VkFormat			formatArg,
+			VkColorSpaceKHR		imageColorSpaceArg,
+			VkPresentModeKHR	presentModeArg)
+			: VkSwapchainCreateInfoKHR{}
+		{
+			sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+			surface = surfaceArg;
+			minImageCount = minImageCountArg;
+			imageFormat = formatArg;
+			imageColorSpace = imageColorSpaceArg;
+			imageArrayLayers = 1;
+			imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+			imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			queueFamilyIndexCount = 0;
+			pQueueFamilyIndices = nullptr;
+			compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+			presentMode = presentModeArg;
+			clipped = VK_TRUE;
+			oldSwapchain = VK_NULL_HANDLE;
+		}
+	};
+
+
+
 	class Swapchain : public HandleWithOwner<VkSwapchainKHR, Device> {
 
 		Swapchain(VkSwapchainKHR vkSwapchain, Device device, DestroyFunc_t pfnDestroy, VkExtent2D vkSwapchainImageExtent)
