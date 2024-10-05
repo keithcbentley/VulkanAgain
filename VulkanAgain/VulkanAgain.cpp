@@ -962,21 +962,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		swapchainPresentMode
 	);
 
-	//swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	//swapchainCreateInfo.surface = surfaceOriginal;
-	//swapchainCreateInfo.minImageCount = MagicValues::SWAP_CHAIN_IMAGE_COUNT;
-	//swapchainCreateInfo.imageFormat = swapchainImageFormat;
-	//swapchainCreateInfo.imageColorSpace = swapchainImageColorSpace;
-	//swapchainCreateInfo.imageArrayLayers = 1;
-	//swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-	//swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	//swapchainCreateInfo.queueFamilyIndexCount = 0;
-	//swapchainCreateInfo.pQueueFamilyIndices = nullptr;
-	//swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-	//swapchainCreateInfo.presentMode = swapchainPresentMode;
-	//swapchainCreateInfo.clipped = VK_TRUE;
-	//swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
-
 
 	vkcpp::Swapchain_ImageViews_FrameBuffers swapchainImageViewsFrameBuffers(swapchainCreateInfo, surfaceOriginal);
 	swapchainImageViewsFrameBuffers.setRenderPass(renderPassOriginal);
