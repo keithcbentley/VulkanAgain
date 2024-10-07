@@ -2536,11 +2536,17 @@ namespace vkcpp {
 		PipelineColorBlendStateCreateInfo m_pipelineColorBlendStateCreateInfo;
 		PipelineDepthStencilStateCreateInfo m_vkPipelineDepthStencilStateCreateInfo;
 
-		VkGraphicsPipelineCreateInfo m_vkGraphicsPipelineCreateInfo{};
-
 		PipelineLayout	m_pipelineLayout;
 		RenderPass		m_renderPass;
 		int				m_subpassNumber;
+
+		//	Contains rather than inherits from the Vulkan structure.
+		//	Not sure if it makes any difference.  It's a tiny bit
+		//	more understandable when assembling since there is so much
+		//	going on during the assembly.  It's clearer what's going
+		//	into the Vulkan create info structure.
+		VkGraphicsPipelineCreateInfo m_vkGraphicsPipelineCreateInfo{};
+
 
 	public:
 
@@ -3219,6 +3225,11 @@ namespace vkcpp {
 
 	class DescriptorSetUpdater {
 
+		//	TODO: Need to add VkBufferView.  Looks like
+		//	image, buffer, and bufferview are the kinds of
+		//	data that are described by descriptors and that
+		//	can need to be written/updated.
+		//	Union to hold each type of info that can be updated/written.
 		union WriteDescriptorInfo {
 			VkDescriptorBufferInfo	m_vkDescriptorBufferInfo;
 			VkDescriptorImageInfo m_vkDescriptorImageInfo;
@@ -3234,6 +3245,14 @@ namespace vkcpp {
 		};
 
 		vkcpp::DescriptorSet	m_descriptorSet;
+
+		//	Each write descriptor has a parallel piece of data.
+		//	The write descriptor takes a pointer to the data so
+		//	we need to assemble it when it is needed.  To tell
+		//	which pointer field of the write descriptor is being used,
+		//	we write a marker into the appropriate field, and then
+		//	replace the marker with the real pointer when assembled
+		//	for use.
 		std::vector<VkWriteDescriptorSet>	m_vkWriteDescriptorSets;
 		std::vector<WriteDescriptorInfo>	m_writeDescriptorInfos;
 
@@ -3245,26 +3264,28 @@ namespace vkcpp {
 		}
 
 		void addWriteDescriptor(
-			int	bindingIndex,
-			VkDescriptorType vkDescriptorType,
-			vkcpp::Buffer buffer,
-			VkDeviceSize size) {
-
+			uint32_t			bindingIndex,
+			VkDescriptorType	vkDescriptorType,
+			vkcpp::Buffer		buffer,
+			VkDeviceSize		size
+		) {
 			const VkDescriptorBufferInfo* marker = reinterpret_cast<VkDescriptorBufferInfo*>(-1);
 
-			VkWriteDescriptorSet	vkWriteDescriptorSet{};
-			vkWriteDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			vkWriteDescriptorSet.dstSet = m_descriptorSet;
-			vkWriteDescriptorSet.dstBinding = bindingIndex;
-			vkWriteDescriptorSet.dstArrayElement = 0;
-			vkWriteDescriptorSet.descriptorType = vkDescriptorType;
-			vkWriteDescriptorSet.descriptorCount = 1;
-			vkWriteDescriptorSet.pBufferInfo = marker;
+			VkWriteDescriptorSet	vkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstSet = m_descriptorSet,
+				.dstBinding = bindingIndex,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vkDescriptorType,
+				.pBufferInfo = marker
+			};
 
-			VkDescriptorBufferInfo vkDescriptorBufferInfo{};
-			vkDescriptorBufferInfo.buffer = buffer;
-			vkDescriptorBufferInfo.offset = 0;
-			vkDescriptorBufferInfo.range = size;
+			VkDescriptorBufferInfo vkDescriptorBufferInfo{
+				.buffer = buffer,
+				.offset = 0,
+				.range = size
+			};
 
 			m_vkWriteDescriptorSets.push_back(vkWriteDescriptorSet);
 			m_writeDescriptorInfos.push_back(vkDescriptorBufferInfo);
@@ -3272,26 +3293,29 @@ namespace vkcpp {
 		}
 
 		void addWriteDescriptor(
-			int	bindingIndex,
-			VkDescriptorType vkDescriptorType,
-			ImageView imageView,
-			Sampler sampler) {
-
+			uint32_t			bindingIndex,
+			VkDescriptorType	vkDescriptorType,
+			ImageView			imageView,
+			Sampler				sampler
+		) {
 			const VkDescriptorImageInfo* marker = reinterpret_cast<VkDescriptorImageInfo*>(-1);
 
-			VkWriteDescriptorSet	vkWriteDescriptorSet{};
-			vkWriteDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			vkWriteDescriptorSet.dstSet = m_descriptorSet;
-			vkWriteDescriptorSet.dstBinding = bindingIndex;
-			vkWriteDescriptorSet.dstArrayElement = 0;
-			vkWriteDescriptorSet.descriptorType = vkDescriptorType;
-			vkWriteDescriptorSet.descriptorCount = 1;
-			vkWriteDescriptorSet.pImageInfo = marker;
+			VkWriteDescriptorSet	vkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstSet = m_descriptorSet,
+				.dstBinding = bindingIndex,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vkDescriptorType,
+				.pImageInfo = marker
+			};
 
-			VkDescriptorImageInfo vkDescriptorImageInfo{};
-			vkDescriptorImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			vkDescriptorImageInfo.imageView = imageView;
-			vkDescriptorImageInfo.sampler = sampler;
+			//	TODO: image layout should probably be a parameter.
+			VkDescriptorImageInfo vkDescriptorImageInfo{
+				.sampler = sampler,
+				.imageView = imageView,
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			};
 
 			m_vkWriteDescriptorSets.push_back(vkWriteDescriptorSet);
 			m_writeDescriptorInfos.push_back(vkDescriptorImageInfo);
