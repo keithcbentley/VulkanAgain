@@ -2757,6 +2757,11 @@ namespace vkcpp {
 
 	public:
 
+		SwapchainCreateInfo()
+			: VkSwapchainCreateInfoKHR{} {
+		}
+
+
 		SwapchainCreateInfo(
 			Surface				surfaceArg,
 			uint32_t			minImageCountArg,
@@ -2970,7 +2975,7 @@ namespace vkcpp {
 	public:
 		static inline	Device		s_device;
 
-		VkSwapchainCreateInfoKHR	m_vkSwapchainCreateInfo{};
+		SwapchainCreateInfo			m_swapchainCreateInfo;
 		vkcpp::Surface				m_surface;
 
 		RenderPass	m_renderPass;
@@ -3050,7 +3055,7 @@ namespace vkcpp {
 
 
 		static Swapchain createSwapchain(
-			VkSwapchainCreateInfoKHR& vkSwapchainCreateInfo,
+			SwapchainCreateInfo& swapchainCreateInfo,
 			Surface surface
 		) {
 			const VkSurfaceCapabilitiesKHR vkSurfaceCapabilities = surface.getSurfaceCapabilities();
@@ -3062,11 +3067,11 @@ namespace vkcpp {
 				return Swapchain{};
 			}
 
-			vkSwapchainCreateInfo.surface = surface;
-			vkSwapchainCreateInfo.imageExtent = surfaceExtent;
-			vkSwapchainCreateInfo.preTransform = vkSurfaceCapabilities.currentTransform;
+			swapchainCreateInfo.surface = surface;
+			swapchainCreateInfo.imageExtent = surfaceExtent;
+			swapchainCreateInfo.preTransform = vkSurfaceCapabilities.currentTransform;
 
-			return Swapchain(vkSwapchainCreateInfo, s_device);
+			return Swapchain(swapchainCreateInfo, s_device);
 		}
 
 
@@ -3080,9 +3085,9 @@ namespace vkcpp {
 		}
 
 		Swapchain_ImageViews_FrameBuffers(
-			const VkSwapchainCreateInfoKHR& vkSwapchainCreateInfo,
+			const SwapchainCreateInfo& swapchainCreateInfo,
 			Surface surface)
-			: m_vkSwapchainCreateInfo(vkSwapchainCreateInfo)
+			: m_swapchainCreateInfo(swapchainCreateInfo)
 			, m_surface(surface) {
 
 		}
@@ -3091,7 +3096,7 @@ namespace vkcpp {
 		Swapchain_ImageViews_FrameBuffers& operator=(const Swapchain_ImageViews_FrameBuffers&) = delete;
 
 		Swapchain_ImageViews_FrameBuffers(Swapchain_ImageViews_FrameBuffers&& other) noexcept
-			: m_vkSwapchainCreateInfo(std::move(other.m_vkSwapchainCreateInfo))
+			: m_swapchainCreateInfo(std::move(other.m_swapchainCreateInfo))
 			, m_surface(std::move(other.m_surface))
 			, m_renderPass(std::move(other.m_renderPass))
 			, m_swapchain(std::move(other.m_swapchain))
@@ -3160,12 +3165,12 @@ namespace vkcpp {
 			//	Explicitly destroy the old swapchain for now.
 			m_swapchain = std::move(vkcpp::Swapchain());
 
-			m_swapchain = std::move(createSwapchain(m_vkSwapchainCreateInfo, m_surface));
+			m_swapchain = std::move(createSwapchain(m_swapchainCreateInfo, m_surface));
 			if (!m_swapchain) {
 				return;
 			}
-			createSwapchainImageViews(m_vkSwapchainCreateInfo.imageFormat);
-			m_depthBuffer = std::move(createDepthBuffer(m_vkSwapchainCreateInfo.imageExtent, s_device));
+			createSwapchainImageViews(m_swapchainCreateInfo.imageFormat);
+			m_depthBuffer = std::move(createDepthBuffer(m_swapchainCreateInfo.imageExtent, s_device));
 			createSwapchainFrameBuffers();
 			m_swapchainUpToDate = true;
 		}
