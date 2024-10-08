@@ -523,7 +523,6 @@ void makeImageTest1(const Globals& globals) {
 
 	uint32_t* pBitmapBits = new uint32_t[width * height];
 
-	std::cout << "pBitmapBits: " << pBitmapBits << "\n";
 
 	const VkDeviceSize bitmapSize = width * height * sizeof(uint32_t);
 
@@ -724,11 +723,14 @@ void MessageLoop(Globals& globals) {
 }
 
 
+
+
 int main()
 {
 	std::cout << "Hello World!\n";
 
 	//	std::cout.imbue(std::locale(""));
+
 
 	HINSTANCE hInstance = GetModuleHandle(NULL);
 	RegisterMyWindowClass(hInstance);

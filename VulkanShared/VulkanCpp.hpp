@@ -3350,6 +3350,70 @@ namespace vkcpp {
 	};
 
 
+	template<typename Underlying_t, typename IdType_t>
+	class Bitset {
+
+	public:
+
+		Underlying_t	m_value;
+
+		Bitset(Underlying_t value)
+			: m_value(value) {
+		}
+
+		explicit operator Underlying_t() {
+			return m_value;
+		}
+
+
+		Bitset& operator|=(const Bitset& rhs) {
+			m_value |= rhs.m_value;
+			return *this;
+		}
+
+		friend Bitset operator|(Bitset a, const Bitset b) {
+			a |= b;	//	OK to modify a since it is passed by value.
+			return a;
+		}
+
+	};
+
+	class PipelineStageFlagBits2Id {};
+
+	using PipelineStageFlagBits2 = Bitset<VkPipelineStageFlagBits2, PipelineStageFlagBits2Id>;
+
+#define PipelineStageFlagBits2Value(BARE_VK_VALUE) \
+static const PipelineStageFlagBits2 BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
+
+	static const PipelineStageFlagBits2 PIPELINE_STAGE_2_NONE(VK_PIPELINE_STAGE_2_NONE);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_TOP_OF_PIPE);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_DRAW_INDIRECT);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_VERTEX_INPUT);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_VERTEX_SHADER);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_GEOMETRY_SHADER);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_FRAGMENT_SHADER);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_COMPUTE_SHADER);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_ALL_TRANSFER);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_TRANSFER);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_BOTTOM_OF_PIPE);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_HOST);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_ALL_GRAPHICS);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_ALL_COMMANDS);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_COPY);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_RESOLVE);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_BLIT);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_CLEAR);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_INDEX_INPUT);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT);
+	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_PRE_RASTERIZATION_SHADERS);
+
+
+
 }
 
 
