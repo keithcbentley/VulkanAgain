@@ -115,6 +115,117 @@ namespace vkcpp {
 	template Rect2D& wrapToRef<VkRect2D, Rect2D>(VkRect2D&);
 
 
+	//	Yikes! Vulkan uses enums for bit values but uses
+	//	non-typesafe uints for the combination of flags.
+	//	The newer flags use 64 bit uints for values and combinations
+	//	but again, not typesafe.  So, we need different types
+	//	for the bits, the combination of bits, and something
+	//	to differentiate the 64 bit uints.  For the 64 bit case,
+	//	the bit type and the combination type will be the same.
+	//	In all cases, the combination type will be the type/value
+	//	passed to the Vulkan functions or used in the Vulkan structures.
+	class DefaultBitsetClassId {};
+	template<typename Bit_t, typename Combination_t, typename IdType_t = DefaultBitsetClassId>
+	class Bitset {
+
+	public:
+
+		Combination_t	m_value;
+
+		Bitset(Bit_t value)
+			: m_value(value) {
+		}
+
+		explicit operator Combination_t() {
+			return m_value;
+		}
+
+
+		Bitset& operator|=(const Bitset& rhs) {
+			m_value |= rhs.m_value;
+			return *this;
+		}
+
+		friend Bitset operator|(const Bitset a, const Bitset b) {
+			Bitset val = a;
+			val |= b;
+			return val;
+		}
+
+		friend bool bitsSet(Combination_t allBits, Bitset requiredBits) {
+			return (allBits & requiredBits.m_value) == requiredBits.m_value;
+		}
+
+
+		Bitset& operator&=(const Bitset& rhs) {
+			m_value &= rhs.m_value;
+			return *this;
+		}
+
+		friend Bitset operator& (const Bitset a, const Bitset b) {
+			Bitset val = a;
+			val &= b;
+			return val;
+		}
+
+		friend Bitset operator& (const Bitset a, const Combination_t b) {
+			Bitset val = a;
+			val.m_value &= b;
+			return val;
+		}
+
+
+	};
+
+	class PipelineStageFlags2Id {};
+
+	using PipelineStageFlags2 = Bitset<VkPipelineStageFlagBits2, VkPipelineStageFlagBits2, PipelineStageFlags2Id>;
+
+#define PipelineStageFlags2Value(BARE_VK_VALUE) \
+static const PipelineStageFlags2 BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
+
+	static const PipelineStageFlags2 PIPELINE_STAGE_2_NONE(VK_PIPELINE_STAGE_2_NONE);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_TOP_OF_PIPE);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_DRAW_INDIRECT);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_VERTEX_INPUT);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_VERTEX_SHADER);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_GEOMETRY_SHADER);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_FRAGMENT_SHADER);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_COMPUTE_SHADER);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_ALL_TRANSFER);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_TRANSFER);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_BOTTOM_OF_PIPE);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_HOST);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_ALL_GRAPHICS);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_ALL_COMMANDS);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_COPY);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_RESOLVE);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_BLIT);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_CLEAR);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_INDEX_INPUT);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT);
+	PipelineStageFlags2Value(PIPELINE_STAGE_2_PRE_RASTERIZATION_SHADERS);
+
+
+
+	using MemoryPropertyFlags = Bitset<VkMemoryPropertyFlagBits, VkMemoryPropertyFlags>;
+
+#define MemoryPropertyFlagsValue(BARE_VK_VALUE) \
+static const MemoryPropertyFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
+
+
+	MemoryPropertyFlagsValue(MEMORY_PROPERTY_DEVICE_LOCAL);
+	MemoryPropertyFlagsValue(MEMORY_PROPERTY_HOST_VISIBLE);
+	MemoryPropertyFlagsValue(MEMORY_PROPERTY_HOST_COHERENT);
+	MemoryPropertyFlagsValue(MEMORY_PROPERTY_HOST_CACHED);
+	MemoryPropertyFlagsValue(MEMORY_PROPERTY_LAZILY_ALLOCATED);
+	MemoryPropertyFlagsValue(MEMORY_PROPERTY_PROTECTED);
+
 
 	class Device;
 
@@ -448,14 +559,14 @@ namespace vkcpp {
 
 		uint32_t findMemoryTypeIndex(
 			uint32_t usableMemoryIndexBits,
-			VkMemoryPropertyFlags requiredProperties
+			MemoryPropertyFlags requiredProperties
 		) const {
 			VkPhysicalDeviceMemoryProperties memProperties;
 			vkGetPhysicalDeviceMemoryProperties(m_vkPhysicalDevice, &memProperties);
 
 			for (uint32_t index = 0; index < memProperties.memoryTypeCount; index++) {
 				if ((usableMemoryIndexBits & (1 << index))
-					&& (memProperties.memoryTypes[index].propertyFlags & requiredProperties) == requiredProperties) {
+					&& bitsSet(memProperties.memoryTypes[index].propertyFlags, requiredProperties)) {
 					return index;
 				}
 			}
@@ -891,7 +1002,7 @@ namespace vkcpp {
 
 		Queue getDeviceQueue(int deviceQueueFamily, int deviceQueueIndex) const;
 
-		uint32_t findMemoryTypeIndex(uint32_t usableMemoryIndexBits, VkMemoryPropertyFlags requiredProperties) {
+		uint32_t findMemoryTypeIndex(uint32_t usableMemoryIndexBits, MemoryPropertyFlags requiredProperties) {
 			return getPhysicalDevice().findMemoryTypeIndex(usableMemoryIndexBits, requiredProperties);
 		}
 
@@ -1013,14 +1124,14 @@ namespace vkcpp {
 
 		DeviceMemory(
 			VkMemoryRequirements vkMemoryRequirements,
-			VkMemoryPropertyFlags vkRequiredMemoryPropertyFlags,
+			MemoryPropertyFlags requiredMemoryPropertyFlags,
 			Device	device
 		) {
 			VkMemoryAllocateInfo vkMemoryAllocateInfo{};
 			vkMemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 			vkMemoryAllocateInfo.allocationSize = vkMemoryRequirements.size;
 			vkMemoryAllocateInfo.memoryTypeIndex =
-				device.findMemoryTypeIndex(vkMemoryRequirements.memoryTypeBits, vkRequiredMemoryPropertyFlags);
+				device.findMemoryTypeIndex(vkMemoryRequirements.memoryTypeBits, requiredMemoryPropertyFlags);
 			new(this)DeviceMemory(vkMemoryAllocateInfo, device);
 		}
 
@@ -1082,9 +1193,9 @@ namespace vkcpp {
 			return vkMemoryRequirements;
 		}
 
-		DeviceMemory allocateDeviceMemory(VkMemoryPropertyFlags vkRequiredMemoryPropertyFlags) {
+		DeviceMemory allocateDeviceMemory(MemoryPropertyFlags requiredMemoryPropertyFlags) {
 			VkMemoryRequirements vkMemoryRequirements = getMemoryRequirements();
-			return DeviceMemory(vkMemoryRequirements, vkRequiredMemoryPropertyFlags, getOwner());
+			return DeviceMemory(vkMemoryRequirements, requiredMemoryPropertyFlags, getOwner());
 		}
 
 	};
@@ -1130,12 +1241,12 @@ namespace vkcpp {
 			VkBufferUsageFlags vkBufferUsageFlags,
 			VkDeviceSize size,
 			uint32_t	queueFamilyIndex,
-			VkMemoryPropertyFlags vkMemoryPropertyFlags,
+			MemoryPropertyFlags memoryPropertyFlags,
 			Device device
 		) {
 			Buffer buffer(vkBufferUsageFlags, size, queueFamilyIndex, device);
 
-			DeviceMemory deviceMemory = buffer.allocateDeviceMemory(vkMemoryPropertyFlags);
+			DeviceMemory deviceMemory = buffer.allocateDeviceMemory(memoryPropertyFlags);
 
 			VkResult vkResult = vkBindBufferMemory(device, buffer, deviceMemory, 0);
 			if (vkResult != VK_SUCCESS) {
@@ -1157,7 +1268,7 @@ namespace vkcpp {
 			VkBufferUsageFlags vkBufferUsageFlags,
 			int64_t size,
 			uint32_t	queueFamilyIndex,
-			VkMemoryPropertyFlags vkRequiredMemoryPropertyFlags,
+			MemoryPropertyFlags requiredMemoryPropertyFlags,
 			void* pSrcMem,
 			Device device
 		) {
@@ -1165,7 +1276,7 @@ namespace vkcpp {
 				vkBufferUsageFlags,
 				size,
 				queueFamilyIndex,
-				vkRequiredMemoryPropertyFlags,
+				requiredMemoryPropertyFlags,
 				device
 			);
 			memcpy(m_mappedMemory, pSrcMem, size);
@@ -1626,13 +1737,13 @@ namespace vkcpp {
 			return vkMemoryRequirements;
 		}
 
-		DeviceMemory allocateDeviceMemory(VkMemoryPropertyFlags vkRequiredProperties) {
+		DeviceMemory allocateDeviceMemory(MemoryPropertyFlags requiredProperties) {
 			VkMemoryRequirements vkMemoryRequirements = getMemoryRequirements();
 			VkMemoryAllocateInfo vkMemoryAllocateInfo{};
 			vkMemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 			vkMemoryAllocateInfo.allocationSize = vkMemoryRequirements.size;
 			vkMemoryAllocateInfo.memoryTypeIndex =
-				getOwner().findMemoryTypeIndex(vkMemoryRequirements.memoryTypeBits, vkRequiredProperties);
+				getOwner().findMemoryTypeIndex(vkMemoryRequirements.memoryTypeBits, requiredProperties);
 			return vkcpp::DeviceMemory(vkMemoryAllocateInfo, getOwner());
 		}
 
@@ -1949,12 +2060,14 @@ namespace vkcpp {
 
 		void addWaitSemaphore(
 			Semaphore semaphore,
-			VkPipelineStageFlags2 waitPipelineStateFlags2
+			PipelineStageFlags2 waitPipelineStateFlags2
+
+			//			VkPipelineStageFlags2 waitPipelineStateFlags2
 		) {
 			VkSemaphoreSubmitInfo	vkSemaphoreSubmitInfo{};
 			vkSemaphoreSubmitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
 			vkSemaphoreSubmitInfo.semaphore = semaphore;
-			vkSemaphoreSubmitInfo.stageMask = waitPipelineStateFlags2;
+			vkSemaphoreSubmitInfo.stageMask = static_cast<VkPipelineStageFlagBits2>(waitPipelineStateFlags2);
 			m_waitSemaphoreInfos.push_back(vkSemaphoreSubmitInfo);
 		}
 
@@ -2875,7 +2988,7 @@ namespace vkcpp {
 
 		Image_Memory(
 			const ImageCreateInfo& imageCreateInfo,
-			VkMemoryPropertyFlags properties,
+			MemoryPropertyFlags properties,
 			Device device
 		) {
 			Image image(imageCreateInfo, device);
@@ -2894,7 +3007,7 @@ namespace vkcpp {
 			VkExtent2D	vkExtent2D,
 			VkFormat format,
 			VkImageUsageFlags usage,
-			VkMemoryPropertyFlags properties,
+			MemoryPropertyFlags properties,
 			Device device
 		) {
 			ImageCreateInfo imageCreateInfo(format, usage);
@@ -3348,69 +3461,6 @@ namespace vkcpp {
 		}
 
 	};
-
-
-	template<typename Underlying_t, typename IdType_t>
-	class Bitset {
-
-	public:
-
-		Underlying_t	m_value;
-
-		Bitset(Underlying_t value)
-			: m_value(value) {
-		}
-
-		explicit operator Underlying_t() {
-			return m_value;
-		}
-
-
-		Bitset& operator|=(const Bitset& rhs) {
-			m_value |= rhs.m_value;
-			return *this;
-		}
-
-		friend Bitset operator|(Bitset a, const Bitset b) {
-			a |= b;	//	OK to modify a since it is passed by value.
-			return a;
-		}
-
-	};
-
-	class PipelineStageFlagBits2Id {};
-
-	using PipelineStageFlagBits2 = Bitset<VkPipelineStageFlagBits2, PipelineStageFlagBits2Id>;
-
-#define PipelineStageFlagBits2Value(BARE_VK_VALUE) \
-static const PipelineStageFlagBits2 BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
-
-	static const PipelineStageFlagBits2 PIPELINE_STAGE_2_NONE(VK_PIPELINE_STAGE_2_NONE);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_TOP_OF_PIPE);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_DRAW_INDIRECT);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_VERTEX_INPUT);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_VERTEX_SHADER);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_GEOMETRY_SHADER);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_FRAGMENT_SHADER);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_COMPUTE_SHADER);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_ALL_TRANSFER);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_TRANSFER);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_BOTTOM_OF_PIPE);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_HOST);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_ALL_GRAPHICS);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_ALL_COMMANDS);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_COPY);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_RESOLVE);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_BLIT);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_CLEAR);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_INDEX_INPUT);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT);
-	PipelineStageFlagBits2Value(PIPELINE_STAGE_2_PRE_RASTERIZATION_SHADERS);
 
 
 

@@ -403,7 +403,7 @@ class DrawingFrame {
 				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 				sizeof(ModelViewProjTransform),
 				MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
 				m_device
 			));
 	}
@@ -708,7 +708,7 @@ vkcpp::Image_Memory_View createTextureFromFile(
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		imageSize,
 		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
 		pixels,
 		device);
 
@@ -786,7 +786,7 @@ void makeImageFromBitmap() {
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		imageSize,
 		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
 		g_imageData.data(),
 		g_globals.g_deviceOriginal);
 
@@ -974,7 +974,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 		g_pointVertexBuffer1.pointsSizeof(),
 		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
 		g_pointVertexBuffer1.pointData(),
 		deviceOriginal);
 
@@ -983,7 +983,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 		g_pointVertexBuffer1.verticesSizeof(),
 		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
 		g_pointVertexBuffer1.vertexData(),
 		deviceOriginal);
 
@@ -992,7 +992,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 		g_pointVertexBuffer2.pointsSizeof(),
 		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
 		g_pointVertexBuffer2.pointData(),
 		deviceOriginal);
 
@@ -1001,7 +1001,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 		g_pointVertexBuffer2.verticesSizeof(),
 		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
 		g_pointVertexBuffer2.vertexData(),
 		deviceOriginal);
 
