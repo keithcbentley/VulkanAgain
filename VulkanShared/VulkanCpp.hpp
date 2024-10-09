@@ -1784,6 +1784,74 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 	};
 
+
+	class ImageViewCreateInfo : public VkImageViewCreateInfo {
+
+	public:
+		ImageViewCreateInfo(
+			VkImageViewType vkImageViewType,
+			VkFormat	vkFormat,
+			VkImageAspectFlags aspectFlags)
+			: VkImageViewCreateInfo{} {
+			sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			viewType = vkImageViewType;
+			format = vkFormat;
+			subresourceRange.aspectMask = aspectFlags;
+			components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+			components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+			components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+			components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+			subresourceRange.baseMipLevel = 0;
+			subresourceRange.levelCount = 1;
+			subresourceRange.baseArrayLayer = 0;
+			subresourceRange.layerCount = 1;
+		}
+
+
+	};
+
+	class ImageView : public HandleWithOwner<VkImageView> {
+
+		ImageView(VkImageView vkImageView, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkImageView, vkDevice, pfnDestroy) {
+
+		}
+
+		static void destroy(VkImageView vkImageView, VkDevice vkDevice) {
+			vkDestroyImageView(vkDevice, vkImageView, nullptr);
+		}
+
+	public:
+
+		//	TODO: need to start remembering some info about the image and how the
+		//	imageview was created to make things easier to use later.
+		ImageView() {}
+
+		ImageView(const VkImageViewCreateInfo& vkImageViewCreateInfo, VkDevice vkDevice) {
+			VkImageView vkImageView;
+			VkResult vkResult = vkCreateImageView(vkDevice, &vkImageViewCreateInfo, nullptr, &vkImageView);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			new(this) ImageView(vkImageView, vkDevice, &destroy);
+		}
+
+
+		static std::vector<ImageView> createImageViews(
+			std::vector<VkImage>& vkImages,
+			ImageViewCreateInfo& imageViewCreateInfo,
+			Device device
+		) {
+			std::vector<ImageView> imageViews;
+			for (VkImage vkImage : vkImages) {
+				imageViewCreateInfo.image = vkImage;
+				imageViews.emplace_back(imageViewCreateInfo, device);
+			}
+			return imageViews;
+		}
+
+	};
+
 	class MemoryBarrier2 : public VkMemoryBarrier2 {
 
 	public:
@@ -1805,6 +1873,57 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 	};
 
+
+	class SamplerCreateInfo : public VkSamplerCreateInfo {
+
+	public:
+
+		SamplerCreateInfo()
+			: VkSamplerCreateInfo{}
+		{
+			sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+			magFilter = VK_FILTER_LINEAR;
+			minFilter = VK_FILTER_LINEAR;
+			mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+			addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			anisotropyEnable = VK_FALSE;
+			maxAnisotropy = 1.0f;
+			borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+			unnormalizedCoordinates = VK_FALSE;
+			compareEnable = VK_FALSE;
+			compareOp = VK_COMPARE_OP_ALWAYS;
+		}
+	};
+
+	class Sampler : public HandleWithOwner<VkSampler, Device> {
+
+		Sampler(VkSampler sampler, Device device, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(sampler, device, pfnDestroy) {
+		}
+
+		static void destroy(VkSampler sampler, Device device) {
+			vkDestroySampler(device, sampler, nullptr);
+		}
+
+	public:
+
+		Sampler() {}
+
+		Sampler(const SamplerCreateInfo& samplerCreateInfo, Device device) {
+			VkSampler vkSampler;
+			VkResult vkResult = vkCreateSampler(device, &samplerCreateInfo, nullptr, &vkSampler);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			new(this) Sampler(vkSampler, device, &destroy);
+		}
+
+
+	};
+
+
 	class ImageMemoryBarrier2 : public VkImageMemoryBarrier2 {
 
 	public:
@@ -1823,26 +1942,10 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			subresourceRange.baseArrayLayer = 0;
 			subresourceRange.layerCount = 1;
 
-			//	TODO: This is an image memory/layout barrier. Why does
-			//	this use other parts of the pipeline?
-			//	TODO: do we need a more general way to do this?
-			//	TODO: does any of this matter if we are doing a standalone image layout transition?
-			//	Note that this grabs oldLayout and newLayout from the structure, not the args.
-			//if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-			//	srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
-			//	srcAccessMask = 0;
-			//	dstStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
-			//	dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			//}
-			//else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-			//	srcStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
-			//	srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			//	dstStageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
-			//	dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-			//}
-			//else {
-			//	throw std::invalid_argument("unsupported layout transition!");
-			//}
+			//	If the image memory barrier is to be used in a sequence
+			//	of command buffer commands, then the access masks will need
+			//	to be set according to usage.  (To the best of my current knowledge.)
+
 		}
 
 	};
@@ -2425,15 +2528,145 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 	};
 
+	class DescriptorSetUpdater {
+
+		//	TODO: Need to add VkBufferView.  Looks like
+		//	image, buffer, and bufferview are the only kinds of
+		//	data that are described by descriptors and that
+		//	can need to be written/updated.
+
+		//	Union to hold each type of info that can be updated/written.
+		union WriteDescriptorInfo {
+			VkDescriptorBufferInfo	m_vkDescriptorBufferInfo;
+			VkDescriptorImageInfo m_vkDescriptorImageInfo;
+
+			WriteDescriptorInfo(const VkDescriptorBufferInfo& vkDescriptorBufferInfo)
+				: m_vkDescriptorBufferInfo(vkDescriptorBufferInfo) {
+			}
+
+			WriteDescriptorInfo(const VkDescriptorImageInfo& vkDescriptorImageInfo)
+				: m_vkDescriptorImageInfo(vkDescriptorImageInfo) {
+			}
+
+		};
+
+
+		//	Each write descriptor has a parallel piece of data.
+		//	The write descriptor takes a pointer to the data so
+		//	we need to assemble it when it is needed.  To tell
+		//	which pointer field of the write descriptor is being used,
+		//	we write a marker into the appropriate field, and then
+		//	replace the marker with the real pointer when assembled
+		//	for use.
+		std::vector<VkWriteDescriptorSet>	m_vkWriteDescriptorSets;
+		std::vector<WriteDescriptorInfo>	m_writeDescriptorInfos;
+
+	public:
+
+
+		void addWriteDescriptor(
+			VkDescriptorSet		vkDescriptorSet,
+			uint32_t			bindingIndex,
+			VkDescriptorType	vkDescriptorType,
+			vkcpp::Buffer		buffer,
+			VkDeviceSize		size
+		) {
+			const VkDescriptorBufferInfo* marker = reinterpret_cast<VkDescriptorBufferInfo*>(-1);
+
+			VkWriteDescriptorSet	vkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstSet = vkDescriptorSet,
+				.dstBinding = bindingIndex,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vkDescriptorType,
+				.pBufferInfo = marker
+			};
+
+			VkDescriptorBufferInfo vkDescriptorBufferInfo{
+				.buffer = buffer,
+				.offset = 0,
+				.range = size
+			};
+
+			m_vkWriteDescriptorSets.push_back(vkWriteDescriptorSet);
+			m_writeDescriptorInfos.push_back(vkDescriptorBufferInfo);
+
+		}
+
+		void addWriteDescriptor(
+			VkDescriptorSet		vkDescriptorSet,
+			uint32_t			bindingIndex,
+			VkDescriptorType	vkDescriptorType,
+			ImageView			imageView,
+			Sampler				sampler
+		) {
+			const VkDescriptorImageInfo* marker = reinterpret_cast<VkDescriptorImageInfo*>(-1);
+
+			VkWriteDescriptorSet	vkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstSet = vkDescriptorSet,
+				.dstBinding = bindingIndex,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vkDescriptorType,
+				.pImageInfo = marker
+			};
+
+			//	TODO: image layout should probably be a parameter.
+			VkDescriptorImageInfo vkDescriptorImageInfo{
+				.sampler = sampler,
+				.imageView = imageView,
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			};
+
+			m_vkWriteDescriptorSets.push_back(vkWriteDescriptorSet);
+			m_writeDescriptorInfos.push_back(vkDescriptorImageInfo);
+
+		}
+
+
+
+		void assemble() {
+			int	index = 0;
+			//	Update marked pointers to the proper address from the info array.
+
+			for (VkWriteDescriptorSet& vkWriteDescriptorSet : m_vkWriteDescriptorSets) {
+				if (vkWriteDescriptorSet.pBufferInfo) {
+					vkWriteDescriptorSet.pBufferInfo = &(m_writeDescriptorInfos.at(index).m_vkDescriptorBufferInfo);
+				}
+				if (vkWriteDescriptorSet.pImageInfo) {
+					vkWriteDescriptorSet.pImageInfo = &(m_writeDescriptorInfos.at(index).m_vkDescriptorImageInfo);
+				}
+				++index;
+			}
+		}
+
+		void updateDescriptorSets(VkDevice vkDevice) {
+			assemble();
+			//	TODO: check for no updates before calling.
+			vkUpdateDescriptorSets(
+				vkDevice,
+				static_cast<uint32_t>(m_vkWriteDescriptorSets.size()),
+				m_vkWriteDescriptorSets.data(),
+				0, nullptr);
+			//	TODO: should the update info be cleared after this?
+			//	is it ever reused?
+		}
+
+	};
+
+
 	class DescriptorSet : public HandleWithOwner<VkDescriptorSet, DescriptorPool> {
 
 		DescriptorSetLayout	m_descriptorSetLayout;
+		DescriptorSetUpdater	m_descriptorSetUpdater;
 
 		DescriptorSet(
 			VkDescriptorSet vkDescriptorSet,
 			DescriptorPool descriptorPool,
 			DestroyFunc_t pfnDestroy,
-			const DescriptorSetLayout&	descriptorSetLayout)
+			const DescriptorSetLayout& descriptorSetLayout)
 			: HandleWithOwner(vkDescriptorSet, descriptorPool, pfnDestroy)
 			, m_descriptorSetLayout(descriptorSetLayout) {
 		}
@@ -2464,6 +2697,42 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 				throw Exception(vkResult);
 			}
 			new(this)DescriptorSet(vkDescriptorSet, descriptorPool, &destroy, descriptorSetLayout);
+		}
+
+
+		//	TODO: should the descriptor type be checked against
+//	the descriptor type in the descriptor set layout info?
+		void addWriteDescriptor(
+			uint32_t			bindingIndex,
+			VkDescriptorType	vkDescriptorType,
+			vkcpp::Buffer		buffer,
+			VkDeviceSize		size
+		) {
+			m_descriptorSetUpdater.addWriteDescriptor(
+				*this,
+				bindingIndex,
+				vkDescriptorType,
+				buffer,
+				size);
+		}
+
+
+		void addWriteDescriptor(
+			uint32_t			bindingIndex,
+			VkDescriptorType	vkDescriptorType,
+			ImageView			imageView,
+			Sampler				sampler
+		) {
+			m_descriptorSetUpdater.addWriteDescriptor(
+				*this,
+				bindingIndex,
+				vkDescriptorType,
+				imageView,
+				sampler);
+		}
+
+		void updateDescriptors() {
+			m_descriptorSetUpdater.updateDescriptorSets(getOwner().getVkDevice());
 		}
 
 	};
@@ -2855,73 +3124,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 	};
 
 
-	class ImageViewCreateInfo : public VkImageViewCreateInfo {
-
-	public:
-		ImageViewCreateInfo(
-			VkImageViewType vkImageViewType,
-			VkFormat	vkFormat,
-			VkImageAspectFlags aspectFlags)
-			: VkImageViewCreateInfo{} {
-			sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			viewType = vkImageViewType;
-			format = vkFormat;
-			subresourceRange.aspectMask = aspectFlags;
-			components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-			components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-			components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-			components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-			subresourceRange.baseMipLevel = 0;
-			subresourceRange.levelCount = 1;
-			subresourceRange.baseArrayLayer = 0;
-			subresourceRange.layerCount = 1;
-		}
-
-
-	};
-
-	class ImageView : public HandleWithOwner<VkImageView> {
-
-		ImageView(VkImageView vkImageView, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(vkImageView, vkDevice, pfnDestroy) {
-
-		}
-
-		static void destroy(VkImageView vkImageView, VkDevice vkDevice) {
-			vkDestroyImageView(vkDevice, vkImageView, nullptr);
-		}
-
-	public:
-
-		//	TODO: need to start remembering some info about the image and how the
-		//	imageview was created to make things easier to use later.
-		ImageView() {}
-
-		ImageView(const VkImageViewCreateInfo& vkImageViewCreateInfo, VkDevice vkDevice) {
-			VkImageView vkImageView;
-			VkResult vkResult = vkCreateImageView(vkDevice, &vkImageViewCreateInfo, nullptr, &vkImageView);
-			if (vkResult != VK_SUCCESS) {
-				throw Exception(vkResult);
-			}
-			new(this) ImageView(vkImageView, vkDevice, &destroy);
-		}
-
-
-		static std::vector<ImageView> createImageViews(
-			std::vector<VkImage>& vkImages,
-			ImageViewCreateInfo& imageViewCreateInfo,
-			Device device
-		) {
-			std::vector<ImageView> imageViews;
-			for (VkImage vkImage : vkImages) {
-				imageViewCreateInfo.image = vkImage;
-				imageViews.emplace_back(imageViewCreateInfo, device);
-			}
-			return imageViews;
-		}
-
-	};
-
 
 	class SwapchainCreateInfo : public VkSwapchainCreateInfoKHR {
 
@@ -3088,55 +3290,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			, m_imageView(std::move(imageView)) {
 
 		}
-
-	};
-
-	class SamplerCreateInfo : public VkSamplerCreateInfo {
-
-	public:
-
-		SamplerCreateInfo()
-			: VkSamplerCreateInfo{}
-		{
-			sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-			magFilter = VK_FILTER_LINEAR;
-			minFilter = VK_FILTER_LINEAR;
-			mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-			addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			anisotropyEnable = VK_FALSE;
-			maxAnisotropy = 1.0f;
-			borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-			unnormalizedCoordinates = VK_FALSE;
-			compareEnable = VK_FALSE;
-			compareOp = VK_COMPARE_OP_ALWAYS;
-		}
-	};
-
-	class Sampler : public HandleWithOwner<VkSampler, Device> {
-
-		Sampler(VkSampler sampler, Device device, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(sampler, device, pfnDestroy) {
-		}
-
-		static void destroy(VkSampler sampler, Device device) {
-			vkDestroySampler(device, sampler, nullptr);
-		}
-
-	public:
-
-		Sampler() {}
-
-		Sampler(const SamplerCreateInfo& samplerCreateInfo, Device device) {
-			VkSampler vkSampler;
-			VkResult vkResult = vkCreateSampler(device, &samplerCreateInfo, nullptr, &vkSampler);
-			if (vkResult != VK_SUCCESS) {
-				throw Exception(vkResult);
-			}
-			new(this) Sampler(vkSampler, device, &destroy);
-		}
-
 
 	};
 
@@ -3387,131 +3540,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 	};
 
 
-	class DescriptorSetUpdater {
-
-		//	TODO: Need to add VkBufferView.  Looks like
-		//	image, buffer, and bufferview are the kinds of
-		//	data that are described by descriptors and that
-		//	can need to be written/updated.
-		//	Union to hold each type of info that can be updated/written.
-		union WriteDescriptorInfo {
-			VkDescriptorBufferInfo	m_vkDescriptorBufferInfo;
-			VkDescriptorImageInfo m_vkDescriptorImageInfo;
-
-			WriteDescriptorInfo(const VkDescriptorBufferInfo& vkDescriptorBufferInfo)
-				: m_vkDescriptorBufferInfo(vkDescriptorBufferInfo) {
-			}
-
-			WriteDescriptorInfo(const VkDescriptorImageInfo& vkDescriptorImageInfo)
-				: m_vkDescriptorImageInfo(vkDescriptorImageInfo) {
-			}
-
-		};
-
-		vkcpp::DescriptorSet	m_descriptorSet;
-
-		//	Each write descriptor has a parallel piece of data.
-		//	The write descriptor takes a pointer to the data so
-		//	we need to assemble it when it is needed.  To tell
-		//	which pointer field of the write descriptor is being used,
-		//	we write a marker into the appropriate field, and then
-		//	replace the marker with the real pointer when assembled
-		//	for use.
-		std::vector<VkWriteDescriptorSet>	m_vkWriteDescriptorSets;
-		std::vector<WriteDescriptorInfo>	m_writeDescriptorInfos;
-
-	public:
-
-		DescriptorSetUpdater(vkcpp::DescriptorSet descriptorSet)
-			: m_descriptorSet(descriptorSet) {
-
-		}
-
-		void addWriteDescriptor(
-			uint32_t			bindingIndex,
-			VkDescriptorType	vkDescriptorType,
-			vkcpp::Buffer		buffer,
-			VkDeviceSize		size
-		) {
-			const VkDescriptorBufferInfo* marker = reinterpret_cast<VkDescriptorBufferInfo*>(-1);
-
-			VkWriteDescriptorSet	vkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstSet = m_descriptorSet,
-				.dstBinding = bindingIndex,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = vkDescriptorType,
-				.pBufferInfo = marker
-			};
-
-			VkDescriptorBufferInfo vkDescriptorBufferInfo{
-				.buffer = buffer,
-				.offset = 0,
-				.range = size
-			};
-
-			m_vkWriteDescriptorSets.push_back(vkWriteDescriptorSet);
-			m_writeDescriptorInfos.push_back(vkDescriptorBufferInfo);
-
-		}
-
-		void addWriteDescriptor(
-			uint32_t			bindingIndex,
-			VkDescriptorType	vkDescriptorType,
-			ImageView			imageView,
-			Sampler				sampler
-		) {
-			const VkDescriptorImageInfo* marker = reinterpret_cast<VkDescriptorImageInfo*>(-1);
-
-			VkWriteDescriptorSet	vkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstSet = m_descriptorSet,
-				.dstBinding = bindingIndex,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = vkDescriptorType,
-				.pImageInfo = marker
-			};
-
-			//	TODO: image layout should probably be a parameter.
-			VkDescriptorImageInfo vkDescriptorImageInfo{
-				.sampler = sampler,
-				.imageView = imageView,
-				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-			};
-
-			m_vkWriteDescriptorSets.push_back(vkWriteDescriptorSet);
-			m_writeDescriptorInfos.push_back(vkDescriptorImageInfo);
-
-		}
-
-
-
-		void assemble() {
-			int	index = 0;
-			for (VkWriteDescriptorSet& vkWriteDescriptorSet : m_vkWriteDescriptorSets) {
-				//	Update marked pointers to the proper address from the info array.
-				if (vkWriteDescriptorSet.pBufferInfo) {
-					vkWriteDescriptorSet.pBufferInfo = &(m_writeDescriptorInfos.at(index).m_vkDescriptorBufferInfo);
-				}
-				if (vkWriteDescriptorSet.pImageInfo) {
-					vkWriteDescriptorSet.pImageInfo = &(m_writeDescriptorInfos.at(index).m_vkDescriptorImageInfo);
-				}
-				++index;
-			}
-		}
-
-		void updateDescriptorSets() {
-			assemble();
-			vkUpdateDescriptorSets(
-				m_descriptorSet.getOwner().getVkDevice(),
-				static_cast<uint32_t>(m_vkWriteDescriptorSets.size()),
-				m_vkWriteDescriptorSets.data(),
-				0, nullptr);
-		}
-
-	};
 
 
 

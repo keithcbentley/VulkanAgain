@@ -421,23 +421,37 @@ class DrawingFrame {
 		vkcpp::Sampler textureSampler
 	) {
 		vkcpp::DescriptorSet descriptorSet(descriptorSetLayout, descriptorPool);
-		vkcpp::DescriptorSetUpdater descriptorSetUpdater(descriptorSet);
+		descriptorSet.addWriteDescriptor(
+			MagicValues::UBO_DESCRIPTOR_BINDING_INDEX,
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			m_uniformBufferMemory.m_buffer,
+			sizeof(ModelViewProjTransform));
+		descriptorSet.addWriteDescriptor(
+			MagicValues::TEXTURE_DESCRIPTOR_BINDING_INDEX,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			textureImageView,
+			textureSampler);
+		descriptorSet.updateDescriptors();
+
+
+		vkcpp::DescriptorSetUpdater descriptorSetUpdater();
+
 		//	TODO: seems like we are duplicating information.  Don't descriptor
 		//	sets and descriptor set layouts already know their layout?  Maybe
 		//	merge the updater into the descriptor set?  I.e., descriptor sets
 		//	would know how to update themselves.  Just add the data to the
 		//	descriptor set and tell it to update itself.
-		descriptorSetUpdater.addWriteDescriptor(
-			MagicValues::UBO_DESCRIPTOR_BINDING_INDEX,
-			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			m_uniformBufferMemory.m_buffer,
-			sizeof(ModelViewProjTransform));
-		descriptorSetUpdater.addWriteDescriptor(
-			MagicValues::TEXTURE_DESCRIPTOR_BINDING_INDEX,
-			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			textureImageView,
-			textureSampler);
-		descriptorSetUpdater.updateDescriptorSets();
+		//descriptorSetUpdater.addWriteDescriptor(
+		//	MagicValues::UBO_DESCRIPTOR_BINDING_INDEX,
+		//	VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		//	m_uniformBufferMemory.m_buffer,
+		//	sizeof(ModelViewProjTransform));
+		//descriptorSetUpdater.addWriteDescriptor(
+		//	MagicValues::TEXTURE_DESCRIPTOR_BINDING_INDEX,
+		//	VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		//	textureImageView,
+		//	textureSampler);
+		//descriptorSetUpdater.updateDescriptorSets();
 		m_descriptorSet = std::move(descriptorSet);
 	}
 
@@ -661,6 +675,7 @@ void transitionImageLayout(
 	vkcpp::CommandPool commandPool,
 	vkcpp::Queue graphicsQueue
 ) {
+	//	TODO: turn into method on command buffers?
 	vkcpp::CommandBuffer commandBuffer(commandPool);
 	commandBuffer.beginOneTimeSubmit();
 
@@ -684,7 +699,7 @@ void copyBufferToImage(
 	vkcpp::CommandPool commandPool,
 	vkcpp::Queue graphicsQueue
 ) {
-
+	//	TODO: turn into method on command buffers?
 	vkcpp::CommandBuffer commandBuffer(commandPool);
 	commandBuffer.beginOneTimeSubmit();
 	commandBuffer.cmdCopyBufferToImage(buffer, image, width, height);
@@ -1270,6 +1285,8 @@ public:
 
 		vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
 
+		commandBuffer.cmdEndRenderPass();
+
 		VkImageSubresourceLayers    srcSubresource{
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.mipLevel = 0,
@@ -1296,36 +1313,17 @@ public:
 		vkImageCopy.dstSubresource = dstSubresource;
 		vkImageCopy.extent = extent;
 
-		// Provided by VK_VERSION_1_0
-		if (g_image_memory.m_image) {
-			vkCmdCopyImage(
-				commandBuffer,
-				g_image_memory.m_image,
-				VK_IMAGE_LAYOUT_GENERAL,
-				m_image,
-				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-				1,
-				&vkImageCopy
-			);
-		}
-		//VkCommandBuffer                             commandBuffer,
-		//VkImage                                     srcImage,
-		//VkImageLayout                               srcImageLayout,
-		//VkImage                                     dstImage,
-		//VkImageLayout                               dstImageLayout,
-		//uint32_t                                    regionCount,
-		//const VkImageCopy * pRegions);
-	//{
-	//	VkBuffer vkPointBuffer = m_pointBuffer2;
-	//	VkBuffer pointBuffers[] = { vkPointBuffer };
-	//	VkDeviceSize offsets[] = { 0 };
-	//	vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
-	//	vkCmdBindIndexBuffer(commandBuffer, m_vertexBuffer2, 0, VK_INDEX_TYPE_UINT16);
-	//	vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer2.vertexCount(), 1, 0, 0, 0);
-	//}
-
-
-		commandBuffer.cmdEndRenderPass();
+		//if (g_image_memory.m_image) {
+		//	vkCmdCopyImage(
+		//		commandBuffer,
+		//		g_image_memory.m_image,
+		//		VK_IMAGE_LAYOUT_GENERAL,
+		//		m_image,
+		//		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		//		1,
+		//		&vkImageCopy
+		//	);
+		//}
 
 
 	}
