@@ -422,6 +422,11 @@ class DrawingFrame {
 	) {
 		vkcpp::DescriptorSet descriptorSet(descriptorSetLayout, descriptorPool);
 		vkcpp::DescriptorSetUpdater descriptorSetUpdater(descriptorSet);
+		//	TODO: seems like we are duplicating information.  Don't descriptor
+		//	sets and descriptor set layouts already know their layout?  Maybe
+		//	merge the updater into the descriptor set?  I.e., descriptor sets
+		//	would know how to update themselves.  Just add the data to the
+		//	descriptor set and tell it to update itself.
 		descriptorSetUpdater.addWriteDescriptor(
 			MagicValues::UBO_DESCRIPTOR_BINDING_INDEX,
 			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -617,8 +622,14 @@ vkcpp::DescriptorSetLayout createDrawingFrameDescriptorSetLayout(VkDevice vkDevi
 
 	vkcpp::DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo{};
 	descriptorSetLayoutCreateInfo
-		.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, vkcpp::SHADER_STAGE_VERTEX)
-		.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, vkcpp::SHADER_STAGE_FRAGMENT);
+		.addBinding(
+			MagicValues::UBO_DESCRIPTOR_BINDING_INDEX,
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			vkcpp::SHADER_STAGE_VERTEX)
+		.addBinding(
+			MagicValues::TEXTURE_DESCRIPTOR_BINDING_INDEX,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			vkcpp::SHADER_STAGE_FRAGMENT);
 
 	return vkcpp::DescriptorSetLayout(descriptorSetLayoutCreateInfo, vkDevice);
 }
@@ -712,7 +723,7 @@ vkcpp::Image_Memory_View createTextureFromFile(
 		pixels,
 		device);
 
-	stbi_image_free(pixels);	//	Don't need these anymore.  Pixels are on gpu now.
+	stbi_image_free(pixels);	//	Don't need these pixels anymore.  Pixels are on gpu now.
 	pixels = nullptr;
 
 	//	Make our target image and memory.

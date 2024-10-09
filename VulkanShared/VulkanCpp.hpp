@@ -2379,8 +2379,8 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 		}
 
 		VkDescriptorSetLayoutCreateInfo* assemble() {
-			bindingCount = static_cast<uint32_t>(m_bindings.size());
 			pBindings = nullptr;
+			bindingCount = static_cast<uint32_t>(m_bindings.size());
 			if (bindingCount > 0) {
 				pBindings = m_bindings.data();
 			}
@@ -2390,8 +2390,15 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 	class DescriptorSetLayout : public HandleWithOwner<VkDescriptorSetLayout> {
 
-		DescriptorSetLayout(VkDescriptorSetLayout vkDescriptorSetLayout, VkDevice vkDevice, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(vkDescriptorSetLayout, vkDevice, pfnDestroy) {
+		DescriptorSetLayoutCreateInfo	m_descriptorSetLayoutCreateInfo;
+
+		DescriptorSetLayout(
+			VkDescriptorSetLayout vkDescriptorSetLayout,
+			VkDevice vkDevice,
+			DestroyFunc_t pfnDestroy,
+			DescriptorSetLayoutCreateInfo& descriptorSetLayoutCreateInfo)
+			: HandleWithOwner(vkDescriptorSetLayout, vkDevice, pfnDestroy)
+			, m_descriptorSetLayoutCreateInfo(descriptorSetLayoutCreateInfo) {
 		}
 
 		static void destroy(VkDescriptorSetLayout vkDescriptorSetLayout, VkDevice vkDevice) {
@@ -2401,6 +2408,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 	public:
 
 		DescriptorSetLayout() {}
+
 		DescriptorSetLayout(DescriptorSetLayoutCreateInfo& descriptorSetLayoutCreateInfo, VkDevice vkDevice) {
 			VkDescriptorSetLayout vkDescriptorSetLayout;
 			VkResult vkResult = vkCreateDescriptorSetLayout(
@@ -2411,7 +2419,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
-			new(this)DescriptorSetLayout(vkDescriptorSetLayout, vkDevice, &destroy);
+			new(this)DescriptorSetLayout(vkDescriptorSetLayout, vkDevice, &destroy, descriptorSetLayoutCreateInfo);
 		}
 
 
