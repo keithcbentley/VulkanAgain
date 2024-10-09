@@ -132,7 +132,7 @@ namespace vkcpp {
 
 		Combination_t	m_value;
 
-		Bitset(Bit_t value)
+		explicit Bitset(Bit_t value)
 			: m_value(value) {
 		}
 
@@ -225,6 +225,41 @@ static const MemoryPropertyFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 	MemoryPropertyFlagsValue(MEMORY_PROPERTY_HOST_CACHED);
 	MemoryPropertyFlagsValue(MEMORY_PROPERTY_LAZILY_ALLOCATED);
 	MemoryPropertyFlagsValue(MEMORY_PROPERTY_PROTECTED);
+
+
+	using ShaderStageFlags = Bitset<VkShaderStageFlagBits, VkShaderStageFlags>;
+#define ShaderStageFlagsValue(BARE_VK_VALUE) \
+static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
+
+
+	ShaderStageFlagsValue(SHADER_STAGE_VERTEX);
+	ShaderStageFlagsValue(SHADER_STAGE_TESSELLATION_CONTROL);
+	ShaderStageFlagsValue(SHADER_STAGE_TESSELLATION_EVALUATION);
+	ShaderStageFlagsValue(SHADER_STAGE_GEOMETRY);
+	ShaderStageFlagsValue(SHADER_STAGE_FRAGMENT);
+	ShaderStageFlagsValue(SHADER_STAGE_COMPUTE);
+	static const ShaderStageFlags SHADER_STAGE_ALL_GRAPHICS(VK_SHADER_STAGE_ALL_GRAPHICS);
+
+	//VK_SHADER_STAGE_ALL = 0x7FFFFFFF,
+	//VK_SHADER_STAGE_RAYGEN_BIT_KHR = 0x00000100,
+	//VK_SHADER_STAGE_ANY_HIT_BIT_KHR = 0x00000200,
+	//VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR = 0x00000400,
+	//VK_SHADER_STAGE_MISS_BIT_KHR = 0x00000800,
+	//VK_SHADER_STAGE_INTERSECTION_BIT_KHR = 0x00001000,
+	//VK_SHADER_STAGE_CALLABLE_BIT_KHR = 0x00002000,
+	//VK_SHADER_STAGE_TASK_BIT_EXT = 0x00000040,
+	//VK_SHADER_STAGE_MESH_BIT_EXT = 0x00000080,
+	//VK_SHADER_STAGE_SUBPASS_SHADING_BIT_HUAWEI = 0x00004000,
+	//VK_SHADER_STAGE_CLUSTER_CULLING_BIT_HUAWEI = 0x00080000,
+	//VK_SHADER_STAGE_RAYGEN_BIT_NV = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+	//VK_SHADER_STAGE_ANY_HIT_BIT_NV = VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
+	//VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+	//VK_SHADER_STAGE_MISS_BIT_NV = VK_SHADER_STAGE_MISS_BIT_KHR,
+	//VK_SHADER_STAGE_INTERSECTION_BIT_NV = VK_SHADER_STAGE_INTERSECTION_BIT_KHR,
+	//VK_SHADER_STAGE_CALLABLE_BIT_NV = VK_SHADER_STAGE_CALLABLE_BIT_KHR,
+	//VK_SHADER_STAGE_TASK_BIT_NV = VK_SHADER_STAGE_TASK_BIT_EXT,
+	//VK_SHADER_STAGE_MESH_BIT_NV = VK_SHADER_STAGE_MESH_BIT_EXT,
+	//VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM = 0x7FFFFFFF
 
 
 	class Device;
@@ -2329,13 +2364,14 @@ static const MemoryPropertyFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 		DescriptorSetLayoutCreateInfo& addBinding(
 			int bindingIndex,
 			VkDescriptorType	vkDescriptorType,
-			VkShaderStageFlags	vkShaderStageFlags
+			ShaderStageFlags	shaderStageFlags
 		) {
+			//	TODO: add check for binding index already used?
 			VkDescriptorSetLayoutBinding layoutBinding{};
 			layoutBinding.binding = bindingIndex;
 			layoutBinding.descriptorType = vkDescriptorType;
 			layoutBinding.descriptorCount = 1;
-			layoutBinding.stageFlags = vkShaderStageFlags;
+			layoutBinding.stageFlags = static_cast<VkShaderStageFlags>(shaderStageFlags);
 			layoutBinding.pImmutableSamplers = nullptr;
 
 			m_bindings.push_back(layoutBinding);
@@ -3315,7 +3351,7 @@ static const MemoryPropertyFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
 			imageCreateInfo.setExtent(vkExtent2D);
 			vkcpp::Image_Memory image_memory(
-				imageCreateInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, device);
+				imageCreateInfo, vkcpp::MEMORY_PROPERTY_DEVICE_LOCAL, device);
 
 			vkcpp::ImageViewCreateInfo imageViewCreateInfo(
 				VK_IMAGE_VIEW_TYPE_2D,

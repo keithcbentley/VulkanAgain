@@ -617,8 +617,8 @@ vkcpp::DescriptorSetLayout createDrawingFrameDescriptorSetLayout(VkDevice vkDevi
 
 	vkcpp::DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo{};
 	descriptorSetLayoutCreateInfo
-		.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
-		.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+		.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, vkcpp::SHADER_STAGE_VERTEX)
+		.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, vkcpp::SHADER_STAGE_FRAGMENT);
 
 	return vkcpp::DescriptorSetLayout(descriptorSetLayoutCreateInfo, vkDevice);
 }
@@ -723,7 +723,7 @@ vkcpp::Image_Memory_View createTextureFromFile(
 		texExtent,
 		targetFormat,
 		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		vkcpp::MEMORY_PROPERTY_DEVICE_LOCAL,
 		device);
 
 	//	Change image format to be best target for transfer into.
@@ -797,7 +797,7 @@ void makeImageFromBitmap() {
 		extent,
 		targetFormat,
 		VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		vkcpp::MEMORY_PROPERTY_DEVICE_LOCAL,
 		g_globals.g_deviceOriginal);
 
 	//	Change image layout to be best target for transfer into.
@@ -1423,7 +1423,7 @@ void drawFrame(Globals& globals)
 	//	(COLOR_ATTACHMENT_OUTPUT) to the image.
 	submitInfo2.addWaitSemaphore(
 		currentDrawingFrame.m_swapchainImageAvailableSemaphore,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+		vkcpp::PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT
 	);
 	submitInfo2.addCommandBuffer(commandBuffer);
 	submitInfo2.addSignalSemaphore(currentDrawingFrame.m_renderFinishedSemaphore);
