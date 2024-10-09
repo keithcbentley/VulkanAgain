@@ -2396,7 +2396,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			VkDescriptorSetLayout vkDescriptorSetLayout,
 			VkDevice vkDevice,
 			DestroyFunc_t pfnDestroy,
-			DescriptorSetLayoutCreateInfo& descriptorSetLayoutCreateInfo)
+			const DescriptorSetLayoutCreateInfo& descriptorSetLayoutCreateInfo)
 			: HandleWithOwner(vkDescriptorSetLayout, vkDevice, pfnDestroy)
 			, m_descriptorSetLayoutCreateInfo(descriptorSetLayoutCreateInfo) {
 		}
@@ -2427,8 +2427,15 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 	class DescriptorSet : public HandleWithOwner<VkDescriptorSet, DescriptorPool> {
 
-		DescriptorSet(VkDescriptorSet vkDescriptorSet, DescriptorPool descriptorPool, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(vkDescriptorSet, descriptorPool, pfnDestroy) {
+		DescriptorSetLayout	m_descriptorSetLayout;
+
+		DescriptorSet(
+			VkDescriptorSet vkDescriptorSet,
+			DescriptorPool descriptorPool,
+			DestroyFunc_t pfnDestroy,
+			const DescriptorSetLayout&	descriptorSetLayout)
+			: HandleWithOwner(vkDescriptorSet, descriptorPool, pfnDestroy)
+			, m_descriptorSetLayout(descriptorSetLayout) {
 		}
 
 		static void destroy(VkDescriptorSet vkDescriptorSet, DescriptorPool descriptorPool) {
@@ -2456,7 +2463,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			if (vkResult != VK_SUCCESS) {
 				throw Exception(vkResult);
 			}
-			new(this)DescriptorSet(vkDescriptorSet, descriptorPool, &destroy);
+			new(this)DescriptorSet(vkDescriptorSet, descriptorPool, &destroy, descriptorSetLayout);
 		}
 
 	};
