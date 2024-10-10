@@ -397,11 +397,19 @@ public:
 	ModelViewProjTransform m_modelViewProjTransform{};
 	VkExtent2D				m_imageExtent = { .width = 1, .height = 1 };
 
+	float	m_eyeX = 0.0;
+	float	m_eyeY = -2.0;
+	float	m_eyeZ = 2.0;
+
+	float	m_lookCenterX = 0.0;
+	float	m_lookCenterY = 0.0;
+	float	m_lookCenterZ = 0.0;
+
 
 	Camera() {
 		m_modelViewProjTransform.m_viewTransform = glm::lookAt(
-			glm::vec3(0.0f, -2.0f, 2.0f),
-			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(m_eyeX, m_eyeY, m_eyeZ),
+			glm::vec3(m_lookCenterX, m_lookCenterY, m_lookCenterZ),
 			glm::vec3(0.0f, 1.0f, 0.0f));
 
 		m_modelViewProjTransform.m_projTransform = glm::perspective(
@@ -414,7 +422,26 @@ public:
 
 	}
 
+	void lookCenterDelta(float deltaX, float deltaY, float deltaZ) {
+		m_lookCenterX += deltaX;
+		m_lookCenterY += deltaY;
+		m_lookCenterZ += deltaZ;
+	}
+
+	void eyeDelta(float deltaX, float deltaY, float deltaZ) {
+		m_eyeX += deltaX;
+		m_eyeY += deltaY;
+		m_eyeZ += deltaZ;
+	}
+
+
 	void update(VkExtent2D imageExtent) {
+
+		m_modelViewProjTransform.m_viewTransform = glm::lookAt(
+			glm::vec3(m_eyeX, m_eyeY, m_eyeZ),
+			glm::vec3(m_lookCenterX, m_lookCenterY, m_lookCenterZ),
+			glm::vec3(0.0f, 1.0f, 0.0f));
+
 		m_imageExtent = imageExtent;
 		m_modelViewProjTransform.m_projTransform = glm::perspective(
 			glm::radians(45.0f),
@@ -1478,6 +1505,39 @@ void drawFrame(Globals& globals)
 
 }
 
+const int32_t	KEY_LEFT_ARROW = 37;
+const int32_t	KEY_UP_ARROW = 38;
+const int32_t	KEY_RIGHT_ARROW = 39;
+const int32_t	KEY_DOWN_ARROW = 40;
+
+const int32_t	KEY_W = 'W';
+const int32_t	KEY_A = 'A';
+const int32_t	KEY_S = 'S';
+const int32_t	KEY_D = 'D';
+
+
+
+void handleKeyDown(int32_t key) {
+
+	std::cout << "key: " << key << "\n";
+
+	switch (key) {
+
+	case KEY_LEFT_ARROW: g_theCamera.lookCenterDelta(-0.1, 0.0, 0.0); break;
+	case KEY_RIGHT_ARROW: g_theCamera.lookCenterDelta(0.1, 0.0, 0.0); break;
+
+	case KEY_UP_ARROW: g_theCamera.lookCenterDelta(0.0, 0.1, 0.0); break;
+	case KEY_DOWN_ARROW: g_theCamera.lookCenterDelta(0.0, -0.1, 0.0); break;
+
+	case KEY_W:	g_theCamera.eyeDelta(0.0, 0.0, -0.1); break;
+	case KEY_S:	g_theCamera.eyeDelta(0.0, 0.0, 0.1); break;
+
+
+	}
+
+}
+
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
@@ -1501,6 +1561,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	case WM_WINDOWPOSCHANGED:
 		g_globals.g_swapchainImageViewsFrameBuffers.stale();
+		break;
+
+	case WM_KEYDOWN:
+		handleKeyDown(wParam);
 		break;
 
 	default:
@@ -1552,8 +1616,7 @@ HWND CreateFirstWindow(HINSTANCE hInstance)
 		nullptr
 	);
 
-	if (!hWnd)
-	{
+	if (!hWnd) {
 		return hWnd;
 	}
 
@@ -1703,6 +1766,8 @@ void snapCommandWindow() {
 
 }
 
+
+
 void MessageLoop(Globals& globals) {
 
 	MSG msg;
@@ -1717,12 +1782,6 @@ void MessageLoop(Globals& globals) {
 				break;
 			}
 
-			if (msg.message == WM_KEYDOWN) {
-				if (msg.wParam == 'S') {
-					snapCommandWindow();
-					makeImageFromBitmap();
-				}
-			}
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
