@@ -11,10 +11,12 @@
 #include <variant>
 
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
-#define VK_USE_PLATFORM_WIN32_KHR
 
+#define VK_USE_PLATFORM_WIN32_KHR
 #include "VulkanCpp.hpp"
 #include <vulkan/vulkan.h>
+
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -383,11 +385,50 @@ const int windowHeight = 600;
 //	TODO: turn into "camera".
 //	TODO: better uniform buffer object handling.
 struct ModelViewProjTransform {
-	alignas(16) glm::mat4 modelTransform;
-	alignas(16) glm::mat4 viewTransform;
-	alignas(16) glm::mat4 projTransform;
+	alignas(16) glm::mat4 m_modelTransform;
+	alignas(16) glm::mat4 m_viewTransform;
+	alignas(16) glm::mat4 m_projTransform;
 };
 
+class Camera {
+
+public:
+
+	ModelViewProjTransform m_modelViewProjTransform{};
+	VkExtent2D				m_imageExtent = { .width = 1, .height = 1 };
+
+
+	Camera() {
+		m_modelViewProjTransform.m_viewTransform = glm::lookAt(
+			glm::vec3(0.0f, -2.0f, 2.0f),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f));
+
+		m_modelViewProjTransform.m_projTransform = glm::perspective(
+			glm::radians(45.0f),
+			(float)m_imageExtent.width / (float)m_imageExtent.height,
+			0.1f,
+			10.0f);
+
+		m_modelViewProjTransform.m_projTransform[1][1] *= -1.0;
+
+	}
+
+	void update(VkExtent2D imageExtent) {
+		m_imageExtent = imageExtent;
+		m_modelViewProjTransform.m_projTransform = glm::perspective(
+			glm::radians(45.0f),
+			(float)m_imageExtent.width / (float)m_imageExtent.height,
+			0.1f,
+			10.0f);
+
+		m_modelViewProjTransform.m_projTransform[1][1] *= -1.0;
+
+	}
+};
+
+
+Camera g_theCamera;
 
 
 class DrawingFrame {
@@ -436,22 +477,6 @@ class DrawingFrame {
 
 		vkcpp::DescriptorSetUpdater descriptorSetUpdater();
 
-		//	TODO: seems like we are duplicating information.  Don't descriptor
-		//	sets and descriptor set layouts already know their layout?  Maybe
-		//	merge the updater into the descriptor set?  I.e., descriptor sets
-		//	would know how to update themselves.  Just add the data to the
-		//	descriptor set and tell it to update itself.
-		//descriptorSetUpdater.addWriteDescriptor(
-		//	MagicValues::UBO_DESCRIPTOR_BINDING_INDEX,
-		//	VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		//	m_uniformBufferMemory.m_buffer,
-		//	sizeof(ModelViewProjTransform));
-		//descriptorSetUpdater.addWriteDescriptor(
-		//	MagicValues::TEXTURE_DESCRIPTOR_BINDING_INDEX,
-		//	VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		//	textureImageView,
-		//	textureSampler);
-		//descriptorSetUpdater.updateDescriptorSets();
 		m_descriptorSet = std::move(descriptorSet);
 	}
 
@@ -492,6 +517,31 @@ public:
 			textureImageView,
 			textureSampler);
 	}
+
+	//	TODO: better uniform buffer handling.
+	void updateUniformBuffer(
+		const VkExtent2D	swapchainImageExtent
+	) {
+		static auto startTime = std::chrono::high_resolution_clock::now();
+
+		auto currentTime = std::chrono::high_resolution_clock::now();
+		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+		g_theCamera.update(swapchainImageExtent);
+
+		//	TODO: turn into real "camera".
+		ModelViewProjTransform modelViewProjTransform = g_theCamera.m_modelViewProjTransform;
+		modelViewProjTransform.m_modelTransform =
+			glm::rotate(
+				glm::mat4(1.0f),
+				time * glm::radians(10.0f),
+				glm::vec3(0.0f, 1.0f, 0.0f));
+
+
+		//	TODO: Maybe use some kind of templated version of the mapped memory?
+		*((ModelViewProjTransform*)m_uniformBufferMemory.m_mappedMemory) = modelViewProjTransform;
+	}
+
 
 
 	vkcpp::Device getDevice() const {
@@ -1140,42 +1190,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 }
 
 
-//	TODO: better uniform buffer handling.
-void updateUniformBuffer(
-	vkcpp::Buffer_DeviceMemory& uniformBufferMemory,
-	const VkExtent2D				swapchainImageExtent
-) {
-	static auto startTime = std::chrono::high_resolution_clock::now();
-
-	auto currentTime = std::chrono::high_resolution_clock::now();
-	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-
-	//	TODO: turn into real "camera".
-	ModelViewProjTransform modelViewProjTransform{};
-	modelViewProjTransform.modelTransform =
-		glm::rotate(
-			glm::mat4(1.0f),
-			time * glm::radians(10.0f),
-			glm::vec3(0.0f, 1.0f, 0.0f));
-	modelViewProjTransform.viewTransform = glm::lookAt(
-		glm::vec3(0.0f, -2.0f, 2.0f),
-		glm::vec3(0.0f, 0.0f, 0.0f),
-		glm::vec3(0.0f, 1.0f, 0.0f));
-	modelViewProjTransform.projTransform = glm::perspective(
-		glm::radians(45.0f),
-		(float)swapchainImageExtent.width / (float)swapchainImageExtent.height,
-		0.1f,
-		10.0f);
-	modelViewProjTransform.projTransform[1][1] *= -1.0;
-
-	//	TODO: shouldn't this just be a simple assignment?
-	//	Maybe use some kind of templated version of the mapped memory?
-	memcpy(
-		uniformBufferMemory.m_mappedMemory,
-		&modelViewProjTransform,
-		sizeof(modelViewProjTransform));
-}
 
 
 class Renderer {
@@ -1395,10 +1409,7 @@ void drawFrame(Globals& globals)
 
 	VkImage swapchainImage = globals.g_swapchainImageViewsFrameBuffers.m_swapchainImages[swapchainImageIndex];
 
-	updateUniformBuffer(
-		currentDrawingFrame.m_uniformBufferMemory,
-		globals.g_swapchainImageViewsFrameBuffers.getImageExtent()
-	);
+	currentDrawingFrame.updateUniformBuffer(globals.g_swapchainImageViewsFrameBuffers.getImageExtent());
 
 	//	TODO: this is kind of clunky
 	theRenderer.m_pointBuffer1 = globals.g_pointBufferAndDeviceMemory1.m_buffer;
