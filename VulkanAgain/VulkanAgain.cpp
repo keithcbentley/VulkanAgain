@@ -49,6 +49,26 @@ public:
 
 };
 
+class ShaderName {
+
+public:
+
+	std::string	m_shaderName;
+	std::string	m_fileName;
+
+	ShaderName(
+		std::string	shaderName,
+		std::string fileName)
+		: m_shaderName(shaderName)
+		, m_fileName(fileName) {
+	}
+};
+
+std::vector<ShaderName> g_shaderNames{
+	{ "vert4", "C:/Shaders/VulkanTriangle/vert4.spv"},
+	{ "textureFrag", "C:/Shaders/VulkanTriangle/textureFrag.spv"},
+	{ "identityFrag", "C:/Shaders/VulkanTriangle/identityFrag.spv"} };
+
 
 struct Point {
 	glm::vec3	m_pos;
@@ -307,16 +327,16 @@ const std::vector<Point> g_cubeCenterPoints{
 	{{0.0f, 1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
 	{{0.0f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f}},
 
-	{{0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},		//	20
-	{{1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+	{{0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},		//	20
+	{{1.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
 	{{1.0f, 1.0f, -1.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.0f, 1.0f, -1.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.0f, 1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
 	{{0.5f, 1.0f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f}},
 
-	{{0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},	//	25
+	{{0.0f, 0.0f, -1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},	//	25
 	{{1.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
-	{{1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
 	{{0.5f, 0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f}},
 
 
@@ -675,10 +695,6 @@ public:
 
 	vkcpp::Swapchain_ImageViews_FrameBuffers	g_swapchainImageViewsFrameBuffers;
 
-	vkcpp::ShaderModule g_vertShaderModule;
-	vkcpp::ShaderModule g_textureFragShaderModule;
-	vkcpp::ShaderModule g_identityFragShaderModule;
-
 	vkcpp::DescriptorPool			g_descriptorPoolOriginal;
 	vkcpp::DescriptorSetLayout		g_descriptorSetLayoutOriginal;
 
@@ -697,6 +713,8 @@ public:
 
 	vkcpp::Image_Memory_View	g_texture;
 	vkcpp::Sampler g_textureSampler;
+
+	ShaderLibrary	g_shaderLibrary;	//	Hack to control when shader library is cleared out.
 
 };
 
@@ -1105,13 +1123,13 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		deviceOriginal);
 
 
+	for (const ShaderName& shaderName : g_shaderNames) {
+		ShaderLibrary::createShaderModuleFromFile(
+			shaderName.m_shaderName,
+			shaderName.m_fileName,
+			deviceOriginal);
 
-	vkcpp::ShaderModule	vertShaderModule =
-		ShaderLibrary::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert4.spv", deviceOriginal);
-	vkcpp::ShaderModule	textureFragShaderModule =
-		ShaderLibrary::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/textureFrag.spv", deviceOriginal);
-	vkcpp::ShaderModule	identityFragShaderModule =
-		ShaderLibrary::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/identityFrag.spv", deviceOriginal);
+	}
 
 
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};
@@ -1150,9 +1168,12 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	//	graphicsPipelineCreateInfo.setViewportExtent(vkSurfaceCapabilities.currentExtent);
 	graphicsPipelineCreateInfo.setPipelineLayout(pipelineLayout);
 	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal, 0);
-	graphicsPipelineCreateInfo.addShaderModule(vertShaderModule, VK_SHADER_STAGE_VERTEX_BIT, "main");
-	graphicsPipelineCreateInfo.addShaderModule(textureFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
-	//graphicsPipelineCreateInfo.addShaderModule(identityFragShaderModule, VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+	graphicsPipelineCreateInfo.addShaderModule(
+		ShaderLibrary::shaderModule("vert4"), VK_SHADER_STAGE_VERTEX_BIT, "main");
+	graphicsPipelineCreateInfo.addShaderModule(
+		ShaderLibrary::shaderModule("textureFrag"), VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+	//graphicsPipelineCreateInfo.addShaderModule(
+	//	ShaderLibrary::shaderModule("identityFrag"), VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 
 	vkcpp::GraphicsPipeline graphicsPipeline0(graphicsPipelineCreateInfo, deviceOriginal);
 
@@ -1203,10 +1224,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	globals.g_renderPassOriginal = std::move(renderPassOriginal);
 	globals.g_swapchainImageViewsFrameBuffers = std::move(swapchainImageViewsFrameBuffers);
-
-	globals.g_vertShaderModule = std::move(vertShaderModule);
-	globals.g_textureFragShaderModule = std::move(textureFragShaderModule);
-	globals.g_identityFragShaderModule = std::move(identityFragShaderModule);
 
 	globals.g_texture = std::move(texture);
 	globals.g_textureSampler = std::move(textureSampler);

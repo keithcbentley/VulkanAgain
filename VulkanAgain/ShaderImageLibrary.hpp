@@ -8,7 +8,15 @@ class ShaderLibrary {
 
 public:
 
-	static vkcpp::ShaderModule createShaderModuleFromFile(const char* fileName, VkDevice vkDevice);
+	ShaderLibrary() {}
+	~ShaderLibrary();
+
+	static void createShaderModuleFromFile(
+		const std::string& shaderName,
+		const std::string& fileName,
+		VkDevice vkDevice);
+
+	static vkcpp::ShaderModule shaderModule(const std::string& shaderName);
 
 
 };
