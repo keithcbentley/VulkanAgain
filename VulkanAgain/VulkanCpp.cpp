@@ -3,13 +3,13 @@
 #include "VulkanCpp.hpp"
 
 namespace vkcpp {
-	Queue Device::getDeviceQueue(int deviceQueueFamily, int deviceQueueIndex) const {
+	Queue Device::getDeviceQueue(int deviceQueueFamilyIndex, int deviceQueueIndex) const {
 		VkQueue vkQueue;
-		vkGetDeviceQueue(m_handle, deviceQueueFamily, deviceQueueIndex, &vkQueue);
+		vkGetDeviceQueue(m_handle, deviceQueueFamilyIndex, deviceQueueIndex, &vkQueue);
 		if (vkQueue == nullptr) {
 			throw Exception(VK_ERROR_UNKNOWN);
 		}
-		return Queue(vkQueue, *this);
+		return Queue(vkQueue, deviceQueueFamilyIndex, *this);
 	}
 
 }

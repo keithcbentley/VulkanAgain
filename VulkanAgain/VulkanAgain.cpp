@@ -21,8 +21,6 @@
 
 #include <conio.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
 
 #include "VulkanSynchronization2Only.h"
 
@@ -586,7 +584,6 @@ public:
 	}
 
 
-
 	vkcpp::Device getDevice() const {
 		return m_device;
 	}
@@ -684,9 +681,9 @@ public:
 	HWND					g_hWnd = NULL;
 
 	vkcpp::VulkanInstance	g_vulkanInstance;
-	vkcpp::Surface			g_surfaceOriginal;
 	vkcpp::PhysicalDevice	g_physicalDevice;
 	vkcpp::Device			g_deviceOriginal;
+	vkcpp::Surface			g_surfaceOriginal;
 
 	vkcpp::Queue				g_graphicsQueue;
 	vkcpp::Queue				g_presentationQueue;
@@ -711,11 +708,10 @@ public:
 
 	vkcpp::CommandPool		g_commandPoolOriginal;
 
-	vkcpp::Image_Memory_View	g_texture;
 	vkcpp::Sampler g_textureSampler;
 
 	ShaderLibrary	g_shaderLibrary;	//	Hack to control when shader library is cleared out.
-
+	ImageLibrary	g_imageLibrary;		//	Hack to control when image library is cleared out.
 };
 
 Globals g_globals;
@@ -755,135 +751,6 @@ vkcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
 
 
 
-
-
-
-void transitionImageLayout(
-	vkcpp::Image image,
-	VkFormat format,
-	VkImageLayout oldLayout,
-	VkImageLayout newLayout,
-	vkcpp::CommandPool commandPool,
-	vkcpp::Queue graphicsQueue
-) {
-	//	TODO: turn into method on command buffers?
-	vkcpp::CommandBuffer commandBuffer(commandPool);
-	commandBuffer.beginOneTimeSubmit();
-
-	vkcpp::ImageMemoryBarrier2 imageMemoryBarrier(oldLayout, newLayout, image);
-	vkcpp::DependencyInfo dependencyInfo;
-	dependencyInfo.addImageMemoryBarrier(imageMemoryBarrier);
-	commandBuffer.cmdPipelineBarrier2(dependencyInfo);
-
-	commandBuffer.end();
-
-	graphicsQueue.submit2Fenced(commandBuffer);
-
-}
-
-
-void copyBufferToImage(
-	vkcpp::Buffer buffer,
-	vkcpp::Image image,
-	int width,
-	int height,
-	vkcpp::CommandPool commandPool,
-	vkcpp::Queue graphicsQueue
-) {
-	//	TODO: turn into method on command buffers?
-	vkcpp::CommandBuffer commandBuffer(commandPool);
-	commandBuffer.beginOneTimeSubmit();
-	commandBuffer.cmdCopyBufferToImage(buffer, image, width, height);
-	commandBuffer.end();
-
-	graphicsQueue.submit2Fenced(commandBuffer);
-}
-
-
-
-vkcpp::Image_Memory_View createTextureFromFile(
-	const char* fileName,
-	vkcpp::Device device,
-	vkcpp::CommandPool commandPool,
-	vkcpp::Queue graphicsQueue
-) {
-	const VkFormat targetFormat = VK_FORMAT_R8G8B8A8_SRGB;
-
-	int texWidth;
-	int texHeight;
-	int texChannels;
-
-	stbi_uc* pixels = stbi_load(fileName, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-	if (!pixels) {
-		throw std::runtime_error("failed to load texture image!");
-	}
-
-	const VkDeviceSize imageSize = texWidth * texHeight * 4;
-
-	//	Make a device (gpu) staging buffer and copy the pixels into it.
-	vkcpp::Buffer_DeviceMemory stagingBuffer_DeviceMemoryMapped(
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		imageSize,
-		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
-		pixels,
-		device);
-
-	stbi_image_free(pixels);	//	Don't need these pixels anymore.  Pixels are on gpu now.
-	pixels = nullptr;
-
-	//	Make our target image and memory.
-	VkExtent2D texExtent;
-	texExtent.width = texWidth;
-	texExtent.height = texHeight;
-	vkcpp::Image_Memory textureImage_DeviceMemory(
-		texExtent,
-		targetFormat,
-		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		vkcpp::MEMORY_PROPERTY_DEVICE_LOCAL,
-		device);
-
-	//	Change image format to be best target for transfer into.
-	transitionImageLayout(
-		textureImage_DeviceMemory.m_image,
-		targetFormat,
-		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		commandPool,
-		graphicsQueue);
-
-	//	Copy image pixels from staging buffer into image memory.
-	copyBufferToImage(
-		stagingBuffer_DeviceMemoryMapped.m_buffer,
-		textureImage_DeviceMemory.m_image,
-		texWidth,
-		texHeight,
-		commandPool,
-		graphicsQueue);
-
-	//	Now transition the image layout to best for shader images.
-	transitionImageLayout(
-		textureImage_DeviceMemory.m_image,
-		targetFormat,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		commandPool,
-		graphicsQueue);
-
-	//	Shaders are accessed through image views, not directly from images.
-	vkcpp::ImageViewCreateInfo textureImageViewCreateInfo(
-		VK_IMAGE_VIEW_TYPE_2D,
-		targetFormat,
-		VK_IMAGE_ASPECT_COLOR_BIT);
-	textureImageViewCreateInfo.image = textureImage_DeviceMemory.m_image;
-	vkcpp::ImageView textureImageView(textureImageViewCreateInfo, device);
-
-	//	Package everything up for use as a shader.
-	return vkcpp::Image_Memory_View(
-		std::move(textureImage_DeviceMemory.m_image),
-		std::move(textureImage_DeviceMemory.m_deviceMemory),
-		std::move(textureImageView));
-}
 
 
 std::vector<uint32_t> g_imageData;
@@ -1066,6 +933,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::RenderPass renderPassOriginal(createRenderPass(swapchainImageFormat, deviceOriginal));
 
+
 	vkcpp::Swapchain_ImageViews_FrameBuffers::setDevice(deviceOriginal);
 
 	const VkColorSpaceKHR swapchainImageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
@@ -1139,9 +1007,9 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::CommandPool commandPoolOriginal(commandPoolCreateInfo, deviceOriginal);
 
 
-	vkcpp::Image_Memory_View texture =
-		createTextureFromFile(
-			"c:/vulkan/texture.jpg", deviceOriginal, commandPoolOriginal, graphicsQueue);
+	ImageLibrary::createImageMemoryViewFromFile(
+		"textureImage", "c:/vulkan/texture.jpg",
+		deviceOriginal, commandPoolOriginal, graphicsQueue);
 
 
 	vkcpp::SamplerCreateInfo textureSamplerCreateInfo;
@@ -1185,9 +1053,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		commandPoolOriginal,
 		descriptorPoolOriginal,
 		descriptorSetLayoutOriginal,
-		texture.m_imageView,
-		textureSampler
-	);
+		ImageLibrary::imageView("textureImage"),
+		textureSampler);
 
 
 
@@ -1225,7 +1092,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_renderPassOriginal = std::move(renderPassOriginal);
 	globals.g_swapchainImageViewsFrameBuffers = std::move(swapchainImageViewsFrameBuffers);
 
-	globals.g_texture = std::move(texture);
 	globals.g_textureSampler = std::move(textureSampler);
 
 }
@@ -1246,9 +1112,9 @@ public:
 	vkcpp::Buffer			m_vertexBuffer2;
 
 
-	VkDescriptorSet			m_vkDescriptorSet;
+	VkDescriptorSet			m_vkDescriptorSet = nullptr;
 
-	VkImage	m_image;
+	VkImage	m_image = nullptr;
 
 	//	TODO:	pipelines should remember their layouts,
 	//	or vice-versa, or both.
@@ -1263,7 +1129,7 @@ public:
 	//	we figure out the best structure for the pieces.  Maybe
 	//	encapsulate the renderpass in this class.
 	vkcpp::Swapchain_ImageViews_FrameBuffers* m_pSwapchainImageViewsFrameBuffers;
-	uint32_t									m_swapchainImageIndex;
+	uint32_t									m_swapchainImageIndex = 0;
 
 
 	void recordCommandBuffer(

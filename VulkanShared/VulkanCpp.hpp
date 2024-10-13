@@ -1259,6 +1259,8 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 		Buffer_DeviceMemory() {}
 
+		//	No copy constructor or assignment because of the mapped pointer.
+		//	A copy could unexpectedly unmap the pointer.
 		Buffer_DeviceMemory(const Buffer_DeviceMemory&) = delete;
 		Buffer_DeviceMemory& operator=(const Buffer_DeviceMemory&) = delete;
 
@@ -2305,21 +2307,24 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 	public:
 
-		Queue()
-			: HandleWithOwner{} {
-		}
+		uint32_t	m_queueFamilyIndex = 0;
+
+		Queue() {}
 
 		//	Queues always come from the device and are never (explicitly) destroyed
-		Queue(VkQueue vkQueue, Device device)
-			: HandleWithOwner(vkQueue, device, nullptr) {
+		Queue(VkQueue vkQueue, uint32_t queueFamilyIndex, Device device)
+			: HandleWithOwner(vkQueue, device, nullptr)
+			, m_queueFamilyIndex(queueFamilyIndex) {
 		}
 
 		Queue(const Queue& other)
-			: HandleWithOwner(other) {
+			: HandleWithOwner(other)
+			, m_queueFamilyIndex(other.m_queueFamilyIndex) {
 		}
 
 		Queue& operator=(const Queue& other) {
 			HandleWithOwner::operator=(other);
+			m_queueFamilyIndex = other.m_queueFamilyIndex;
 			return *this;
 		}
 
