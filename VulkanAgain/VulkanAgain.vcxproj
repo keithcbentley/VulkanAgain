@@ -139,7 +139,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ShaderImageLibrary.cpp" />
     <ClCompile Include="VulkanAgain.cpp" />
+    <ClCompile Include="VulkanCpp.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ShaderImageLibrary.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

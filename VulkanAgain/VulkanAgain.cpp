@@ -14,8 +14,7 @@
 
 #define VK_USE_PLATFORM_WIN32_KHR
 #include "VulkanCpp.hpp"
-#include <vulkan/vulkan.h>
-
+#include "ShaderImageLibrary.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -58,10 +57,7 @@ struct Point {
 
 
 	static vkcpp::VertexBinding getVertexBinding(int bindingIndex) {
-		vkcpp::VertexBinding vertexBinding;
-		vertexBinding.m_vkVertexInputBindingDescription.binding = bindingIndex;
-		vertexBinding.m_vkVertexInputBindingDescription.stride = sizeof(Point);
-		vertexBinding.m_vkVertexInputBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+		vkcpp::VertexBinding vertexBinding(bindingIndex, sizeof(Point), VK_VERTEX_INPUT_RATE_VERTEX);
 
 		//	A little bit fragile since location depends on addition order,
 		//	but we need to keep locations explicit for vertex shader.
@@ -1109,12 +1105,13 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		deviceOriginal);
 
 
+
 	vkcpp::ShaderModule	vertShaderModule =
-		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert4.spv", deviceOriginal);
+		ShaderLibrary::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/vert4.spv", deviceOriginal);
 	vkcpp::ShaderModule	textureFragShaderModule =
-		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/textureFrag.spv", deviceOriginal);
+		ShaderLibrary::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/textureFrag.spv", deviceOriginal);
 	vkcpp::ShaderModule	identityFragShaderModule =
-		vkcpp::ShaderModule::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/identityFrag.spv", deviceOriginal);
+		ShaderLibrary::createShaderModuleFromFile("C:/Shaders/VulkanTriangle/identityFrag.spv", deviceOriginal);
 
 
 	VkCommandPoolCreateInfo commandPoolCreateInfo{};

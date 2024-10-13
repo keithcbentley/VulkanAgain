@@ -1,8 +1,10 @@
-
+#pragma once
 
 #include <exception>
 #include <vector>
+#include <array>
 #include <unordered_set>
+#include <map>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -10,17 +12,6 @@
 #include <vulkan/vulkan.h>
 
 #include "VulkanSynchronization2Only.h"
-
-
-template<typename T>
-concept DefaultCopyConstructible = requires (T t) {
-	T(t);
-};
-
-template<typename T>
-concept BoolConvertible = requires (T t) {
-	t.operator bool();
-};
 
 
 
@@ -53,6 +44,12 @@ namespace vkcpp {
 	};
 
 
+
+
+
+
+
+
 	//	Use this to make pre-existing type act like
 	//	another (smarter) type.
 	template<typename Real_t, typename ActsLike_t>
@@ -62,57 +59,6 @@ namespace vkcpp {
 		ActsLike_t* p = static_cast<ActsLike_t*>(&real);
 		return *p;
 	}
-
-	class Extent2D : public VkExtent2D {
-
-	public:
-		Extent2D(int widthArg, int heightArg) {
-			width = widthArg;
-			height = heightArg;
-		}
-	};
-
-	class Extent3D : public VkExtent3D {};
-	//	uint32_t    width;
-	//	uint32_t    height;
-	//	uint32_t    depth;
-	//} VkExtent3D;
-
-	class Offset2D : public VkOffset2D {};
-	//	int32_t    x;
-	//	int32_t    y;
-	//} VkOffset2D;
-
-	class Offset3D : public VkOffset3D {};
-	//	int32_t    x;
-	//	int32_t    y;
-	//	int32_t    z;
-	//} VkOffset3D;
-
-	class Rect2D : public VkRect2D {
-
-	public:
-
-		Rect2D()
-			: VkRect2D{} {
-		}
-
-		Rect2D(VkOffset2D vkOffset2D, VkExtent2D vkExtent2D) {
-			offset = vkOffset2D;
-			extent = vkExtent2D;
-		}
-
-		Rect2D(VkExtent2D vkExtent2D) {
-			offset.x = 0;
-			offset.y = 0;
-			extent = vkExtent2D;
-		}
-
-
-
-	};
-	static_assert(sizeof(Rect2D) == sizeof(VkRect2D));
-	template Rect2D& wrapToRef<VkRect2D, Rect2D>(VkRect2D&);
 
 
 	//	Yikes! Vulkan uses enums for bit values but uses
@@ -176,6 +122,68 @@ namespace vkcpp {
 
 
 	};
+
+
+
+
+
+
+
+
+
+	class Extent2D : public VkExtent2D {
+
+	public:
+		Extent2D(int widthArg, int heightArg) {
+			width = static_cast<uint32_t>(widthArg);
+			height = static_cast<uint32_t>(heightArg);
+		}
+	};
+
+	class Extent3D : public VkExtent3D {};
+	//	uint32_t    width;
+	//	uint32_t    height;
+	//	uint32_t    depth;
+	//} VkExtent3D;
+
+	class Offset2D : public VkOffset2D {};
+	//	int32_t    x;
+	//	int32_t    y;
+	//} VkOffset2D;
+
+	class Offset3D : public VkOffset3D {};
+	//	int32_t    x;
+	//	int32_t    y;
+	//	int32_t    z;
+	//} VkOffset3D;
+
+	class Rect2D : public VkRect2D {
+
+	public:
+
+		Rect2D()
+			: VkRect2D{} {
+		}
+
+		Rect2D(VkOffset2D vkOffset2D, VkExtent2D vkExtent2D) {
+			offset = vkOffset2D;
+			extent = vkExtent2D;
+		}
+
+		Rect2D(VkExtent2D vkExtent2D) {
+			offset.x = 0;
+			offset.y = 0;
+			extent = vkExtent2D;
+		}
+
+
+
+	};
+	static_assert(sizeof(Rect2D) == sizeof(VkRect2D));
+	template Rect2D& wrapToRef<VkRect2D, Rect2D>(VkRect2D&);
+
+
+
 
 	class PipelineStageFlags2Id {};
 
@@ -400,7 +408,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			return m_vkVersionNumber != 0;
 		}
 
-		int y;
 		auto operator<=>(const VersionNumber& other) const {
 			if (auto cmp = major() <=> other.major(); cmp != 0) {
 				return cmp;
@@ -901,7 +908,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 			sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 			queueFamilyIndex = queueFamilyIndexArg;
-			queueCount = queueCountArg;
+			queueCount = static_cast<uint32_t>(queueCountArg);
 			pQueuePriorities = s_queuePriorities.data();
 		}
 
@@ -975,7 +982,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			}
 
 			//	TODO: add hygiene in case we are called twice.
-			queueCreateInfoCount = m_deviceQueueCreateInfos.size();
+			queueCreateInfoCount = static_cast<uint32_t>(m_deviceQueueCreateInfos.size());
 			if (queueCreateInfoCount > 0) {
 				pQueueCreateInfos = m_deviceQueueCreateInfos.data();
 			}
@@ -1478,12 +1485,12 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 		VkSubpassDescription* assemble() {
 
-			inputAttachmentCount = m_inputAttachmentReferences.size();
+			inputAttachmentCount = static_cast<uint32_t>(m_inputAttachmentReferences.size());
 			if (inputAttachmentCount > 0) {
 				pInputAttachments = m_inputAttachmentReferences.data();
 			}
 
-			colorAttachmentCount = m_colorAttachmentReferences.size();
+			colorAttachmentCount = static_cast<uint32_t>(m_colorAttachmentReferences.size());
 			if (colorAttachmentCount > 0) {
 				pColorAttachments = m_colorAttachmentReferences.data();
 			}
@@ -1624,7 +1631,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 			pSubpasses = nullptr;
 			m_vkSubpassDescriptions.clear();
-			subpassCount = m_subpassDescriptions.size();
+			subpassCount = static_cast<uint32_t>(m_subpassDescriptions.size());
 			if (subpassCount > 0) {
 				for (SubpassDescription& subpassDescription : m_subpassDescriptions) {
 					//	TODO: investigate.  This is either really clever or really risky.
@@ -1637,7 +1644,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 			pDependencies = nullptr;
 			m_vkSubpassDependencies.clear();
-			dependencyCount = m_subpassDependencies.size();
+			dependencyCount = static_cast<uint32_t>(m_subpassDependencies.size());
 			if (dependencyCount > 0) {
 				for (SubpassDependency& subpassDependency : m_subpassDependencies) {
 					m_vkSubpassDependencies.push_back(subpassDependency);
@@ -1985,13 +1992,13 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 		VkDependencyInfo* assemble() {
 
 			pMemoryBarriers = nullptr;
-			memoryBarrierCount = m_memoryBarriers.size();
+			memoryBarrierCount = static_cast<uint32_t>(m_memoryBarriers.size());
 			if (memoryBarrierCount > 0) {
 				pMemoryBarriers = m_memoryBarriers.data();
 			}
 
 			pImageMemoryBarriers = nullptr;
-			imageMemoryBarrierCount = m_imageMemoryBarriers.size();
+			imageMemoryBarrierCount = static_cast<uint32_t>(m_imageMemoryBarriers.size());
 			if (imageMemoryBarrierCount > 0) {
 				pImageMemoryBarriers = m_imageMemoryBarriers.data();
 			}
@@ -2220,19 +2227,19 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 		SubmitInfo2* assemble() {
 
 			pWaitSemaphoreInfos = nullptr;
-			waitSemaphoreInfoCount = m_waitSemaphoreInfos.size();
+			waitSemaphoreInfoCount = static_cast<uint32_t>(m_waitSemaphoreInfos.size());
 			if (waitSemaphoreInfoCount > 0) {
 				pWaitSemaphoreInfos = m_waitSemaphoreInfos.data();
 			}
 
 			pCommandBufferInfos = nullptr;
-			commandBufferInfoCount = m_commandBufferInfos.size();
+			commandBufferInfoCount = static_cast<uint32_t>(m_commandBufferInfos.size());
 			if (commandBufferInfoCount > 0) {
 				pCommandBufferInfos = m_commandBufferInfos.data();
 			}
 
 			pSignalSemaphoreInfos = nullptr;
-			signalSemaphoreInfoCount = m_signalSemaphoreInfos.size();
+			signalSemaphoreInfoCount = static_cast<uint32_t>(m_signalSemaphoreInfos.size());
 			if (signalSemaphoreInfoCount > 0) {
 				pSignalSemaphoreInfos = m_signalSemaphoreInfos.data();
 			}
@@ -2267,7 +2274,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			int	swapchainImageIndex
 		) {
 			m_vkSwapchain = vkSwapchain;
-			m_swapchainImageIndex = swapchainImageIndex;
+			m_swapchainImageIndex = static_cast<uint32_t>(swapchainImageIndex);
 		}
 
 		VkPresentInfoKHR* assemble() {
@@ -2370,15 +2377,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			throw Exception(vkResult);
 		}
 	};
-
-	Queue Device::getDeviceQueue(int deviceQueueFamily, int deviceQueueIndex) const {
-		VkQueue vkQueue;
-		vkGetDeviceQueue(m_handle, deviceQueueFamily, deviceQueueIndex, &vkQueue);
-		if (vkQueue == nullptr) {
-			throw Exception(VK_ERROR_UNKNOWN);
-		}
-		return Queue(vkQueue, *this);
-	}
 
 
 	class DescriptorPoolCreateInfo : public VkDescriptorPoolCreateInfo {
@@ -2873,11 +2871,23 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 
 	class VertexBinding {
+		//	This contains the vertex binding and the corresponding
+		//	attribute descriptions for the binding.
 
 	public:
 
 		VkVertexInputBindingDescription m_vkVertexInputBindingDescription{};
 		std::vector<VkVertexInputAttributeDescription>	m_vkVertexInputAttributeDescriptions;
+
+		VertexBinding(
+			uint32_t             binding,
+			uint32_t             stride,
+			VkVertexInputRate    inputRate
+		) {
+			m_vkVertexInputBindingDescription.binding = binding;
+			m_vkVertexInputBindingDescription.stride = stride;
+			m_vkVertexInputBindingDescription.inputRate = inputRate;
+		}
 
 		void addVertexInputAttributeDescription(
 			int	bindingIndex,
@@ -2886,10 +2896,10 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			uint32_t	offset
 		) {
 			VkVertexInputAttributeDescription vkVertexInputAttributeDescription{};
-			vkVertexInputAttributeDescription.binding = bindingIndex;
-			vkVertexInputAttributeDescription.location = location;
+			vkVertexInputAttributeDescription.binding = static_cast<uint32_t>(bindingIndex);
+			vkVertexInputAttributeDescription.location = static_cast<uint32_t>(location);
 			vkVertexInputAttributeDescription.format = vkFormat;
-			vkVertexInputAttributeDescription.offset = offset;
+			vkVertexInputAttributeDescription.offset = static_cast<uint32_t>(offset);
 			m_vkVertexInputAttributeDescriptions.push_back(vkVertexInputAttributeDescription);
 		}
 
@@ -2947,14 +2957,14 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 	class GraphicsPipelineCreateInfo {
 
-		std::vector<VkPipelineShaderStageCreateInfo> m_shaderStageCreateInfos;
-
 		PipelineInputAssemblyStateCreateInfo m_inputAssemblyStateCreateInfo{ VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST };
 
-		VkPipelineVertexInputStateCreateInfo m_vkPipelineVertexInputStateCreateInfo{};
 		std::vector<VkVertexInputBindingDescription>	m_vertexInputBindingDescriptions;
 		std::vector<VkVertexInputAttributeDescription> m_vertexInputAttributeDescriptions;
+		VkPipelineVertexInputStateCreateInfo m_vkPipelineVertexInputStateCreateInfo{};
 
+
+		std::vector<VkPipelineShaderStageCreateInfo> m_shaderStageCreateInfos;
 
 		PipelineDynamicStateCreateInfo m_pipelineDynamicStateCreateInfo;
 
@@ -2998,6 +3008,9 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 
 		void addVertexBinding(const VertexBinding& vertexBinding) {
+			//	Take the binding and split it to the binding description
+			//	and the corresponding attribute description since they are
+			//	passed separately when creating the pipeline.
 			m_vertexInputBindingDescriptions.push_back(vertexBinding.m_vkVertexInputBindingDescription);
 			for (const VkVertexInputAttributeDescription& vkVertexInputAttributeDescription
 				: vertexBinding.m_vkVertexInputAttributeDescriptions) {
