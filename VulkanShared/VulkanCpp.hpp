@@ -2178,6 +2178,43 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			vkCmdEndRenderPass(*this);
 		}
 
+		void cmdSetViewport(
+			VkExtent2D vkExtent2D
+		) {
+			VkViewport viewport{};
+			viewport.x = 0.0f;
+			viewport.y = 0.0f;
+			viewport.width = static_cast<float>(vkExtent2D.width);
+			viewport.height = static_cast<float>(vkExtent2D.height);
+			viewport.minDepth = 0.0f;
+			viewport.maxDepth = 1.0f;
+			vkCmdSetViewport(*this, 0, 1, &viewport);
+		}
+
+		void cmdSetScissor(
+			VkExtent2D vkExtent2D
+		) {
+			VkRect2D scissor{};
+			scissor.offset = { 0, 0 };
+			scissor.extent = vkExtent2D;
+			vkCmdSetScissor(*this, 0, 1, &scissor);
+		}
+
+		void cmdBindPipeline(
+			VkPipeline vkPipeline
+		) {
+			vkCmdBindPipeline(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, vkPipeline);
+		}
+
+		void cmdBindDescriptorSet(
+			VkPipelineLayout vkPipelineLayout,
+			VkDescriptorSet vkDescriptorSet
+		) {
+			vkCmdBindDescriptorSets(*this, VK_PIPELINE_BIND_POINT_GRAPHICS,
+				vkPipelineLayout, 0, 1, &vkDescriptorSet, 0, nullptr);
+
+		}
+
 	};
 
 
@@ -3326,17 +3363,25 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 		std::vector<VkImage> m_swapchainImages;
 		std::vector<ImageView>		m_swapchainImageViews;
 		std::vector<VkFramebuffer>	m_swapchainFrameBuffers;
+		//	TODO: is it really true that we only need one depth buffer?
+		//	Tutuorials say we only render one frame at a time but is that
+		//	really true?
 		Image_Memory_View	m_depthBuffer;
 
 	private:
 
 		void makeEmpty() {
+			//	TODO: should we clear swapchain images also?
+			//	Need to review the whole move thing to make sure
+			//	this all makes sense.
 			m_swapchainImageViews.clear();
 			m_swapchainFrameBuffers.clear();
 		}
 
 
 		void destroyFrameBuffers() {
+			//	TODO: should we make VkFrameBuffers first class objects
+			//	just to make them easier to destroy?
 			for (VkFramebuffer vkFrameBuffer : m_swapchainFrameBuffers) {
 				vkDestroyFramebuffer(s_device, vkFrameBuffer, nullptr);
 			}
@@ -3358,6 +3403,8 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			}
 		}
 
+		//	TODO: does it really make sense to have the swapchain
+		//	image format be an argument?
 		void createSwapchainImageViews(
 			VkFormat	swapchainImageFormat
 		) {
@@ -3373,9 +3420,10 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 		void createSwapchainFrameBuffers() {
 			m_swapchainFrameBuffers.resize(m_swapchainImageViews.size());
 			for (size_t i = 0; i < m_swapchainImageViews.size(); i++) {
-				std::vector<VkImageView> attachments = {
-					m_swapchainImageViews[i]
-				};
+				//	Note that attachments here are image views, not attachments
+				//	as the term is used for a renderpass.
+				std::vector<VkImageView> attachments;
+				attachments.push_back(m_swapchainImageViews[i]);
 				attachments.push_back(m_depthBuffer.m_imageView);
 
 				VkFramebufferCreateInfo framebufferInfo{};
@@ -3407,6 +3455,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			if (surfaceExtent.width == 0 || surfaceExtent.height == 0) {
 				return Swapchain{};
 			}
+			//	TODO: should probably sanity some other surface capabilities.
 
 			swapchainCreateInfo.surface = surface;
 			swapchainCreateInfo.imageExtent = surfaceExtent;
@@ -3471,7 +3520,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			if (m_swapchain && m_swapchainUpToDate) {
 				return true;
 			}
-			recreateSwapchainImageViewsFrameBuffers();
+			recreateFullSwapchain();
 			return m_swapchain;
 		}
 
@@ -3492,7 +3541,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			m_renderPass = renderPass;
 		}
 
-		void recreateSwapchainImageViewsFrameBuffers() {
+		void recreateFullSwapchain() {
 			m_swapchainUpToDate = false;
 			if (!s_device) {
 				return;
@@ -3501,6 +3550,9 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			vkDeviceWaitIdle(s_device);
 			destroyFrameBuffers();
 			destroyImageViews();
+			//	TODO: should we destroy the frame buffer here?
+			//	If we can't create a new swapchain, it will just
+			//	be hanging around until a new swapchain is created.
 
 			//	TODO: can we set the old swapchain to avoid this?
 			//	Explicitly destroy the old swapchain for now.
@@ -3520,13 +3572,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			m_swapchainUpToDate = false;
 		}
 
-		//void recreateIfStale() {
-		//	if (!m_stale) {
-		//		return;
-		//	}
-		//	recreateSwapchainImageViewsFrameBuffers();
-		//	m_stale = false;
-		//}
 
 		Image_Memory_View createDepthBuffer(
 			VkExtent2D vkExtent2D,

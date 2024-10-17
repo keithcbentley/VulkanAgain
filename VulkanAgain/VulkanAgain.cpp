@@ -380,8 +380,8 @@ PointVertexBuffer g_cubeCenterPointVertexBuffer(g_cubeCenterPoints, g_cubeCenter
 Shape g_theCubeCenter(g_cubeCenterPointVertexBuffer);
 
 
+PointVertexBuffer g_pointVertexBuffer0;
 PointVertexBuffer g_pointVertexBuffer1;
-PointVertexBuffer g_pointVertexBuffer2;
 
 
 
@@ -699,11 +699,11 @@ public:
 	vkcpp::GraphicsPipeline	g_graphicsPipeline0;
 	vkcpp::GraphicsPipeline	g_graphicsPipeline1;
 
+	vkcpp::Buffer_DeviceMemory	g_pointBufferAndDeviceMemory0;
+	vkcpp::Buffer_DeviceMemory	g_vertexBufferAndDeviceMemory0;
+
 	vkcpp::Buffer_DeviceMemory	g_pointBufferAndDeviceMemory1;
 	vkcpp::Buffer_DeviceMemory	g_vertexBufferAndDeviceMemory1;
-
-	vkcpp::Buffer_DeviceMemory	g_pointBufferAndDeviceMemory2;
-	vkcpp::Buffer_DeviceMemory	g_vertexBufferAndDeviceMemory2;
 
 
 	vkcpp::CommandPool		g_commandPoolOriginal;
@@ -947,13 +947,30 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		swapchainPresentMode
 	);
 
-
+	//	The swapchainCreateInfo does not hold the smart Surface object so
+	//	we need to pass it in separately.
 	vkcpp::Swapchain_ImageViews_FrameBuffers swapchainImageViewsFrameBuffers(swapchainCreateInfo, surfaceOriginal);
 	swapchainImageViewsFrameBuffers.setRenderPass(renderPassOriginal);
 
-	swapchainImageViewsFrameBuffers.recreateSwapchainImageViewsFrameBuffers();
-
 	//	TODO: combine point and vertex device memory into one object.
+	//	Pay attention to the terminology change.
+	vkcpp::Buffer_DeviceMemory pointBufferAndDeviceMemory0(
+		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		g_pointVertexBuffer0.pointsSizeof(),
+		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
+		g_pointVertexBuffer0.pointData(),
+		deviceOriginal);
+
+	//	Pay attention to the terminology change.
+	vkcpp::Buffer_DeviceMemory vertexBufferAndDeviceMemory0(
+		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+		g_pointVertexBuffer0.verticesSizeof(),
+		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
+		g_pointVertexBuffer0.vertexData(),
+		deviceOriginal);
+
 	//	Pay attention to the terminology change.
 	vkcpp::Buffer_DeviceMemory pointBufferAndDeviceMemory1(
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -970,24 +987,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
 		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
 		g_pointVertexBuffer1.vertexData(),
-		deviceOriginal);
-
-	//	Pay attention to the terminology change.
-	vkcpp::Buffer_DeviceMemory pointBufferAndDeviceMemory2(
-		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		g_pointVertexBuffer2.pointsSizeof(),
-		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
-		g_pointVertexBuffer2.pointData(),
-		deviceOriginal);
-
-	//	Pay attention to the terminology change.
-	vkcpp::Buffer_DeviceMemory vertexBufferAndDeviceMemory2(
-		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-		g_pointVertexBuffer2.verticesSizeof(),
-		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
-		g_pointVertexBuffer2.vertexData(),
 		deviceOriginal);
 
 
@@ -1011,6 +1010,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		"textureImage", "c:/vulkan/texture.jpg",
 		deviceOriginal, commandPoolOriginal, graphicsQueue);
 
+	ImageLibrary::createImageMemoryViewFromFile(
+		"spaceImage", "c:/vulkan/space.jpg",
+		deviceOriginal, commandPoolOriginal, graphicsQueue);
+
 
 	vkcpp::SamplerCreateInfo textureSamplerCreateInfo;
 	vkcpp::Sampler textureSampler(textureSamplerCreateInfo, deviceOriginal);
@@ -1018,6 +1021,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	vkcpp::DescriptorSetLayout descriptorSetLayoutOriginal = createDrawingFrameDescriptorSetLayout(deviceOriginal);
 	vkcpp::DescriptorPool descriptorPoolOriginal = createDescriptorPool(deviceOriginal);
+
+
 
 	vkcpp::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
 	pipelineLayoutCreateInfo.addDescriptorSetLayout(descriptorSetLayoutOriginal);
@@ -1038,10 +1043,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal, 0);
 	graphicsPipelineCreateInfo.addShaderModule(
 		ShaderLibrary::shaderModule("vert4"), VK_SHADER_STAGE_VERTEX_BIT, "main");
-	graphicsPipelineCreateInfo.addShaderModule(
-		ShaderLibrary::shaderModule("textureFrag"), VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 	//graphicsPipelineCreateInfo.addShaderModule(
-	//	ShaderLibrary::shaderModule("identityFrag"), VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+	//	ShaderLibrary::shaderModule("textureFrag"), VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+	graphicsPipelineCreateInfo.addShaderModule(
+		ShaderLibrary::shaderModule("identityFrag"), VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 
 	vkcpp::GraphicsPipeline graphicsPipeline0(graphicsPipelineCreateInfo, deviceOriginal);
 
@@ -1053,7 +1058,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		commandPoolOriginal,
 		descriptorPoolOriginal,
 		descriptorSetLayoutOriginal,
-		ImageLibrary::imageView("textureImage"),
+		ImageLibrary::imageView("spaceImage"),
 		textureSampler);
 
 
@@ -1069,11 +1074,11 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_surfaceOriginal = std::move(surfaceOriginal);
 
 
+	globals.g_pointBufferAndDeviceMemory0 = std::move(pointBufferAndDeviceMemory0);
+	globals.g_vertexBufferAndDeviceMemory0 = std::move(vertexBufferAndDeviceMemory0);
+
 	globals.g_pointBufferAndDeviceMemory1 = std::move(pointBufferAndDeviceMemory1);
 	globals.g_vertexBufferAndDeviceMemory1 = std::move(vertexBufferAndDeviceMemory1);
-
-	globals.g_pointBufferAndDeviceMemory2 = std::move(pointBufferAndDeviceMemory2);
-	globals.g_vertexBufferAndDeviceMemory2 = std::move(vertexBufferAndDeviceMemory2);
 
 
 	globals.g_descriptorSetLayoutOriginal = std::move(descriptorSetLayoutOriginal);
@@ -1105,11 +1110,11 @@ public:
 
 	vkcpp::CommandBuffer	m_commandBuffer;
 
+	vkcpp::Buffer			m_pointBuffer0;
+	vkcpp::Buffer			m_vertexBuffer0;
+
 	vkcpp::Buffer			m_pointBuffer1;
 	vkcpp::Buffer			m_vertexBuffer1;
-
-	vkcpp::Buffer			m_pointBuffer2;
-	vkcpp::Buffer			m_vertexBuffer2;
 
 
 	VkDescriptorSet			m_vkDescriptorSet = nullptr;
@@ -1137,7 +1142,6 @@ public:
 	) {
 		const VkExtent2D swapchainImageExtent = m_pSwapchainImageViewsFrameBuffers->getImageExtent();
 
-
 		VkRenderPassBeginInfo vkRenderPassBeginInfo{};
 		vkRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		vkRenderPassBeginInfo.renderPass = m_pSwapchainImageViewsFrameBuffers->getRenderPass();
@@ -1153,32 +1157,32 @@ public:
 
 		commandBuffer.cmdBeginRenderPass(vkRenderPassBeginInfo);
 
-		VkViewport viewport{};
-		viewport.x = 0.0f;
-		viewport.y = 0.0f;
-		viewport.width = static_cast<float>(swapchainImageExtent.width);
-		viewport.height = static_cast<float>(swapchainImageExtent.height);
-		viewport.minDepth = 0.0f;
-		viewport.maxDepth = 1.0f;
-		vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+		commandBuffer.cmdSetViewport(swapchainImageExtent);
+		commandBuffer.cmdSetScissor(swapchainImageExtent);
 
-		VkRect2D scissor{};
-		scissor.offset = { 0, 0 };
-		scissor.extent = swapchainImageExtent;
-		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline0);
-		vkCmdBindDescriptorSets(
-			commandBuffer,
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			m_pipelineLayout0,
-			0, 1,
-			&m_vkDescriptorSet,
-			0, nullptr);
+		commandBuffer.cmdBindPipeline(m_graphicsPipeline0);
+		commandBuffer.cmdBindDescriptorSet(m_pipelineLayout0, m_vkDescriptorSet);
 
 		vkCmdSetDepthTestEnable(commandBuffer, VK_TRUE);
 
+		//	TODO: encapsulate binding of points and vertices and
+		//	maybe the draw indexed call
+		{
+			VkBuffer vkPointBuffer = m_pointBuffer0;
+			VkBuffer pointBuffers[] = { vkPointBuffer };
+			VkDeviceSize offsets[] = { 0 };
+			vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
+			vkCmdBindIndexBuffer(commandBuffer, m_vertexBuffer0, 0, VK_INDEX_TYPE_UINT16);
+			//	TODO: need to track vertex count along with buffer info.
+			vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer0.vertexCount(), 1, 0, 0, 0);
+		}
+
+		VkSubpassContents vkSubpassContents{};
+		vkCmdNextSubpass(commandBuffer, vkSubpassContents);
+		commandBuffer.cmdBindPipeline(m_graphicsPipeline1);
+		commandBuffer.cmdBindDescriptorSet(m_pipelineLayout1, m_vkDescriptorSet);
+
+		vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
 		//	TODO: encapsulate binding of points and vertices and
 		//	maybe the draw indexed call
 		{
@@ -1187,52 +1191,40 @@ public:
 			VkDeviceSize offsets[] = { 0 };
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
 			vkCmdBindIndexBuffer(commandBuffer, m_vertexBuffer1, 0, VK_INDEX_TYPE_UINT16);
-			//	TODO: need to track vertext count along with buffer info.
+			//	TODO: need to track vertex count along with buffer info.
 			vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer1.vertexCount(), 1, 0, 0, 0);
 		}
 
-		VkSubpassContents vkSubpassContents{};
-		vkCmdNextSubpass(commandBuffer, vkSubpassContents);
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline1);
-
-		//vkCmdBindDescriptorSets(
-		//	commandBuffer,
-		//	VK_PIPELINE_BIND_POINT_GRAPHICS,
-		//	m_pipelineLayout1,
-		//	0, 1,
-		//	&m_vkDescriptorSet,
-		//	0, nullptr);
 
 
-		vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
+
 
 		commandBuffer.cmdEndRenderPass();
 
-		VkImageSubresourceLayers    srcSubresource{
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.mipLevel = 0,
-			.baseArrayLayer = 0,
-			.layerCount = 1
-		};
+		//VkImageSubresourceLayers    srcSubresource{
+		//	.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		//	.mipLevel = 0,
+		//	.baseArrayLayer = 0,
+		//	.layerCount = 1
+		//};
 
-		VkImageSubresourceLayers    dstSubresource{
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.mipLevel = 0,
-			.baseArrayLayer = 0,
-			.layerCount = 1
-		};
+		//VkImageSubresourceLayers	dstSubresource{
+		//	.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		//	.mipLevel = 0,
+		//	.baseArrayLayer = 0,
+		//	.layerCount = 1
+		//};
 
+		//VkExtent3D	extent{
+		//	.width = g_width,
+		//	.height = g_height,
+		//	.depth = 1
+		//};
 
-		VkExtent3D                  extent{
-			.width = g_width,
-			.height = g_height,
-			.depth = 1
-		};
-
-		VkImageCopy vkImageCopy{};
-		vkImageCopy.srcSubresource = srcSubresource;
-		vkImageCopy.dstSubresource = dstSubresource;
-		vkImageCopy.extent = extent;
+		//VkImageCopy vkImageCopy{};
+		//vkImageCopy.srcSubresource = srcSubresource;
+		//vkImageCopy.dstSubresource = dstSubresource;
+		//vkImageCopy.extent = extent;
 
 		//if (g_image_memory.m_image) {
 		//	vkCmdCopyImage(
@@ -1270,6 +1262,7 @@ void drawFrame(Globals& globals)
 	//	Time the calls ourselves instead of just blasting
 	//	thousands of frames.
 	//	TODO: do timing outside of call to give time back to OS?
+	//	Should we draw?
 	std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
 	if (now < g_nextFrameTime) {
 		return;
@@ -1279,23 +1272,21 @@ void drawFrame(Globals& globals)
 	g_nextFrameTime = std::chrono::high_resolution_clock::now() + std::chrono::microseconds(frameIntervalMicro);
 
 
+	//	Is the swapchain available to draw?
 	if (!globals.g_swapchainImageViewsFrameBuffers.canDraw()) {
 		return;
 	}
 
+	//	Is the drawing frame available to draw?
 	DrawingFrame& currentDrawingFrame = g_allDrawingFrames.getNextFrameToDraw();
 	//	Wait for this drawing frame to be free
 	//	TODO: does this need a warning timer?
 	currentDrawingFrame.m_inFlightFence.wait();
 
-
+	//	Need to grab the device from somewhere, might as well be from here.
 	vkcpp::Device device = currentDrawingFrame.getDevice();
-	vkcpp::CommandBuffer commandBuffer = currentDrawingFrame.m_commandBuffer;
 
-	commandBuffer.reset();
-	commandBuffer.begin();
-
-
+	//	Can we get a swapchain image to draw on?
 	uint32_t	swapchainImageIndex;
 	//	Try to get the next image available index.  Don't wait though.
 	//	If no image available, just return.
@@ -1314,16 +1305,21 @@ void drawFrame(Globals& globals)
 	}
 
 
-	VkImage swapchainImage = globals.g_swapchainImageViewsFrameBuffers.m_swapchainImages[swapchainImageIndex];
+	//	Got everything we need to draw, start recording commands.
+	vkcpp::CommandBuffer commandBuffer = currentDrawingFrame.m_commandBuffer;
+	commandBuffer.reset();
+	commandBuffer.begin();
 
 	currentDrawingFrame.updateUniformBuffer(globals.g_swapchainImageViewsFrameBuffers.getImageExtent());
 
+
+
 	//	TODO: this is kind of clunky
+	theRenderer.m_pointBuffer0 = globals.g_pointBufferAndDeviceMemory0.m_buffer;
+	theRenderer.m_vertexBuffer0 = globals.g_vertexBufferAndDeviceMemory0.m_buffer;
+
 	theRenderer.m_pointBuffer1 = globals.g_pointBufferAndDeviceMemory1.m_buffer;
 	theRenderer.m_vertexBuffer1 = globals.g_vertexBufferAndDeviceMemory1.m_buffer;
-
-	theRenderer.m_pointBuffer2 = globals.g_pointBufferAndDeviceMemory2.m_buffer;
-	theRenderer.m_vertexBuffer2 = globals.g_vertexBufferAndDeviceMemory2.m_buffer;
 
 	theRenderer.m_vkDescriptorSet = currentDrawingFrame.m_descriptorSet;
 	theRenderer.m_pipelineLayout0 = globals.g_pipelineLayout;
@@ -1335,11 +1331,9 @@ void drawFrame(Globals& globals)
 
 	theRenderer.m_pSwapchainImageViewsFrameBuffers = &globals.g_swapchainImageViewsFrameBuffers;
 	theRenderer.m_swapchainImageIndex = swapchainImageIndex;
-	theRenderer.m_image = swapchainImage;
+	theRenderer.m_image = globals.g_swapchainImageViewsFrameBuffers.m_swapchainImages[swapchainImageIndex];
 
 	theRenderer.recordCommandBuffer(commandBuffer);
-
-
 
 	commandBuffer.end();
 
@@ -1527,12 +1521,6 @@ void showStats() {
 }
 
 
-class CommandBuffer {
-
-public:
-
-
-};
 
 
 
@@ -1695,16 +1683,16 @@ int main()
 	HWND commandBufferHwnd = createCommandBufferHwnd(hInstance, hWnd);
 
 
-	Shape shape1 = g_pointVertexBuffer1.add(g_theCubeCenter);
+	Shape shape1 = g_pointVertexBuffer0.add(g_theCubeCenter);
 	//shape1.addOffset(0.0, -0.5, 0.0);
 	//shape1.scale(1.5, 1.5, 0.0);
 
-	//Shape shape2 = g_pointVertexBuffer1.add(g_theSquareCenter);
+	//Shape shape2 = g_pointVertexBuffer0.add(g_theSquareCenter);
 	//shape2.scale(0.5, 0.5, 0.0);
 	//shape2.addOffset(1.0, 0.0, -0.5);
 
 
-	Shape shape3 = g_pointVertexBuffer2.add(g_theRightTriangle);
+	Shape shape3 = g_pointVertexBuffer1.add(g_theRightTriangle);
 	shape3.addOffset(0.5, 0.5, -0.2);
 	shape3.scale(0.1, 0.1, 0.1);
 
