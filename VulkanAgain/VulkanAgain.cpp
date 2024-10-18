@@ -114,7 +114,7 @@ class PointVertexBuffer {
 	//	saving us anything.  Does vulkan care about the
 	//	size of a vertex index?  Index size is used
 	//	in draw indexed command.
-	//	TODO: swith to int32_t or templatize.
+	//	TODO: swicth to int32_t or templatize?
 	std::vector<Point>		m_points;
 	std::vector<int16_t>	m_vertices;
 
@@ -141,20 +141,20 @@ public:
 		, m_vertices(vertices) {}
 
 
-	int64_t	pointsSizeof() {
+	int64_t	pointsSizeof() const {
 		return sizeof(Point) * m_points.size();
 	}
 
-	int64_t verticesSizeof() {
+	int64_t verticesSizeof() const {
 		return sizeof(int16_t) * m_vertices.size();
 	}
 
-	int16_t pointCount() {
-		return static_cast<int16_t>(m_points.size());
+	int32_t pointCount() const {
+		return m_points.size();
 	}
 
-	int16_t vertexCount() {
-		return static_cast<int16_t>(m_vertices.size());
+	int32_t vertexCount() const {
+		return m_vertices.size();
 	}
 
 	Point* pointData() {
@@ -202,8 +202,6 @@ public:
 	friend class PointVertexBuffer;
 
 	//	TODO: maybe allow moving if we need to save shapes somewhere.
-	//	Copying might be a bit problematic since it would allow
-	//	modifying the "shape" from two different places.
 	Shape(const Shape&) = delete;
 	Shape& operator=(const Shape&) = delete;
 	Shape(Shape&&) noexcept = delete;
@@ -383,6 +381,80 @@ Shape g_theCubeCenter(g_cubeCenterPointVertexBuffer);
 PointVertexBuffer g_pointVertexBuffer0;
 PointVertexBuffer g_pointVertexBuffer1;
 
+
+
+class PointVertexDeviceBuffer {
+
+
+public:
+
+	vkcpp::Buffer_DeviceMemory m_points;
+	vkcpp::Buffer_DeviceMemory m_vertices;
+	uint32_t	m_vertexCount = 0;
+
+	PointVertexDeviceBuffer() {}
+
+	PointVertexDeviceBuffer(
+		PointVertexBuffer& pointVertexBuffer,
+		vkcpp::Device device) {
+
+		//	TODO: combine point and vertex device memory into one object.
+		//	Pay attention to the terminology change.
+		m_points = vkcpp::Buffer_DeviceMemory(
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			pointVertexBuffer.pointsSizeof(),
+			MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+			vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
+			pointVertexBuffer.pointData(),
+			device);
+
+		//	Pay attention to the terminology change.
+		m_vertices = vkcpp::Buffer_DeviceMemory(
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			pointVertexBuffer.verticesSizeof(),
+			MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+			vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
+			pointVertexBuffer.vertexData(),
+			device);
+
+		m_vertexCount = pointVertexBuffer.vertexCount();
+	}
+
+	PointVertexDeviceBuffer(const PointVertexDeviceBuffer& other)
+		: m_points(other.m_points)
+		, m_vertices(other.m_vertices)
+		, m_vertexCount(other.m_vertexCount) {
+	}
+
+	PointVertexDeviceBuffer& operator=(const PointVertexDeviceBuffer& other) {
+		if (this == &other) {
+			return *this;
+		}
+		(*this).~PointVertexDeviceBuffer();
+		new(this) PointVertexDeviceBuffer(other);
+		return *this;
+	}
+
+	PointVertexDeviceBuffer(PointVertexDeviceBuffer&& other) noexcept
+		: m_points(std::move(other.m_points))
+		, m_vertices(std::move(other.m_vertices))
+		, m_vertexCount(other.m_vertexCount) {
+	}
+
+	PointVertexDeviceBuffer& operator=(PointVertexDeviceBuffer&& other) noexcept {
+		if (this == &other) {
+			return *this;
+		}
+		(*this).~PointVertexDeviceBuffer();
+		new(this) PointVertexDeviceBuffer(std::move(other));
+		return *this;
+	}
+
+	uint32_t	vertexCount() {
+		return m_vertexCount;
+	}
+
+};
 
 
 
@@ -699,11 +771,8 @@ public:
 	vkcpp::GraphicsPipeline	g_graphicsPipeline0;
 	vkcpp::GraphicsPipeline	g_graphicsPipeline1;
 
-	vkcpp::Buffer_DeviceMemory	g_pointBufferAndDeviceMemory0;
-	vkcpp::Buffer_DeviceMemory	g_vertexBufferAndDeviceMemory0;
-
-	vkcpp::Buffer_DeviceMemory	g_pointBufferAndDeviceMemory1;
-	vkcpp::Buffer_DeviceMemory	g_vertexBufferAndDeviceMemory1;
+	PointVertexDeviceBuffer		g_pointVertexDeviceBuffer0;
+	PointVertexDeviceBuffer		g_pointVertexDeviceBuffer1;
 
 
 	vkcpp::CommandPool		g_commandPoolOriginal;
@@ -952,42 +1021,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::Swapchain_ImageViews_FrameBuffers swapchainImageViewsFrameBuffers(swapchainCreateInfo, surfaceOriginal);
 	swapchainImageViewsFrameBuffers.setRenderPass(renderPassOriginal);
 
-	//	TODO: combine point and vertex device memory into one object.
-	//	Pay attention to the terminology change.
-	vkcpp::Buffer_DeviceMemory pointBufferAndDeviceMemory0(
-		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		g_pointVertexBuffer0.pointsSizeof(),
-		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
-		g_pointVertexBuffer0.pointData(),
-		deviceOriginal);
-
-	//	Pay attention to the terminology change.
-	vkcpp::Buffer_DeviceMemory vertexBufferAndDeviceMemory0(
-		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-		g_pointVertexBuffer0.verticesSizeof(),
-		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
-		g_pointVertexBuffer0.vertexData(),
-		deviceOriginal);
-
-	//	Pay attention to the terminology change.
-	vkcpp::Buffer_DeviceMemory pointBufferAndDeviceMemory1(
-		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		g_pointVertexBuffer1.pointsSizeof(),
-		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
-		g_pointVertexBuffer1.pointData(),
-		deviceOriginal);
-
-	//	Pay attention to the terminology change.
-	vkcpp::Buffer_DeviceMemory vertexBufferAndDeviceMemory1(
-		VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-		g_pointVertexBuffer1.verticesSizeof(),
-		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
-		g_pointVertexBuffer1.vertexData(),
-		deviceOriginal);
+	PointVertexDeviceBuffer	pointVertexDeviceBuffer0(g_pointVertexBuffer0, deviceOriginal);
+	PointVertexDeviceBuffer	pointVertexDeviceBuffer1(g_pointVertexBuffer1, deviceOriginal);
 
 
 	for (const ShaderName& shaderName : g_shaderNames) {
@@ -1074,15 +1109,12 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_surfaceOriginal = std::move(surfaceOriginal);
 
 
-	globals.g_pointBufferAndDeviceMemory0 = std::move(pointBufferAndDeviceMemory0);
-	globals.g_vertexBufferAndDeviceMemory0 = std::move(vertexBufferAndDeviceMemory0);
-
-	globals.g_pointBufferAndDeviceMemory1 = std::move(pointBufferAndDeviceMemory1);
-	globals.g_vertexBufferAndDeviceMemory1 = std::move(vertexBufferAndDeviceMemory1);
-
-
 	globals.g_descriptorSetLayoutOriginal = std::move(descriptorSetLayoutOriginal);
 	globals.g_descriptorPoolOriginal = std::move(descriptorPoolOriginal);
+
+	globals.g_pointVertexDeviceBuffer0 = std::move(pointVertexDeviceBuffer0);
+	globals.g_pointVertexDeviceBuffer1 = std::move(pointVertexDeviceBuffer1);
+
 
 	globals.g_pipelineLayout = std::move(pipelineLayout);
 	globals.g_graphicsPipeline0 = std::move(graphicsPipeline0);
@@ -1110,11 +1142,8 @@ public:
 
 	vkcpp::CommandBuffer	m_commandBuffer;
 
-	vkcpp::Buffer			m_pointBuffer0;
-	vkcpp::Buffer			m_vertexBuffer0;
-
-	vkcpp::Buffer			m_pointBuffer1;
-	vkcpp::Buffer			m_vertexBuffer1;
+	PointVertexDeviceBuffer	m_pointVertexDeviceBuffer0;
+	PointVertexDeviceBuffer	m_pointVertexDeviceBuffer1;
 
 
 	VkDescriptorSet			m_vkDescriptorSet = nullptr;
@@ -1168,13 +1197,13 @@ public:
 		//	TODO: encapsulate binding of points and vertices and
 		//	maybe the draw indexed call
 		{
-			VkBuffer vkPointBuffer = m_pointBuffer0;
+			VkBuffer vkPointBuffer = m_pointVertexDeviceBuffer0.m_points.m_buffer;
 			VkBuffer pointBuffers[] = { vkPointBuffer };
 			VkDeviceSize offsets[] = { 0 };
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
-			vkCmdBindIndexBuffer(commandBuffer, m_vertexBuffer0, 0, VK_INDEX_TYPE_UINT16);
+			vkCmdBindIndexBuffer(commandBuffer, m_pointVertexDeviceBuffer0.m_vertices.m_buffer, 0, VK_INDEX_TYPE_UINT16);
 			//	TODO: need to track vertex count along with buffer info.
-			vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer0.vertexCount(), 1, 0, 0, 0);
+			vkCmdDrawIndexed(commandBuffer, m_pointVertexDeviceBuffer0.vertexCount(), 1, 0, 0, 0);
 		}
 
 		VkSubpassContents vkSubpassContents{};
@@ -1186,17 +1215,14 @@ public:
 		//	TODO: encapsulate binding of points and vertices and
 		//	maybe the draw indexed call
 		{
-			VkBuffer vkPointBuffer = m_pointBuffer1;
+			VkBuffer vkPointBuffer = m_pointVertexDeviceBuffer1.m_points.m_buffer;;
 			VkBuffer pointBuffers[] = { vkPointBuffer };
 			VkDeviceSize offsets[] = { 0 };
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
-			vkCmdBindIndexBuffer(commandBuffer, m_vertexBuffer1, 0, VK_INDEX_TYPE_UINT16);
+			vkCmdBindIndexBuffer(commandBuffer, m_pointVertexDeviceBuffer1.m_vertices.m_buffer, 0, VK_INDEX_TYPE_UINT16);
 			//	TODO: need to track vertex count along with buffer info.
-			vkCmdDrawIndexed(commandBuffer, g_pointVertexBuffer1.vertexCount(), 1, 0, 0, 0);
+			vkCmdDrawIndexed(commandBuffer, m_pointVertexDeviceBuffer1.vertexCount(), 1, 0, 0, 0);
 		}
-
-
-
 
 
 		commandBuffer.cmdEndRenderPass();
@@ -1313,13 +1339,16 @@ void drawFrame(Globals& globals)
 	currentDrawingFrame.updateUniformBuffer(globals.g_swapchainImageViewsFrameBuffers.getImageExtent());
 
 
-
 	//	TODO: this is kind of clunky
-	theRenderer.m_pointBuffer0 = globals.g_pointBufferAndDeviceMemory0.m_buffer;
-	theRenderer.m_vertexBuffer0 = globals.g_vertexBufferAndDeviceMemory0.m_buffer;
 
-	theRenderer.m_pointBuffer1 = globals.g_pointBufferAndDeviceMemory1.m_buffer;
-	theRenderer.m_vertexBuffer1 = globals.g_vertexBufferAndDeviceMemory1.m_buffer;
+	//theRenderer.m_pointBuffer0 = globals.g_pointBufferAndDeviceMemory0.m_buffer;
+	//theRenderer.m_vertexBuffer0 = globals.g_vertexBufferAndDeviceMemory0.m_buffer;
+
+	//theRenderer.m_pointBuffer1 = globals.g_pointBufferAndDeviceMemory1.m_buffer;
+	//theRenderer.m_vertexBuffer1 = globals.g_vertexBufferAndDeviceMemory1.m_buffer;
+
+	theRenderer.m_pointVertexDeviceBuffer0 = globals.g_pointVertexDeviceBuffer0;
+	theRenderer.m_pointVertexDeviceBuffer1 = globals.g_pointVertexDeviceBuffer1;
 
 	theRenderer.m_vkDescriptorSet = currentDrawingFrame.m_descriptorSet;
 	theRenderer.m_pipelineLayout0 = globals.g_pipelineLayout;

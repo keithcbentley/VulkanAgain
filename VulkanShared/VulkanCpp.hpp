@@ -1259,10 +1259,19 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 		Buffer_DeviceMemory() {}
 
-		//	No copy constructor or assignment because of the mapped pointer.
-		//	A copy could unexpectedly unmap the pointer.
-		Buffer_DeviceMemory(const Buffer_DeviceMemory&) = delete;
-		Buffer_DeviceMemory& operator=(const Buffer_DeviceMemory&) = delete;
+		Buffer_DeviceMemory(const Buffer_DeviceMemory& other)
+			: m_buffer(other.m_buffer)
+			, m_deviceMemory(other.m_deviceMemory)
+			, m_mappedMemory(other.m_mappedMemory) {
+		}
+		Buffer_DeviceMemory& operator=(const Buffer_DeviceMemory& other) {
+			if (this == &other) {
+				return *this;
+			}
+			(*this).~Buffer_DeviceMemory();
+			new(this) Buffer_DeviceMemory(other);
+			return *this;
+		}
 
 		Buffer_DeviceMemory(Buffer_DeviceMemory&& other) noexcept
 			: m_buffer(std::move(other.m_buffer))
