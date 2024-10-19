@@ -454,6 +454,16 @@ public:
 		return m_vertexCount;
 	}
 
+	void draw(vkcpp::CommandBuffer commandBuffer) {
+		VkBuffer vkPointBuffer = m_points.m_buffer;
+		VkBuffer pointBuffers[] = { vkPointBuffer };
+		VkDeviceSize offsets[] = { 0 };
+		vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
+		vkCmdBindIndexBuffer(commandBuffer, m_vertices.m_buffer, 0, VK_INDEX_TYPE_UINT16);
+		vkCmdDrawIndexed(commandBuffer, vertexCount(), 1, 0, 0, 0);
+	}
+
+
 };
 
 
@@ -1193,18 +1203,7 @@ public:
 		commandBuffer.cmdBindDescriptorSet(m_pipelineLayout0, m_vkDescriptorSet);
 
 		vkCmdSetDepthTestEnable(commandBuffer, VK_TRUE);
-
-		//	TODO: encapsulate binding of points and vertices and
-		//	maybe the draw indexed call
-		{
-			VkBuffer vkPointBuffer = m_pointVertexDeviceBuffer0.m_points.m_buffer;
-			VkBuffer pointBuffers[] = { vkPointBuffer };
-			VkDeviceSize offsets[] = { 0 };
-			vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
-			vkCmdBindIndexBuffer(commandBuffer, m_pointVertexDeviceBuffer0.m_vertices.m_buffer, 0, VK_INDEX_TYPE_UINT16);
-			//	TODO: need to track vertex count along with buffer info.
-			vkCmdDrawIndexed(commandBuffer, m_pointVertexDeviceBuffer0.vertexCount(), 1, 0, 0, 0);
-		}
+		m_pointVertexDeviceBuffer0.draw(commandBuffer);
 
 		VkSubpassContents vkSubpassContents{};
 		vkCmdNextSubpass(commandBuffer, vkSubpassContents);
@@ -1212,18 +1211,7 @@ public:
 		commandBuffer.cmdBindDescriptorSet(m_pipelineLayout1, m_vkDescriptorSet);
 
 		vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
-		//	TODO: encapsulate binding of points and vertices and
-		//	maybe the draw indexed call
-		{
-			VkBuffer vkPointBuffer = m_pointVertexDeviceBuffer1.m_points.m_buffer;;
-			VkBuffer pointBuffers[] = { vkPointBuffer };
-			VkDeviceSize offsets[] = { 0 };
-			vkCmdBindVertexBuffers(commandBuffer, 0, 1, pointBuffers, offsets);
-			vkCmdBindIndexBuffer(commandBuffer, m_pointVertexDeviceBuffer1.m_vertices.m_buffer, 0, VK_INDEX_TYPE_UINT16);
-			//	TODO: need to track vertex count along with buffer info.
-			vkCmdDrawIndexed(commandBuffer, m_pointVertexDeviceBuffer1.vertexCount(), 1, 0, 0, 0);
-		}
-
+		m_pointVertexDeviceBuffer1.draw(commandBuffer);
 
 		commandBuffer.cmdEndRenderPass();
 
