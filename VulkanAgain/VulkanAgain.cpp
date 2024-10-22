@@ -455,6 +455,7 @@ public:
 	}
 
 	void draw(vkcpp::CommandBuffer commandBuffer) {
+		//	TODO: move to command buffer methods
 		VkBuffer vkPointBuffer = m_points.m_buffer;
 		VkBuffer pointBuffers[] = { vkPointBuffer };
 		VkDeviceSize offsets[] = { 0 };
@@ -596,9 +597,6 @@ class DrawingFrame {
 			textureImageView,
 			textureSampler);
 		descriptorSet.updateDescriptors();
-
-
-		vkcpp::DescriptorSetUpdater descriptorSetUpdater();
 
 		m_descriptorSet = std::move(descriptorSet);
 	}
@@ -798,18 +796,16 @@ Globals g_globals;
 AllDrawingFrames g_allDrawingFrames(MagicValues::MAX_FRAMES_IN_FLIGHT);
 
 
+std::vector<vkcpp::DescriptorSetLayoutBinding>	g_descriptorSetLayoutBindings{
+	{ MagicValues::UBO_DESCRIPTOR_BINDING_INDEX, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,	vkcpp::SHADER_STAGE_VERTEX},
+	{ MagicValues::TEXTURE_DESCRIPTOR_BINDING_INDEX, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	vkcpp::SHADER_STAGE_FRAGMENT}
+};
+
 vkcpp::DescriptorSetLayout createDrawingFrameDescriptorSetLayout(VkDevice vkDevice) {
 
+	//	TODO: just make a static function
 	vkcpp::DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo{};
-	descriptorSetLayoutCreateInfo
-		.addBinding(
-			MagicValues::UBO_DESCRIPTOR_BINDING_INDEX,
-			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			vkcpp::SHADER_STAGE_VERTEX)
-		.addBinding(
-			MagicValues::TEXTURE_DESCRIPTOR_BINDING_INDEX,
-			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			vkcpp::SHADER_STAGE_FRAGMENT);
+	descriptorSetLayoutCreateInfo.addDescriptorSetLayoutBindings(g_descriptorSetLayoutBindings);
 
 	return vkcpp::DescriptorSetLayout(descriptorSetLayoutCreateInfo, vkDevice);
 }
@@ -827,8 +823,6 @@ vkcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
 
 	return vkcpp::DescriptorPool(poolCreateInfo, vkDevice);
 }
-
-
 
 
 
@@ -935,15 +929,16 @@ vkcpp::RenderPass createRenderPass(
 		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 	);
 
+	//	Just a handy abbreviation
+	const VkPipelineStageFlags bothFragmentTests
+		= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+		| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+
 
 	renderPassCreateInfo.addSubpass()
 		.addColorAttachmentReference(colorAttachmentReference)
 		.setDepthStencilAttachmentReference(depthAttachmentReference);
 
-	//	Just a handy abbreviation
-	const VkPipelineStageFlags bothFragmentTests
-		= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
-		| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 
 	//	All depth stencil attachment writes have to finish before
 	//	any new depth stencil attachment reads or writes.
@@ -966,6 +961,8 @@ vkcpp::RenderPass createRenderPass(
 
 	return vkcpp::RenderPass(renderPassCreateInfo, device);
 }
+
+
 
 
 
@@ -1052,7 +1049,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 
 	ImageLibrary::createImageMemoryViewFromFile(
-		"textureImage", "c:/vulkan/texture.jpg",
+		"statueImage", "c:/vulkan/statue.jpg",
 		deviceOriginal, commandPoolOriginal, graphicsQueue);
 
 	ImageLibrary::createImageMemoryViewFromFile(
@@ -1088,10 +1085,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal, 0);
 	graphicsPipelineCreateInfo.addShaderModule(
 		ShaderLibrary::shaderModule("vert4"), VK_SHADER_STAGE_VERTEX_BIT, "main");
-	//graphicsPipelineCreateInfo.addShaderModule(
-	//	ShaderLibrary::shaderModule("textureFrag"), VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 	graphicsPipelineCreateInfo.addShaderModule(
-		ShaderLibrary::shaderModule("identityFrag"), VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+		ShaderLibrary::shaderModule("textureFrag"), VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+	//graphicsPipelineCreateInfo.addShaderModule(
+	//	ShaderLibrary::shaderModule("identityFrag"), VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 
 	vkcpp::GraphicsPipeline graphicsPipeline0(graphicsPipelineCreateInfo, deviceOriginal);
 
@@ -1103,7 +1100,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 		commandPoolOriginal,
 		descriptorPoolOriginal,
 		descriptorSetLayoutOriginal,
-		ImageLibrary::imageView("spaceImage"),
+		ImageLibrary::imageView("statueImage"),
 		textureSampler);
 
 
@@ -1328,13 +1325,6 @@ void drawFrame(Globals& globals)
 
 
 	//	TODO: this is kind of clunky
-
-	//theRenderer.m_pointBuffer0 = globals.g_pointBufferAndDeviceMemory0.m_buffer;
-	//theRenderer.m_vertexBuffer0 = globals.g_vertexBufferAndDeviceMemory0.m_buffer;
-
-	//theRenderer.m_pointBuffer1 = globals.g_pointBufferAndDeviceMemory1.m_buffer;
-	//theRenderer.m_vertexBuffer1 = globals.g_vertexBufferAndDeviceMemory1.m_buffer;
-
 	theRenderer.m_pointVertexDeviceBuffer0 = globals.g_pointVertexDeviceBuffer0;
 	theRenderer.m_pointVertexDeviceBuffer1 = globals.g_pointVertexDeviceBuffer1;
 

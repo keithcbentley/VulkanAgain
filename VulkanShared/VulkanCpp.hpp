@@ -2498,10 +2498,16 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 	};
 
+	struct DescriptorSetLayoutBinding {
+		int						m_bindingIndex;
+		VkDescriptorType		m_vkDescriptorType;
+		vkcpp::ShaderStageFlags	m_shaderStage;
+	};
+
+
 	class DescriptorSetLayoutCreateInfo : public VkDescriptorSetLayoutCreateInfo {
 
 		std::vector<VkDescriptorSetLayoutBinding>	m_bindings;
-
 
 	public:
 
@@ -2528,6 +2534,18 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 			m_bindings.push_back(layoutBinding);
 			return *this;
+		}
+
+		void addDescriptorSetLayoutBindings(
+			std::vector<DescriptorSetLayoutBinding> descriptorSetLayoutBindings
+		) {
+			for (DescriptorSetLayoutBinding& descriptorSetLayoutBinding : descriptorSetLayoutBindings) {
+				addBinding(
+					descriptorSetLayoutBinding.m_bindingIndex,
+					descriptorSetLayoutBinding.m_vkDescriptorType,
+					descriptorSetLayoutBinding.m_shaderStage
+					);
+			}
 		}
 
 		VkDescriptorSetLayoutCreateInfo* assemble() {
