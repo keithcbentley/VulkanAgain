@@ -2544,7 +2544,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 					descriptorSetLayoutBinding.m_bindingIndex,
 					descriptorSetLayoutBinding.m_vkDescriptorType,
 					descriptorSetLayoutBinding.m_shaderStage
-					);
+				);
 			}
 		}
 
@@ -3287,6 +3287,71 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 	};
 
+	class FramebufferCreateInfo : public VkFramebufferCreateInfo {
+
+		std::vector<VkImageView> m_attachments;
+
+	public:
+
+		VkFramebufferCreateInfo* operator&() = delete;
+
+		FramebufferCreateInfo(
+			RenderPass renderPassArg,
+			VkExtent2D	vkExtent2D
+		)
+			: VkFramebufferCreateInfo{}
+		{
+			sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			renderPass = renderPassArg;
+			width = vkExtent2D.width;
+			height = vkExtent2D.height;
+			layers = 1;
+		}
+
+		FramebufferCreateInfo& addAttachment(ImageView imageView) {
+			m_attachments.push_back(imageView);
+			return *this;
+		}
+
+		VkFramebufferCreateInfo* assemble() {
+			attachmentCount = static_cast<uint32_t>(m_attachments.size());
+			pAttachments = m_attachments.data();
+			return this;
+		}
+
+
+
+	};
+
+
+
+	class Framebuffer : public HandleWithOwner<VkFramebuffer, Device> {
+
+		Framebuffer(VkFramebuffer vkFramebuffer, Device device, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkFramebuffer, device, pfnDestroy) {
+		}
+
+		static void destroy(VkFramebuffer vkFramebuffer, Device device) {
+			vkDestroyFramebuffer(device, vkFramebuffer, nullptr);
+		}
+
+
+
+	public:
+
+		Framebuffer() {}
+
+		Framebuffer(FramebufferCreateInfo& framebufferCreateInfo, Device device) {
+			VkFramebuffer	vkFramebuffer;
+			VkResult vkResult = vkCreateFramebuffer(device, framebufferCreateInfo.assemble(), nullptr, &vkFramebuffer);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			new(this)Framebuffer(vkFramebuffer, device, &destroy);
+		}
+
+	};
+
 
 
 	class Image_Memory {
@@ -3389,7 +3454,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 		bool m_swapchainUpToDate{};
 		std::vector<VkImage> m_swapchainImages;
 		std::vector<ImageView>		m_swapchainImageViews;
-		std::vector<VkFramebuffer>	m_swapchainFrameBuffers;
+		std::vector<Framebuffer>	m_swapchainFrameBuffers;
 		//	TODO: is it really true that we only need one depth buffer?
 		//	Tutuorials say we only render one frame at a time but is that
 		//	really true?
@@ -3407,11 +3472,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 
 		void destroyFrameBuffers() {
-			//	TODO: should we make VkFrameBuffers first class objects
-			//	just to make them easier to destroy?
-			for (VkFramebuffer vkFrameBuffer : m_swapchainFrameBuffers) {
-				vkDestroyFramebuffer(s_device, vkFrameBuffer, nullptr);
-			}
 			m_swapchainFrameBuffers.clear();
 		}
 
@@ -3447,25 +3507,17 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 		void createSwapchainFrameBuffers() {
 			m_swapchainFrameBuffers.resize(m_swapchainImageViews.size());
 			for (size_t i = 0; i < m_swapchainImageViews.size(); i++) {
-				//	Note that attachments here are image views, not attachments
-				//	as the term is used for a renderpass.
-				std::vector<VkImageView> attachments;
-				attachments.push_back(m_swapchainImageViews[i]);
-				attachments.push_back(m_depthBuffer.m_imageView);
+				//	Note that attachments here are image views.  When a
+				//	Renderpass adds attachments, the attachments are descriptions
+				//	of these attachments.
+				FramebufferCreateInfo	framebufferCreateInfo(m_renderPass, m_swapchain.imageExtent());
+				framebufferCreateInfo
+					.addAttachment(m_swapchainImageViews[i])
+					.addAttachment(m_depthBuffer.m_imageView);
 
-				VkFramebufferCreateInfo framebufferInfo{};
-				framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-				framebufferInfo.renderPass = m_renderPass;
-				framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-				framebufferInfo.pAttachments = attachments.data();
-				framebufferInfo.width = m_swapchain.imageExtent().width;
-				framebufferInfo.height = m_swapchain.imageExtent().height;
-				framebufferInfo.layers = 1;
 
-				VkResult vkResult = vkCreateFramebuffer(s_device, &framebufferInfo, nullptr, &m_swapchainFrameBuffers[i]);
-				if (vkResult != VK_SUCCESS) {
-					throw Exception(vkResult);
-				}
+				Framebuffer framebuffer(framebufferCreateInfo, s_device);
+				m_swapchainFrameBuffers[i] = std::move(framebuffer);
 			}
 		}
 
@@ -3482,7 +3534,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			if (surfaceExtent.width == 0 || surfaceExtent.height == 0) {
 				return Swapchain{};
 			}
-			//	TODO: should probably sanity some other surface capabilities.
+			//	TODO: should probably sanity check some other surface capabilities.
 
 			swapchainCreateInfo.surface = surface;
 			swapchainCreateInfo.imageExtent = surfaceExtent;
@@ -3490,8 +3542,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 			return Swapchain(swapchainCreateInfo, s_device);
 		}
-
-
 
 
 	public:

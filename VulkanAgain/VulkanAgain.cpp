@@ -919,6 +919,9 @@ vkcpp::RenderPass createRenderPass(
 	//	Note that the index of the attachment can be pulled out
 	//	of the returned attachment reference to use in other
 	//	attachment references.
+	//	IMPORTANT! The index in the attachment reference must match the index of the
+	//	attachment as it was added to the framebuffer.
+	//	TODO: make the indexing in the framebuffer and here explicit.
 	VkAttachmentReference colorAttachmentReference = renderPassCreateInfo.addAttachment(
 		vkcpp::AttachmentDescription::simpleColorAttachmentPresentDescription(swapchainImageFormat),
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
@@ -928,6 +931,8 @@ vkcpp::RenderPass createRenderPass(
 		vkcpp::AttachmentDescription::simpleDepthAttachmentDescription(),
 		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 	);
+
+
 
 	//	Just a handy abbreviation
 	const VkPipelineStageFlags bothFragmentTests
