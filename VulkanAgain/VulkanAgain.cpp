@@ -770,7 +770,7 @@ public:
 
 	vkcpp::RenderPass g_renderPassOriginal;
 
-	vkcpp::Swapchain_ImageViews_FrameBuffers	g_swapchainImageViewsFrameBuffers;
+	vkcpp::Swapchain_FrameBuffers	g_swapchain_frameBuffers;
 
 	vkcpp::DescriptorPool			g_descriptorPoolOriginal;
 	vkcpp::DescriptorSetLayout		g_descriptorSetLayoutOriginal;
@@ -1015,7 +1015,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::RenderPass renderPassOriginal(createRenderPass(swapchainImageFormat, deviceOriginal));
 
 
-	vkcpp::Swapchain_ImageViews_FrameBuffers::setDevice(deviceOriginal);
+	vkcpp::Swapchain_FrameBuffers::setDevice(deviceOriginal);
 
 	const VkColorSpaceKHR swapchainImageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 	const VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
@@ -1030,8 +1030,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	//	The swapchainCreateInfo does not hold the smart Surface object so
 	//	we need to pass it in separately.
-	vkcpp::Swapchain_ImageViews_FrameBuffers swapchainImageViewsFrameBuffers(swapchainCreateInfo, surfaceOriginal);
-	swapchainImageViewsFrameBuffers.setRenderPass(renderPassOriginal);
+	vkcpp::Swapchain_FrameBuffers swapchain_frameBuffers(swapchainCreateInfo, surfaceOriginal);
+	swapchain_frameBuffers.setRenderPass(renderPassOriginal);
 
 	PointVertexDeviceBuffer	pointVertexDeviceBuffer0(g_pointVertexBuffer0, deviceOriginal);
 	PointVertexDeviceBuffer	pointVertexDeviceBuffer1(g_pointVertexBuffer1, deviceOriginal);
@@ -1139,7 +1139,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_presentationQueue = presentationQueue;
 
 	globals.g_renderPassOriginal = std::move(renderPassOriginal);
-	globals.g_swapchainImageViewsFrameBuffers = std::move(swapchainImageViewsFrameBuffers);
+	globals.g_swapchain_frameBuffers = std::move(swapchain_frameBuffers);
 
 	globals.g_textureSampler = std::move(textureSampler);
 
@@ -1160,8 +1160,6 @@ public:
 
 	VkDescriptorSet			m_vkDescriptorSet = nullptr;
 
-	VkImage	m_image = nullptr;
-
 	//	TODO:	pipelines should remember their layouts,
 	//	or vice-versa, or both.
 	vkcpp::PipelineLayout		m_pipelineLayout0;
@@ -1174,19 +1172,19 @@ public:
 	//	TODO: use a pointer instead of a reference for now, until
 	//	we figure out the best structure for the pieces.  Maybe
 	//	encapsulate the renderpass in this class.
-	vkcpp::Swapchain_ImageViews_FrameBuffers* m_pSwapchainImageViewsFrameBuffers;
+	vkcpp::Swapchain_FrameBuffers* m_pSwapchain_frameBuffers;
 	uint32_t									m_swapchainImageIndex = 0;
 
 
 	void recordCommandBuffer(
 		vkcpp::CommandBuffer		commandBuffer
 	) {
-		const VkExtent2D swapchainImageExtent = m_pSwapchainImageViewsFrameBuffers->getImageExtent();
+		const VkExtent2D swapchainImageExtent = m_pSwapchain_frameBuffers->getImageExtent();
 
 		VkRenderPassBeginInfo vkRenderPassBeginInfo{};
 		vkRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		vkRenderPassBeginInfo.renderPass = m_pSwapchainImageViewsFrameBuffers->getRenderPass();
-		vkRenderPassBeginInfo.framebuffer = m_pSwapchainImageViewsFrameBuffers->getFrameBuffer(m_swapchainImageIndex);
+		vkRenderPassBeginInfo.renderPass = m_pSwapchain_frameBuffers->getRenderPass();
+		vkRenderPassBeginInfo.framebuffer = m_pSwapchain_frameBuffers->getFrameBuffer(m_swapchainImageIndex);
 		vkRenderPassBeginInfo.renderArea.offset = { 0, 0 };
 		vkRenderPassBeginInfo.renderArea.extent = swapchainImageExtent;
 
@@ -1216,44 +1214,6 @@ public:
 		m_pointVertexDeviceBuffer1.draw(commandBuffer);
 
 		commandBuffer.cmdEndRenderPass();
-
-		//VkImageSubresourceLayers    srcSubresource{
-		//	.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-		//	.mipLevel = 0,
-		//	.baseArrayLayer = 0,
-		//	.layerCount = 1
-		//};
-
-		//VkImageSubresourceLayers	dstSubresource{
-		//	.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-		//	.mipLevel = 0,
-		//	.baseArrayLayer = 0,
-		//	.layerCount = 1
-		//};
-
-		//VkExtent3D	extent{
-		//	.width = g_width,
-		//	.height = g_height,
-		//	.depth = 1
-		//};
-
-		//VkImageCopy vkImageCopy{};
-		//vkImageCopy.srcSubresource = srcSubresource;
-		//vkImageCopy.dstSubresource = dstSubresource;
-		//vkImageCopy.extent = extent;
-
-		//if (g_image_memory.m_image) {
-		//	vkCmdCopyImage(
-		//		commandBuffer,
-		//		g_image_memory.m_image,
-		//		VK_IMAGE_LAYOUT_GENERAL,
-		//		m_image,
-		//		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-		//		1,
-		//		&vkImageCopy
-		//	);
-		//}
-
 
 	}
 
@@ -1289,7 +1249,7 @@ void drawFrame(Globals& globals)
 
 
 	//	Is the swapchain available to draw?
-	if (!globals.g_swapchainImageViewsFrameBuffers.canDraw()) {
+	if (!globals.g_swapchain_frameBuffers.canDraw()) {
 		return;
 	}
 
@@ -1311,7 +1271,7 @@ void drawFrame(Globals& globals)
 	//	signaled when the image itself is actually available.
 	VkResult vkResult = vkAcquireNextImageKHR(
 		device,
-		globals.g_swapchainImageViewsFrameBuffers.vkSwapchain(),
+		globals.g_swapchain_frameBuffers.vkSwapchain(),
 		0,
 		currentDrawingFrame.m_swapchainImageAvailableSemaphore,
 		VK_NULL_HANDLE,
@@ -1326,7 +1286,7 @@ void drawFrame(Globals& globals)
 	commandBuffer.reset();
 	commandBuffer.begin();
 
-	currentDrawingFrame.updateUniformBuffer(globals.g_swapchainImageViewsFrameBuffers.getImageExtent());
+	currentDrawingFrame.updateUniformBuffer(globals.g_swapchain_frameBuffers.getImageExtent());
 
 
 	//	TODO: this is kind of clunky
@@ -1341,9 +1301,8 @@ void drawFrame(Globals& globals)
 	theRenderer.m_graphicsPipeline1 = globals.g_graphicsPipeline1;
 
 
-	theRenderer.m_pSwapchainImageViewsFrameBuffers = &globals.g_swapchainImageViewsFrameBuffers;
+	theRenderer.m_pSwapchain_frameBuffers = &globals.g_swapchain_frameBuffers;
 	theRenderer.m_swapchainImageIndex = swapchainImageIndex;
-	theRenderer.m_image = globals.g_swapchainImageViewsFrameBuffers.m_swapchainImages[swapchainImageIndex];
 
 	theRenderer.recordCommandBuffer(commandBuffer);
 
@@ -1376,14 +1335,14 @@ void drawFrame(Globals& globals)
 	vkcpp::PresentInfo presentInfo;
 	presentInfo.addWaitSemaphore(currentDrawingFrame.m_renderFinishedSemaphore);
 	presentInfo.addSwapchain(
-		globals.g_swapchainImageViewsFrameBuffers.vkSwapchain(),
+		globals.g_swapchain_frameBuffers.vkSwapchain(),
 		swapchainImageIndex
 	);
 
 	//	TODO: add timer to check for blocking call?
 	vkResult = globals.g_presentationQueue.present(presentInfo);
 	if (vkResult == VK_SUBOPTIMAL_KHR) {
-		globals.g_swapchainImageViewsFrameBuffers.stale();
+		globals.g_swapchain_frameBuffers.stale();
 	}
 
 	g_allDrawingFrames.advanceNextFrameToDraw();
@@ -1446,7 +1405,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case WM_WINDOWPOSCHANGED:
-		g_globals.g_swapchainImageViewsFrameBuffers.stale();
+		g_globals.g_swapchain_frameBuffers.stale();
 		break;
 
 	case WM_KEYDOWN:

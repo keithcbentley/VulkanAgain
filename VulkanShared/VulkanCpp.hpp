@@ -1619,11 +1619,11 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 		}
 
 		SubpassDependency& addSubpassDependency(
-			uint32_t	srcSubpassArg,
-			uint32_t	dstSubpassArg
+			uint32_t	srcSubpass,
+			uint32_t	dstSubpass
 		) {
 			SubpassDependency& subpassDependency = m_subpassDependencies.emplace_back();
-			subpassDependency.setDependency(srcSubpassArg, dstSubpassArg);
+			subpassDependency.setDependency(srcSubpass, dstSubpass);
 			return subpassDependency;
 		}
 
@@ -1807,11 +1807,13 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 	public:
 		ImageViewCreateInfo(
+			VkImage			vkImage,
 			VkImageViewType vkImageViewType,
 			VkFormat	vkFormat,
 			VkImageAspectFlags aspectFlags)
 			: VkImageViewCreateInfo{} {
 			sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			image = vkImage;
 			viewType = vkImageViewType;
 			format = vkFormat;
 			subresourceRange.aspectMask = aspectFlags;
@@ -1854,19 +1856,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			new(this) ImageView(vkImageView, vkDevice, &destroy);
 		}
 
-
-		static std::vector<ImageView> createImageViews(
-			std::vector<VkImage>& vkImages,
-			ImageViewCreateInfo& imageViewCreateInfo,
-			Device device
-		) {
-			std::vector<ImageView> imageViews;
-			for (VkImage vkImage : vkImages) {
-				imageViewCreateInfo.image = vkImage;
-				imageViews.emplace_back(imageViewCreateInfo, device);
-			}
-			return imageViews;
-		}
 
 	};
 
@@ -1945,7 +1934,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 	class ImageMemoryBarrier2 : public VkImageMemoryBarrier2 {
 
 	public:
-		ImageMemoryBarrier2(VkImageLayout oldLayoutArg, VkImageLayout newLayoutArg, VkImage imageArg)
+		ImageMemoryBarrier2(VkImageLayout oldLayoutArg, VkImageLayout newLayoutArg, VkImage vkImage)
 			:VkImageMemoryBarrier2{} {
 			sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
 
@@ -1953,7 +1942,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			newLayout = newLayoutArg;
 			srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			image = imageArg;
+			image = vkImage;
 			subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			subresourceRange.baseMipLevel = 0;
 			subresourceRange.levelCount = 1;
@@ -3219,23 +3208,23 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 		SwapchainCreateInfo(
 			Surface				surfaceArg,
 			uint32_t			minImageCountArg,
-			VkFormat			formatArg,
-			VkColorSpaceKHR		imageColorSpaceArg,
-			VkPresentModeKHR	presentModeArg)
+			VkFormat			vkFormat,
+			VkColorSpaceKHR		vkColorSpaceImage,
+			VkPresentModeKHR	vkPresentMode)
 			: VkSwapchainCreateInfoKHR{}
 		{
 			sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 			surface = surfaceArg;
 			minImageCount = minImageCountArg;
-			imageFormat = formatArg;
-			imageColorSpace = imageColorSpaceArg;
+			imageFormat = vkFormat;
+			imageColorSpace = vkColorSpaceImage;
 			imageArrayLayers = 1;
 			imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 			imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 			queueFamilyIndexCount = 0;
 			pQueueFamilyIndices = nullptr;
 			compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-			presentMode = presentModeArg;
+			presentMode = vkPresentMode;
 			clipped = VK_TRUE;
 			oldSwapchain = VK_NULL_HANDLE;
 		}
@@ -3325,34 +3314,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 
 
-	class Framebuffer : public HandleWithOwner<VkFramebuffer, Device> {
-
-		Framebuffer(VkFramebuffer vkFramebuffer, Device device, DestroyFunc_t pfnDestroy)
-			: HandleWithOwner(vkFramebuffer, device, pfnDestroy) {
-		}
-
-		static void destroy(VkFramebuffer vkFramebuffer, Device device) {
-			vkDestroyFramebuffer(device, vkFramebuffer, nullptr);
-		}
-
-
-
-	public:
-
-		Framebuffer() {}
-
-		Framebuffer(FramebufferCreateInfo& framebufferCreateInfo, Device device) {
-			VkFramebuffer	vkFramebuffer;
-			VkResult vkResult = vkCreateFramebuffer(device, framebufferCreateInfo.assemble(), nullptr, &vkFramebuffer);
-			if (vkResult != VK_SUCCESS) {
-				throw Exception(vkResult);
-			}
-			new(this)Framebuffer(vkFramebuffer, device, &destroy);
-		}
-
-	};
-
-
 
 	class Image_Memory {
 
@@ -3440,33 +3401,73 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 	};
 
-	class Swapchain_ImageViews_FrameBuffers {
+
+
+	class Framebuffer : public HandleWithOwner<VkFramebuffer, Device> {
+
+		Framebuffer(VkFramebuffer vkFramebuffer, Device device, DestroyFunc_t pfnDestroy)
+			: HandleWithOwner(vkFramebuffer, device, pfnDestroy) {
+		}
+
+		static void destroy(VkFramebuffer vkFramebuffer, Device device) {
+			vkDestroyFramebuffer(device, vkFramebuffer, nullptr);
+		}
+
+		//	Right now, framebuffer holds these just to control lifetime.
+		//	TODO: is there ever going to be more than one of these?
+		std::vector<Image_Memory_View>	m_image_memory_views;
+
+		std::vector<ImageView>	m_imageViews;
+
+
+	public:
+
+		Framebuffer() {}
+
+		Framebuffer(FramebufferCreateInfo& framebufferCreateInfo, Device device) {
+			VkFramebuffer	vkFramebuffer;
+			VkResult vkResult = vkCreateFramebuffer(device, framebufferCreateInfo.assemble(), nullptr, &vkFramebuffer);
+			if (vkResult != VK_SUCCESS) {
+				throw Exception(vkResult);
+			}
+			new(this)Framebuffer(vkFramebuffer, device, &destroy);
+		}
+
+		void take(Image_Memory_View&& image_memory_view) {
+			m_image_memory_views.push_back(std::move(image_memory_view));
+		}
+
+		void take(ImageView&& imageView) {
+			m_imageViews.push_back(std::move(imageView));
+		}
+
+
+	};
+
+
+	class Swapchain_FrameBuffers {
 
 	public:
 		static inline	Device		s_device;
 
-		SwapchainCreateInfo			m_swapchainCreateInfo;
-		vkcpp::Surface				m_surface;
+		//	Just save the create info since we need parts of it later.
+		SwapchainCreateInfo	m_swapchainCreateInfo;
+
+		//	Save the "smart" surface since the create info only has the base handle.
+		Surface				m_surface;
 
 		RenderPass	m_renderPass;
 
 		Swapchain	m_swapchain;
-		bool m_swapchainUpToDate{};
-		std::vector<VkImage> m_swapchainImages;
-		std::vector<ImageView>		m_swapchainImageViews;
 		std::vector<Framebuffer>	m_swapchainFrameBuffers;
-		//	TODO: is it really true that we only need one depth buffer?
-		//	Tutuorials say we only render one frame at a time but is that
-		//	really true?
-		Image_Memory_View	m_depthBuffer;
+
+		bool m_swapchainUpToDate = false;
+
 
 	private:
 
 		void makeEmpty() {
-			//	TODO: should we clear swapchain images also?
-			//	Need to review the whole move thing to make sure
-			//	this all makes sense.
-			m_swapchainImageViews.clear();
+			//	TODO: Need to review the whole move thing to make sure this all makes sense.
 			m_swapchainFrameBuffers.clear();
 		}
 
@@ -3475,9 +3476,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			m_swapchainFrameBuffers.clear();
 		}
 
-		void destroyImageViews() {
-			m_swapchainImageViews.clear();
-		}
 
 		void destroy() {
 			if (!s_device) {
@@ -3486,38 +3484,44 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			if (m_swapchain) {
 				vkDeviceWaitIdle(s_device);
 				destroyFrameBuffers();
-				destroyImageViews();
 			}
-		}
-
-		//	TODO: does it really make sense to have the swapchain
-		//	image format be an argument?
-		void createSwapchainImageViews(
-			VkFormat	swapchainImageFormat
-		) {
-			m_swapchainImages = m_swapchain.getImages();
-			ImageViewCreateInfo imageViewCreateInfo(
-				VK_IMAGE_VIEW_TYPE_2D,
-				swapchainImageFormat,
-				VK_IMAGE_ASPECT_COLOR_BIT);
-			m_swapchainImageViews = ImageView::createImageViews(m_swapchainImages, imageViewCreateInfo, m_swapchain.getOwner());
 		}
 
 
 		void createSwapchainFrameBuffers() {
-			m_swapchainFrameBuffers.resize(m_swapchainImageViews.size());
-			for (size_t i = 0; i < m_swapchainImageViews.size(); i++) {
+
+			std::vector<VkImage> m_swapchainImages = m_swapchain.getImages();
+
+			for (VkImage vkImage : m_swapchainImages) {
+				//	The renderpass image view and the depth buffer are "passed"
+				//	to the renderpass via attachments to the framebuffer.  This
+				//	means that was don't need to actually pass them through code.
+				//	All we need to do is create them and make sure they don't disappear.
+				//	We just have the framebuffer take ownership of the image view and
+				//	depth buffer.  
+				Image_Memory_View	depthBuffer(createDepthBuffer(m_swapchain.imageExtent(), s_device));
+
+				ImageViewCreateInfo imageViewCreateInfo(
+					vkImage,
+					VK_IMAGE_VIEW_TYPE_2D,
+					m_swapchainCreateInfo.imageFormat,
+					VK_IMAGE_ASPECT_COLOR_BIT);
+				ImageView imageView(imageViewCreateInfo, m_swapchain.getOwner());
+
+
 				//	Note that attachments here are image views.  When a
 				//	Renderpass adds attachments, the attachments are descriptions
 				//	of these attachments.
 				FramebufferCreateInfo	framebufferCreateInfo(m_renderPass, m_swapchain.imageExtent());
 				framebufferCreateInfo
-					.addAttachment(m_swapchainImageViews[i])
-					.addAttachment(m_depthBuffer.m_imageView);
+					.addAttachment(imageView)
+					.addAttachment(depthBuffer.m_imageView);
 
 
 				Framebuffer framebuffer(framebufferCreateInfo, s_device);
-				m_swapchainFrameBuffers[i] = std::move(framebuffer);
+				framebuffer.take(std::move(depthBuffer));
+				framebuffer.take(std::move(imageView));
+				m_swapchainFrameBuffers.push_back(std::move(framebuffer));
 			}
 		}
 
@@ -3535,7 +3539,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 				return Swapchain{};
 			}
 			//	TODO: should probably sanity check some other surface capabilities.
-
 			swapchainCreateInfo.surface = surface;
 			swapchainCreateInfo.imageExtent = surfaceExtent;
 			swapchainCreateInfo.preTransform = vkSurfaceCapabilities.currentTransform;
@@ -3546,12 +3549,12 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 	public:
 
-		Swapchain_ImageViews_FrameBuffers() {}
-		~Swapchain_ImageViews_FrameBuffers() {
+		Swapchain_FrameBuffers() {}
+		~Swapchain_FrameBuffers() {
 			destroy();
 		}
 
-		Swapchain_ImageViews_FrameBuffers(
+		Swapchain_FrameBuffers(
 			const SwapchainCreateInfo& swapchainCreateInfo,
 			Surface surface)
 			: m_swapchainCreateInfo(swapchainCreateInfo)
@@ -3559,25 +3562,24 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 		}
 
-		Swapchain_ImageViews_FrameBuffers(const Swapchain_ImageViews_FrameBuffers&) = delete;
-		Swapchain_ImageViews_FrameBuffers& operator=(const Swapchain_ImageViews_FrameBuffers&) = delete;
+		Swapchain_FrameBuffers(const Swapchain_FrameBuffers&) = delete;
+		Swapchain_FrameBuffers& operator=(const Swapchain_FrameBuffers&) = delete;
 
-		Swapchain_ImageViews_FrameBuffers(Swapchain_ImageViews_FrameBuffers&& other) noexcept
+		Swapchain_FrameBuffers(Swapchain_FrameBuffers&& other) noexcept
 			: m_swapchainCreateInfo(std::move(other.m_swapchainCreateInfo))
 			, m_surface(std::move(other.m_surface))
 			, m_renderPass(std::move(other.m_renderPass))
 			, m_swapchain(std::move(other.m_swapchain))
-			, m_swapchainImageViews(std::move(other.m_swapchainImageViews))
 			, m_swapchainFrameBuffers(std::move(other.m_swapchainFrameBuffers)) {
 			other.makeEmpty();
 		}
 
-		Swapchain_ImageViews_FrameBuffers& operator=(Swapchain_ImageViews_FrameBuffers&& other) noexcept {
+		Swapchain_FrameBuffers& operator=(Swapchain_FrameBuffers&& other) noexcept {
 			if (this == &other) {
 				return *this;
 			}
-			(*this).~Swapchain_ImageViews_FrameBuffers();
-			new(this) Swapchain_ImageViews_FrameBuffers(std::move(other));
+			(*this).~Swapchain_FrameBuffers();
+			new(this) Swapchain_FrameBuffers(std::move(other));
 			other.makeEmpty();
 			return *this;
 		}
@@ -3609,7 +3611,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			return m_renderPass;
 		}
 
-		VkFramebuffer getFrameBuffer(int index) {
+		Framebuffer getFrameBuffer(int index) {
 			return m_swapchainFrameBuffers.at(index);
 		}
 
@@ -3626,11 +3628,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 			vkDeviceWaitIdle(s_device);
 			destroyFrameBuffers();
-			destroyImageViews();
-			//	TODO: should we destroy the frame buffer here?
-			//	If we can't create a new swapchain, it will just
-			//	be hanging around until a new swapchain is created.
-
 			//	TODO: can we set the old swapchain to avoid this?
 			//	Explicitly destroy the old swapchain for now.
 			m_swapchain = std::move(vkcpp::Swapchain());
@@ -3639,8 +3636,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			if (!m_swapchain) {
 				return;
 			}
-			createSwapchainImageViews(m_swapchainCreateInfo.imageFormat);
-			m_depthBuffer = std::move(createDepthBuffer(m_swapchainCreateInfo.imageExtent, s_device));
 			createSwapchainFrameBuffers();
 			m_swapchainUpToDate = true;
 		}
@@ -3654,18 +3649,20 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			VkExtent2D vkExtent2D,
 			vkcpp::Device device
 		) {
+			const VkFormat	depthBufferFormat = VK_FORMAT_D32_SFLOAT;
+
 			vkcpp::ImageCreateInfo imageCreateInfo(
-				VK_FORMAT_D32_SFLOAT, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+				depthBufferFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
 			imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
 			imageCreateInfo.setExtent(vkExtent2D);
 			vkcpp::Image_Memory image_memory(
 				imageCreateInfo, vkcpp::MEMORY_PROPERTY_DEVICE_LOCAL, device);
 
 			vkcpp::ImageViewCreateInfo imageViewCreateInfo(
+				image_memory.m_image,
 				VK_IMAGE_VIEW_TYPE_2D,
-				VK_FORMAT_D32_SFLOAT,
+				depthBufferFormat,
 				VK_IMAGE_ASPECT_DEPTH_BIT);
-			imageViewCreateInfo.image = image_memory.m_image;
 			vkcpp::ImageView imageView(imageViewCreateInfo, device);
 
 			return Image_Memory_View(
@@ -3675,12 +3672,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 		}
 
-
-
 	};
-
-
-
 
 
 }

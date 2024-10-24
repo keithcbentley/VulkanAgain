@@ -153,10 +153,10 @@ void ImageLibrary::createImageMemoryViewFromFile(
 
 	//	Shaders are accessed through image views, not directly from images.
 	vkcpp::ImageViewCreateInfo textureImageViewCreateInfo(
+		textureImage_DeviceMemory.m_image,
 		VK_IMAGE_VIEW_TYPE_2D,
 		targetFormat,
 		VK_IMAGE_ASPECT_COLOR_BIT);
-	textureImageViewCreateInfo.image = textureImage_DeviceMemory.m_image;
 	vkcpp::ImageView textureImageView(textureImageViewCreateInfo, device);
 
 	vkcpp::Image_Memory_View image_memory_view(
