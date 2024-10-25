@@ -722,23 +722,76 @@ public:
 
 
 
+class VulkanAssets {
+
+public:
+
+	vkcpp::VulkanInstance	m_vulkanInstance;
+
+	vkcpp::PhysicalDevice	m_physicalDevice;
+	vkcpp::Device			m_device;
+
+	vkcpp::Queue				m_graphicsQueue;
+	vkcpp::Queue				m_presentationQueue;
+
+	VulkanAssets() {
+		m_vulkanInstance = createVulkanInstance();
+		m_vulkanInstance.createDebugMessenger();
+
+		m_physicalDevice = m_vulkanInstance.getPhysicalDevice(0);
+
+		m_device = createDevice(m_physicalDevice);
+
+		createQueues();
+
+	}
 
 
-vkcpp::VulkanInstance createVulkanInstance() {
+	vkcpp::VulkanInstance createVulkanInstance() {
 
-	vkcpp::VulkanInstanceCreateInfo vulkanInstanceCreateInfo{};
-	vulkanInstanceCreateInfo.addLayer("VK_LAYER_KHRONOS_validation");
+		vkcpp::VulkanInstanceCreateInfo vulkanInstanceCreateInfo{};
+		vulkanInstanceCreateInfo.addLayer("VK_LAYER_KHRONOS_validation");
 
 
-	vulkanInstanceCreateInfo.addExtension("VK_EXT_debug_utils");
-	vulkanInstanceCreateInfo.addExtension("VK_KHR_surface");
-	vulkanInstanceCreateInfo.addExtension("VK_KHR_win32_surface");
+		vulkanInstanceCreateInfo.addExtension("VK_EXT_debug_utils");
+		vulkanInstanceCreateInfo.addExtension("VK_KHR_surface");
+		vulkanInstanceCreateInfo.addExtension("VK_KHR_win32_surface");
 
-	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = vkcpp::DebugUtilsMessenger::getCreateInfo();
-	vulkanInstanceCreateInfo.pNext = &debugCreateInfo;
+		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = vkcpp::DebugUtilsMessenger::getCreateInfo();
+		vulkanInstanceCreateInfo.pNext = &debugCreateInfo;
 
-	return vkcpp::VulkanInstance(vulkanInstanceCreateInfo);
-}
+		return vkcpp::VulkanInstance(vulkanInstanceCreateInfo);
+	}
+
+	vkcpp::Device createDevice(vkcpp::PhysicalDevice physicalDevice) {
+		vkcpp::DeviceCreateInfo deviceCreateInfo;
+		deviceCreateInfo.addExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+		deviceCreateInfo.addDeviceQueue(MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX, 1);
+		deviceCreateInfo.addDeviceQueue(MagicValues::PRESENTATION_QUEUE_FAMILY_INDEX, 1);
+
+		VkPhysicalDeviceFeatures2 vkPhysicalDeviceFeatures2 = physicalDevice.getPhysicalDeviceFeatures2();
+		deviceCreateInfo.pNext = &vkPhysicalDeviceFeatures2;
+
+		return vkcpp::Device(deviceCreateInfo, physicalDevice);
+
+	}
+
+	void createQueues() {
+		m_graphicsQueue = m_device.getDeviceQueue(
+			MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+			MagicValues::GRAPHICS_QUEUE_INDEX);
+
+		m_presentationQueue = m_device.getDeviceQueue(
+			MagicValues::PRESENTATION_QUEUE_FAMILY_INDEX,
+			MagicValues::PRESENTATION_QUEUE_INDEX);
+
+	}
+
+
+};
+
+VulkanAssets g_vulkanAssets;
 
 
 
@@ -760,14 +813,7 @@ public:
 	HINSTANCE				g_hInstance = NULL;
 	HWND					g_hWnd = NULL;
 
-	vkcpp::VulkanInstance	g_vulkanInstance;
-	vkcpp::PhysicalDevice	g_physicalDevice;
-	vkcpp::Device			g_deviceOriginal;
 	vkcpp::Surface			g_surfaceOriginal;
-
-	vkcpp::Queue				g_graphicsQueue;
-	vkcpp::Queue				g_presentationQueue;
-
 	vkcpp::RenderPass g_renderPassOriginal;
 
 	vkcpp::Swapchain_FrameBuffers	g_swapchain_frameBuffers;
@@ -826,85 +872,85 @@ vkcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
 
 
 
-std::vector<uint32_t> g_imageData;
-uint32_t	g_width;
-uint32_t	g_height;
-vkcpp::Image_Memory g_image_memory;
+//std::vector<uint32_t> g_imageData;
+//uint32_t	g_width;
+//uint32_t	g_height;
+//vkcpp::Image_Memory g_image_memory;
 
 
-void makeImageFromBitmap() {
-
-	const VkFormat targetFormat = VK_FORMAT_R8G8B8A8_SRGB;
-
-	const VkDeviceSize imageSize = g_imageData.size() * sizeof(uint32_t);
-
-	//	Make a device (gpu) staging buffer and copy the pixels into it.
-	vkcpp::Buffer_DeviceMemory stagingBuffer_DeviceMemoryMapped(
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		imageSize,
-		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
-		g_imageData.data(),
-		g_globals.g_deviceOriginal);
-
-
-	//	Make our target image and memory.  Bits are copied later.
-	vkcpp::Extent2D extent(g_width, g_height);
-	vkcpp::Image_Memory image_memory(
-		extent,
-		targetFormat,
-		VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-		vkcpp::MEMORY_PROPERTY_DEVICE_LOCAL,
-		g_globals.g_deviceOriginal);
-
-	//	Change image layout to be best target for transfer into.
-	//	TODO: should this be packaged up into one command buffer method?
-	{
-		vkcpp::CommandBuffer commandBuffer(g_globals.g_commandPoolOriginal);
-		commandBuffer.beginOneTimeSubmit();
-		vkcpp::ImageMemoryBarrier2 imageMemoryBarrier(
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			image_memory.m_image);
-		vkcpp::DependencyInfo dependencyInfo;
-		dependencyInfo.addImageMemoryBarrier(imageMemoryBarrier);
-		commandBuffer.cmdPipelineBarrier2(dependencyInfo);
-		commandBuffer.end();
-		g_globals.g_graphicsQueue.submit2Fenced(commandBuffer);
-	}
-
-	{
-		//	Copy bitmap bits from staging buffer into image memory.
-		//	TODO: should images remember their width and height?
-		vkcpp::CommandBuffer commandBuffer(g_globals.g_commandPoolOriginal);
-		commandBuffer.beginOneTimeSubmit();
-		commandBuffer.cmdCopyBufferToImage(
-			stagingBuffer_DeviceMemoryMapped.m_buffer,
-			image_memory.m_image,
-			g_width, g_height);
-		commandBuffer.end();
-		g_globals.g_graphicsQueue.submit2Fenced(commandBuffer);
-	}
-
-	{
-		//	Change image layout to whatever is appropriate for use.
-		vkcpp::CommandBuffer commandBuffer(g_globals.g_commandPoolOriginal);
-		commandBuffer.beginOneTimeSubmit();
-		vkcpp::ImageMemoryBarrier2 imageMemoryBarrier(
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			VK_IMAGE_LAYOUT_GENERAL,
-			image_memory.m_image);
-		vkcpp::DependencyInfo dependencyInfo;
-		dependencyInfo.addImageMemoryBarrier(imageMemoryBarrier);
-		commandBuffer.cmdPipelineBarrier2(dependencyInfo);
-		commandBuffer.end();
-		g_globals.g_graphicsQueue.submit2Fenced(commandBuffer);
-	}
-
-	g_image_memory = std::move(image_memory);
-
-
-}
+//void makeImageFromBitmap() {
+//
+//	const VkFormat targetFormat = VK_FORMAT_R8G8B8A8_SRGB;
+//
+//	const VkDeviceSize imageSize = g_imageData.size() * sizeof(uint32_t);
+//
+//	//	Make a device (gpu) staging buffer and copy the pixels into it.
+//	vkcpp::Buffer_DeviceMemory stagingBuffer_DeviceMemoryMapped(
+//		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+//		imageSize,
+//		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+//		vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
+//		g_imageData.data(),
+//		g_globals.g_deviceOriginal);
+//
+//
+//	//	Make our target image and memory.  Bits are copied later.
+//	vkcpp::Extent2D extent(g_width, g_height);
+//	vkcpp::Image_Memory image_memory(
+//		extent,
+//		targetFormat,
+//		VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+//		vkcpp::MEMORY_PROPERTY_DEVICE_LOCAL,
+//		g_globals.g_deviceOriginal);
+//
+//	//	Change image layout to be best target for transfer into.
+//	//	TODO: should this be packaged up into one command buffer method?
+//	{
+//		vkcpp::CommandBuffer commandBuffer(g_globals.g_commandPoolOriginal);
+//		commandBuffer.beginOneTimeSubmit();
+//		vkcpp::ImageMemoryBarrier2 imageMemoryBarrier(
+//			VK_IMAGE_LAYOUT_UNDEFINED,
+//			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+//			image_memory.m_image);
+//		vkcpp::DependencyInfo dependencyInfo;
+//		dependencyInfo.addImageMemoryBarrier(imageMemoryBarrier);
+//		commandBuffer.cmdPipelineBarrier2(dependencyInfo);
+//		commandBuffer.end();
+//		g_globals.g_graphicsQueue.submit2Fenced(commandBuffer);
+//	}
+//
+//	{
+//		//	Copy bitmap bits from staging buffer into image memory.
+//		//	TODO: should images remember their width and height?
+//		vkcpp::CommandBuffer commandBuffer(g_globals.g_commandPoolOriginal);
+//		commandBuffer.beginOneTimeSubmit();
+//		commandBuffer.cmdCopyBufferToImage(
+//			stagingBuffer_DeviceMemoryMapped.m_buffer,
+//			image_memory.m_image,
+//			g_width, g_height);
+//		commandBuffer.end();
+//		g_globals.g_graphicsQueue.submit2Fenced(commandBuffer);
+//	}
+//
+//	{
+//		//	Change image layout to whatever is appropriate for use.
+//		vkcpp::CommandBuffer commandBuffer(g_globals.g_commandPoolOriginal);
+//		commandBuffer.beginOneTimeSubmit();
+//		vkcpp::ImageMemoryBarrier2 imageMemoryBarrier(
+//			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+//			VK_IMAGE_LAYOUT_GENERAL,
+//			image_memory.m_image);
+//		vkcpp::DependencyInfo dependencyInfo;
+//		dependencyInfo.addImageMemoryBarrier(imageMemoryBarrier);
+//		commandBuffer.cmdPipelineBarrier2(dependencyInfo);
+//		commandBuffer.end();
+//		g_globals.g_graphicsQueue.submit2Fenced(commandBuffer);
+//	}
+//
+//	g_image_memory = std::move(image_memory);
+//
+//
+//}
 
 
 
@@ -919,9 +965,6 @@ vkcpp::RenderPass createRenderPass(
 	//	Note that the index of the attachment can be pulled out
 	//	of the returned attachment reference to use in other
 	//	attachment references.
-	//	IMPORTANT! The index in the attachment reference must match the index of the
-	//	attachment as it was added to the framebuffer.
-	//	TODO: make the indexing in the framebuffer and here explicit.
 	VkAttachmentReference colorAttachmentReference = renderPassCreateInfo.addAttachment(
 		vkcpp::AttachmentDescription::simpleColorAttachmentPresentDescription(swapchainImageFormat),
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
@@ -969,42 +1012,18 @@ vkcpp::RenderPass createRenderPass(
 
 
 
-
-
 void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
-
-	vkcpp::VulkanInstance vulkanInstance = createVulkanInstance();
-	vulkanInstance.createDebugMessenger();
-
-	vkcpp::PhysicalDevice physicalDevice = vulkanInstance.getPhysicalDevice(0);
-
-	//auto allQueueFamilyProperties = physicalDevice.getAllQueueFamilyProperties();
-
-	vkcpp::DeviceCreateInfo deviceCreateInfo;
-	deviceCreateInfo.addExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-
-	deviceCreateInfo.addDeviceQueue(MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX, 1);
-	deviceCreateInfo.addDeviceQueue(MagicValues::PRESENTATION_QUEUE_FAMILY_INDEX, 1);
-
-	VkPhysicalDeviceFeatures2 vkPhysicalDeviceFeatures2 = physicalDevice.getPhysicalDeviceFeatures2();
-	deviceCreateInfo.pNext = &vkPhysicalDeviceFeatures2;
-
-	vkcpp::Device deviceOriginal(deviceCreateInfo, physicalDevice);
-
-	vkcpp::Queue graphicsQueue = deviceOriginal.getDeviceQueue(
-		MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-		MagicValues::GRAPHICS_QUEUE_INDEX);
-
-	vkcpp::Queue presentationQueue = deviceOriginal.getDeviceQueue(
-		MagicValues::PRESENTATION_QUEUE_FAMILY_INDEX,
-		MagicValues::PRESENTATION_QUEUE_INDEX);
 
 
 	VkWin32SurfaceCreateInfoKHR vkWin32SurfaceCreateInfo{};
 	vkWin32SurfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 	vkWin32SurfaceCreateInfo.hwnd = hWnd;
 	vkWin32SurfaceCreateInfo.hinstance = hInstance;
-	vkcpp::Surface surfaceOriginal(vkWin32SurfaceCreateInfo, vulkanInstance, physicalDevice);
+	vkcpp::Surface surfaceOriginal(
+		vkWin32SurfaceCreateInfo,
+		g_vulkanAssets.m_vulkanInstance,
+		g_vulkanAssets.m_physicalDevice
+	);
 
 	VkSurfaceCapabilitiesKHR vkSurfaceCapabilities = surfaceOriginal.getSurfaceCapabilities();
 	//std::vector<VkSurfaceFormatKHR> surfaceFormats = surfaceOriginal.getSurfaceFormats();
@@ -1012,10 +1031,9 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 	const VkFormat swapchainImageFormat = VK_FORMAT_B8G8R8A8_SRGB;
 
-	vkcpp::RenderPass renderPassOriginal(createRenderPass(swapchainImageFormat, deviceOriginal));
+	vkcpp::RenderPass renderPassOriginal(createRenderPass(swapchainImageFormat, g_vulkanAssets.m_device));
 
-
-	vkcpp::Swapchain_FrameBuffers::setDevice(deviceOriginal);
+	vkcpp::Swapchain_FrameBuffers::setDevice(g_vulkanAssets.m_device);
 
 	const VkColorSpaceKHR swapchainImageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 	const VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
@@ -1033,15 +1051,15 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::Swapchain_FrameBuffers swapchain_frameBuffers(swapchainCreateInfo, surfaceOriginal);
 	swapchain_frameBuffers.setRenderPass(renderPassOriginal);
 
-	PointVertexDeviceBuffer	pointVertexDeviceBuffer0(g_pointVertexBuffer0, deviceOriginal);
-	PointVertexDeviceBuffer	pointVertexDeviceBuffer1(g_pointVertexBuffer1, deviceOriginal);
+	PointVertexDeviceBuffer	pointVertexDeviceBuffer0(g_pointVertexBuffer0, g_vulkanAssets.m_device);
+	PointVertexDeviceBuffer	pointVertexDeviceBuffer1(g_pointVertexBuffer1, g_vulkanAssets.m_device);
 
 
 	for (const ShaderName& shaderName : g_shaderNames) {
 		ShaderLibrary::createShaderModuleFromFile(
 			shaderName.m_shaderName,
 			shaderName.m_fileName,
-			deviceOriginal);
+			g_vulkanAssets.m_device);
 
 	}
 
@@ -1050,30 +1068,30 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	commandPoolCreateInfo.queueFamilyIndex = MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX;
-	vkcpp::CommandPool commandPoolOriginal(commandPoolCreateInfo, deviceOriginal);
+	vkcpp::CommandPool commandPoolOriginal(commandPoolCreateInfo, g_vulkanAssets.m_device);
 
 
 	ImageLibrary::createImageMemoryViewFromFile(
 		"statueImage", "c:/vulkan/statue.jpg",
-		deviceOriginal, commandPoolOriginal, graphicsQueue);
+		g_vulkanAssets.m_device, commandPoolOriginal, g_vulkanAssets.m_graphicsQueue);
 
 	ImageLibrary::createImageMemoryViewFromFile(
 		"spaceImage", "c:/vulkan/space.jpg",
-		deviceOriginal, commandPoolOriginal, graphicsQueue);
+		g_vulkanAssets.m_device, commandPoolOriginal, g_vulkanAssets.m_graphicsQueue);
 
 
 	vkcpp::SamplerCreateInfo textureSamplerCreateInfo;
-	vkcpp::Sampler textureSampler(textureSamplerCreateInfo, deviceOriginal);
+	vkcpp::Sampler textureSampler(textureSamplerCreateInfo, g_vulkanAssets.m_device);
 
 
-	vkcpp::DescriptorSetLayout descriptorSetLayoutOriginal = createDrawingFrameDescriptorSetLayout(deviceOriginal);
-	vkcpp::DescriptorPool descriptorPoolOriginal = createDescriptorPool(deviceOriginal);
+	vkcpp::DescriptorSetLayout descriptorSetLayoutOriginal = createDrawingFrameDescriptorSetLayout(g_vulkanAssets.m_device);
+	vkcpp::DescriptorPool descriptorPoolOriginal = createDescriptorPool(g_vulkanAssets.m_device);
 
 
 
 	vkcpp::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
 	pipelineLayoutCreateInfo.addDescriptorSetLayout(descriptorSetLayoutOriginal);
-	vkcpp::PipelineLayout pipelineLayout(pipelineLayoutCreateInfo, deviceOriginal);
+	vkcpp::PipelineLayout pipelineLayout(pipelineLayoutCreateInfo, g_vulkanAssets.m_device);
 
 
 	vkcpp::GraphicsPipelineCreateInfo graphicsPipelineCreateInfo;
@@ -1095,13 +1113,13 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	//graphicsPipelineCreateInfo.addShaderModule(
 	//	ShaderLibrary::shaderModule("identityFrag"), VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 
-	vkcpp::GraphicsPipeline graphicsPipeline0(graphicsPipelineCreateInfo, deviceOriginal);
+	vkcpp::GraphicsPipeline graphicsPipeline0(graphicsPipelineCreateInfo, g_vulkanAssets.m_device);
 
 	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal, 1);
-	vkcpp::GraphicsPipeline graphicsPipeline1(graphicsPipelineCreateInfo, deviceOriginal);
+	vkcpp::GraphicsPipeline graphicsPipeline1(graphicsPipelineCreateInfo, g_vulkanAssets.m_device);
 
 	g_allDrawingFrames.createDrawingFrames(
-		deviceOriginal,
+		g_vulkanAssets.m_device,
 		commandPoolOriginal,
 		descriptorPoolOriginal,
 		descriptorSetLayoutOriginal,
@@ -1112,9 +1130,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 #undef globals
 
-	globals.g_vulkanInstance = std::move(vulkanInstance);
-	globals.g_physicalDevice = std::move(physicalDevice);
-	globals.g_deviceOriginal = std::move(deviceOriginal);
 
 	globals.g_hInstance = hInstance;
 	globals.g_hWnd = hWnd;
@@ -1134,9 +1149,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
 
 	globals.g_commandPoolOriginal = std::move(commandPoolOriginal);
-
-	globals.g_graphicsQueue = graphicsQueue;
-	globals.g_presentationQueue = presentationQueue;
 
 	globals.g_renderPassOriginal = std::move(renderPassOriginal);
 	globals.g_swapchain_frameBuffers = std::move(swapchain_frameBuffers);
@@ -1326,7 +1338,7 @@ void drawFrame(Globals& globals)
 	currentDrawingFrame.m_inFlightFence.close();
 	g_drawFrameDraws++;
 
-	globals.g_graphicsQueue.submit2(submitInfo2, currentDrawingFrame.m_inFlightFence);
+	g_vulkanAssets.m_graphicsQueue.submit2(submitInfo2, currentDrawingFrame.m_inFlightFence);
 
 	//	TODO: Is this where we are supposed to add an image memory barrier
 	//	to avoid the present after write error?
@@ -1340,7 +1352,7 @@ void drawFrame(Globals& globals)
 	);
 
 	//	TODO: add timer to check for blocking call?
-	vkResult = globals.g_presentationQueue.present(presentInfo);
+	vkResult = g_vulkanAssets.m_presentationQueue.present(presentInfo);
 	if (vkResult == VK_SUBOPTIMAL_KHR) {
 		globals.g_swapchain_frameBuffers.stale();
 	}
@@ -1585,19 +1597,19 @@ void snapCommandWindow() {
 
 	std::cout << "biSizeImage: " << bitmapInfo.bmiHeader.biSizeImage << "\n";
 
-	g_imageData.resize(bitmapInfo.bmiHeader.biSizeImage / sizeof(uint32_t));
-	g_width = bitmap.bmWidth;
-	g_height = bitmap.bmHeight;
+	//g_imageData.resize(bitmapInfo.bmiHeader.biSizeImage / sizeof(uint32_t));
+	//g_width = bitmap.bmWidth;
+	//g_height = bitmap.bmHeight;
 
-	returnCode = GetDIBits(
-		commandWindowDC,
-		bitmapHandle,
-		0,
-		windowHeight,
-		g_imageData.data(),
-		&bitmapInfo,
-		DIB_RGB_COLORS
-	);
+	//returnCode = GetDIBits(
+	//	commandWindowDC,
+	//	bitmapHandle,
+	//	0,
+	//	windowHeight,
+	//	g_imageData.data(),
+	//	&bitmapInfo,
+	//	DIB_RGB_COLORS
+	//);
 
 	std::cout << "returnCode: " << returnCode << "\n";
 
@@ -1693,7 +1705,7 @@ int main()
 	MessageLoop(g_globals);
 
 	//	Wait for device to be idle before exiting and cleaning up globals.
-	g_globals.g_deviceOriginal.waitIdle();
+	g_vulkanAssets.m_device.waitIdle();
 
 }
 
@@ -1746,10 +1758,10 @@ int CaptureAnImage(HWND hWnd)
 		(BITMAPINFO*)&bi,
 		DIB_RGB_COLORS);
 
-	makeImageFromBitmap();
+	//	makeImageFromBitmap();
 
 
-	// Unlock and Free the DIB from the heap.
+		// Unlock and Free the DIB from the heap.
 	GlobalUnlock(hDIB);
 	GlobalFree(hDIB);
 	DeleteObject(bitmapHandle);
