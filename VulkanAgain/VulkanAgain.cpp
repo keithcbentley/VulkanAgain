@@ -47,6 +47,10 @@ public:
 
 };
 
+
+
+
+
 class ShaderName {
 
 public:
@@ -66,6 +70,8 @@ std::vector<ShaderName> g_shaderNames{
 	{ "vert4", "C:/Shaders/VulkanTriangle/vert4.spv"},
 	{ "textureFrag", "C:/Shaders/VulkanTriangle/textureFrag.spv"},
 	{ "identityFrag", "C:/Shaders/VulkanTriangle/identityFrag.spv"} };
+
+
 
 
 struct Point {
@@ -487,6 +493,58 @@ struct ModelViewProjTransform {
 	alignas(16) glm::mat4 m_projTransform;
 };
 
+
+//class UniformBufferMemory {
+//
+//public:
+//
+//	vkcpp::Buffer_DeviceMemory m_uniformBufferMemory;
+//
+//	void createUniformBuffer() {
+//		m_uniformBufferMemory = std::move(
+//			vkcpp::Buffer_DeviceMemory(
+//				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+//				sizeof(ModelViewProjTransform),
+//				MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+//				vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
+//				m_device
+//			));
+//	}
+//
+//};
+//
+//class DescriptorSet {
+//
+//public:
+//
+//	void createDescriptorSet(
+//		vkcpp::DescriptorPool		descriptorPool,
+//		vkcpp::DescriptorSetLayout descriptorSetLayout,
+//		vkcpp::ImageView textureImageView,
+//		vkcpp::Sampler textureSampler
+//	) {
+//		vkcpp::DescriptorSet descriptorSet(descriptorSetLayout, descriptorPool);
+//		descriptorSet.addWriteDescriptor(
+//			MagicValues::UBO_DESCRIPTOR_BINDING_INDEX,
+//			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+//			m_uniformBufferMemory.m_buffer,
+//			sizeof(ModelViewProjTransform));
+//		descriptorSet.addWriteDescriptor(
+//			MagicValues::TEXTURE_DESCRIPTOR_BINDING_INDEX,
+//			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+//			textureImageView,
+//			textureSampler);
+//		descriptorSet.updateDescriptors();
+//
+//		m_descriptorSet = std::move(descriptorSet);
+//	}
+//
+//
+//};
+
+
+
+
 class Camera {
 
 public:
@@ -674,10 +732,10 @@ class AllDrawingFrames {
 
 private:
 	std::vector<DrawingFrame> m_drawingFrames;
+	int m_nextFrameToDrawIndex = 0;
+
 
 public:
-
-	int m_nextFrameToDrawIndex = 0;
 
 
 	AllDrawingFrames() {}
@@ -695,8 +753,6 @@ public:
 	DrawingFrame& getNextFrameToDraw() {
 		return m_drawingFrames.at(m_nextFrameToDrawIndex);
 	}
-
-	int	frameCount() { return static_cast<int>(m_drawingFrames.size()); }
 
 	void createDrawingFrames(
 		vkcpp::Device device,
@@ -791,7 +847,9 @@ public:
 
 };
 
-VulkanAssets g_vulkanAssets;
+VulkanAssets	g_vulkanAssets;
+ShaderLibrary	g_shaderLibrary;	//	Hack to control when shader library is cleared out.
+ImageLibrary	g_imageLibrary;		//	Hack to control when image library is cleared out.
 
 
 
@@ -813,17 +871,18 @@ public:
 	HINSTANCE				g_hInstance = NULL;
 	HWND					g_hWnd = NULL;
 
-	vkcpp::Surface			g_surfaceOriginal;
-	vkcpp::RenderPass g_renderPassOriginal;
-
+	vkcpp::Surface		g_surfaceOriginal;
 	vkcpp::Swapchain_FrameBuffers	g_swapchain_frameBuffers;
+
 
 	vkcpp::DescriptorPool			g_descriptorPoolOriginal;
 	vkcpp::DescriptorSetLayout		g_descriptorSetLayoutOriginal;
 
-	vkcpp::PipelineLayout	g_pipelineLayout;
-	vkcpp::GraphicsPipeline	g_graphicsPipeline0;
-	vkcpp::GraphicsPipeline	g_graphicsPipeline1;
+	//	vkcpp::RenderPass	g_renderPassOriginal;
+
+		//vkcpp::PipelineLayout	g_pipelineLayout;
+		//vkcpp::GraphicsPipeline	g_graphicsPipeline0;
+		//vkcpp::GraphicsPipeline	g_graphicsPipeline1;
 
 	PointVertexDeviceBuffer		g_pointVertexDeviceBuffer0;
 	PointVertexDeviceBuffer		g_pointVertexDeviceBuffer1;
@@ -833,8 +892,6 @@ public:
 
 	vkcpp::Sampler g_textureSampler;
 
-	ShaderLibrary	g_shaderLibrary;	//	Hack to control when shader library is cleared out.
-	ImageLibrary	g_imageLibrary;		//	Hack to control when image library is cleared out.
 };
 
 Globals g_globals;
@@ -1011,6 +1068,83 @@ vkcpp::RenderPass createRenderPass(
 }
 
 
+class Renderer {
+
+public:
+
+	vkcpp::RenderPass	m_renderPass;
+
+	//	TODO:	pipelines should remember their layouts,
+	//	or vice-versa, or both.
+	vkcpp::PipelineLayout		m_pipelineLayout;
+
+	vkcpp::PipelineLayout		m_pipelineLayout0;
+	vkcpp::GraphicsPipeline		m_graphicsPipeline0;
+
+	vkcpp::PipelineLayout		m_pipelineLayout1;
+	vkcpp::GraphicsPipeline		m_graphicsPipeline1;
+
+
+	//	TODO: where to put these?
+	PointVertexDeviceBuffer	m_pointVertexDeviceBuffer0;
+	PointVertexDeviceBuffer	m_pointVertexDeviceBuffer1;
+
+
+	//	TODO: either the drawing frame or frame buffer should know the image extent
+	void recordCommandBuffer(
+		DrawingFrame& drawingFrame,
+		const vkcpp::Framebuffer& framebufferArg,
+		const VkExtent2D			imageExtent
+	) {
+		VkRenderPassBeginInfo vkRenderPassBeginInfo{};
+		vkRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		vkRenderPassBeginInfo.renderPass = m_renderPass;
+		vkRenderPassBeginInfo.framebuffer = framebufferArg;
+		vkRenderPassBeginInfo.renderArea.offset = { 0, 0 };
+		vkRenderPassBeginInfo.renderArea.extent = imageExtent;
+
+		std::array<VkClearValue, 2> clearValues{};
+		clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f } };
+		clearValues[1].depthStencil = { 1.0f, 0 };
+		vkRenderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+		vkRenderPassBeginInfo.pClearValues = clearValues.data();
+
+		drawingFrame.updateUniformBuffer(imageExtent);
+
+		vkcpp::CommandBuffer commandBuffer = drawingFrame.m_commandBuffer;
+		commandBuffer.reset();
+		commandBuffer.begin();
+
+		commandBuffer.cmdBeginRenderPass(vkRenderPassBeginInfo);
+
+		commandBuffer.cmdSetViewport(imageExtent);
+		commandBuffer.cmdSetScissor(imageExtent);
+
+		commandBuffer.cmdBindPipeline(m_graphicsPipeline0);
+		commandBuffer.cmdBindDescriptorSet(m_pipelineLayout0, drawingFrame.m_descriptorSet);
+
+		vkCmdSetDepthTestEnable(commandBuffer, VK_TRUE);
+		m_pointVertexDeviceBuffer0.draw(commandBuffer);
+
+		VkSubpassContents vkSubpassContents{};
+		vkCmdNextSubpass(commandBuffer, vkSubpassContents);
+		commandBuffer.cmdBindPipeline(m_graphicsPipeline1);
+		commandBuffer.cmdBindDescriptorSet(m_pipelineLayout1, drawingFrame.m_descriptorSet);
+
+		vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
+		m_pointVertexDeviceBuffer1.draw(commandBuffer);
+
+		commandBuffer.cmdEndRenderPass();
+
+		commandBuffer.end();
+
+	}
+
+
+};
+
+Renderer theRenderer;
+
 
 void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
@@ -1030,13 +1164,12 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	//std::vector<VkPresentModeKHR> presentModes = surfaceOriginal.getSurfacePresentModes();
 
 	const VkFormat swapchainImageFormat = VK_FORMAT_B8G8R8A8_SRGB;
-
-	vkcpp::RenderPass renderPassOriginal(createRenderPass(swapchainImageFormat, g_vulkanAssets.m_device));
-
-	vkcpp::Swapchain_FrameBuffers::setDevice(g_vulkanAssets.m_device);
-
 	const VkColorSpaceKHR swapchainImageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 	const VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+
+	vkcpp::RenderPass renderPass(createRenderPass(swapchainImageFormat, g_vulkanAssets.m_device));
+
+	vkcpp::Swapchain_FrameBuffers::setDevice(g_vulkanAssets.m_device);
 
 	vkcpp::SwapchainCreateInfo swapchainCreateInfo(
 		surfaceOriginal,
@@ -1049,7 +1182,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	//	The swapchainCreateInfo does not hold the smart Surface object so
 	//	we need to pass it in separately.
 	vkcpp::Swapchain_FrameBuffers swapchain_frameBuffers(swapchainCreateInfo, surfaceOriginal);
-	swapchain_frameBuffers.setRenderPass(renderPassOriginal);
+	swapchain_frameBuffers.setRenderPass(renderPass);
 
 	PointVertexDeviceBuffer	pointVertexDeviceBuffer0(g_pointVertexBuffer0, g_vulkanAssets.m_device);
 	PointVertexDeviceBuffer	pointVertexDeviceBuffer1(g_pointVertexBuffer1, g_vulkanAssets.m_device);
@@ -1060,7 +1193,6 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 			shaderName.m_shaderName,
 			shaderName.m_fileName,
 			g_vulkanAssets.m_device);
-
 	}
 
 
@@ -1103,9 +1235,9 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	graphicsPipelineCreateInfo.addVertexBinding(
 		Point::getVertexBinding(MagicValues::VERTEX_BINDING_INDEX));
 
-	//	graphicsPipelineCreateInfo.setViewportExtent(vkSurfaceCapabilities.currentExtent);
+	//	TODO: move pipeline creation to the renderer
 	graphicsPipelineCreateInfo.setPipelineLayout(pipelineLayout);
-	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal, 0);
+	graphicsPipelineCreateInfo.setRenderPass(renderPass, 0);
 	graphicsPipelineCreateInfo.addShaderModule(
 		ShaderLibrary::shaderModule("vert4"), VK_SHADER_STAGE_VERTEX_BIT, "main");
 	graphicsPipelineCreateInfo.addShaderModule(
@@ -1114,8 +1246,7 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	//	ShaderLibrary::shaderModule("identityFrag"), VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 
 	vkcpp::GraphicsPipeline graphicsPipeline0(graphicsPipelineCreateInfo, g_vulkanAssets.m_device);
-
-	graphicsPipelineCreateInfo.setRenderPass(renderPassOriginal, 1);
+	graphicsPipelineCreateInfo.setRenderPass(renderPass, 1);
 	vkcpp::GraphicsPipeline graphicsPipeline1(graphicsPipelineCreateInfo, g_vulkanAssets.m_device);
 
 	g_allDrawingFrames.createDrawingFrames(
@@ -1142,97 +1273,21 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	globals.g_pointVertexDeviceBuffer0 = std::move(pointVertexDeviceBuffer0);
 	globals.g_pointVertexDeviceBuffer1 = std::move(pointVertexDeviceBuffer1);
 
-
-	globals.g_pipelineLayout = std::move(pipelineLayout);
-	globals.g_graphicsPipeline0 = std::move(graphicsPipeline0);
-	globals.g_graphicsPipeline1 = std::move(graphicsPipeline1);
+	theRenderer.m_renderPass = std::move(renderPass);
+	theRenderer.m_pipelineLayout = std::move(pipelineLayout);
+	theRenderer.m_pipelineLayout0 = theRenderer.m_pipelineLayout;
+	theRenderer.m_graphicsPipeline0 = std::move(graphicsPipeline0);
+	theRenderer.m_pipelineLayout1 = theRenderer.m_pipelineLayout;
+	theRenderer.m_graphicsPipeline1 = std::move(graphicsPipeline1);
 
 
 	globals.g_commandPoolOriginal = std::move(commandPoolOriginal);
 
-	globals.g_renderPassOriginal = std::move(renderPassOriginal);
 	globals.g_swapchain_frameBuffers = std::move(swapchain_frameBuffers);
 
 	globals.g_textureSampler = std::move(textureSampler);
 
 }
-
-
-
-
-class Renderer {
-
-public:
-
-	vkcpp::CommandBuffer	m_commandBuffer;
-
-	PointVertexDeviceBuffer	m_pointVertexDeviceBuffer0;
-	PointVertexDeviceBuffer	m_pointVertexDeviceBuffer1;
-
-
-	VkDescriptorSet			m_vkDescriptorSet = nullptr;
-
-	//	TODO:	pipelines should remember their layouts,
-	//	or vice-versa, or both.
-	vkcpp::PipelineLayout		m_pipelineLayout0;
-	vkcpp::GraphicsPipeline		m_graphicsPipeline0;
-
-	vkcpp::PipelineLayout		m_pipelineLayout1;
-	vkcpp::GraphicsPipeline		m_graphicsPipeline1;
-
-
-	//	TODO: use a pointer instead of a reference for now, until
-	//	we figure out the best structure for the pieces.  Maybe
-	//	encapsulate the renderpass in this class.
-	vkcpp::Swapchain_FrameBuffers* m_pSwapchain_frameBuffers;
-	uint32_t									m_swapchainImageIndex = 0;
-
-
-	void recordCommandBuffer(
-		vkcpp::CommandBuffer		commandBuffer
-	) {
-		const VkExtent2D swapchainImageExtent = m_pSwapchain_frameBuffers->getImageExtent();
-
-		VkRenderPassBeginInfo vkRenderPassBeginInfo{};
-		vkRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		vkRenderPassBeginInfo.renderPass = m_pSwapchain_frameBuffers->getRenderPass();
-		vkRenderPassBeginInfo.framebuffer = m_pSwapchain_frameBuffers->getFrameBuffer(m_swapchainImageIndex);
-		vkRenderPassBeginInfo.renderArea.offset = { 0, 0 };
-		vkRenderPassBeginInfo.renderArea.extent = swapchainImageExtent;
-
-		std::array<VkClearValue, 2> clearValues{};
-		clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f } };
-		clearValues[1].depthStencil = { 1.0f, 0 };
-		vkRenderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-		vkRenderPassBeginInfo.pClearValues = clearValues.data();
-
-		commandBuffer.cmdBeginRenderPass(vkRenderPassBeginInfo);
-
-		commandBuffer.cmdSetViewport(swapchainImageExtent);
-		commandBuffer.cmdSetScissor(swapchainImageExtent);
-
-		commandBuffer.cmdBindPipeline(m_graphicsPipeline0);
-		commandBuffer.cmdBindDescriptorSet(m_pipelineLayout0, m_vkDescriptorSet);
-
-		vkCmdSetDepthTestEnable(commandBuffer, VK_TRUE);
-		m_pointVertexDeviceBuffer0.draw(commandBuffer);
-
-		VkSubpassContents vkSubpassContents{};
-		vkCmdNextSubpass(commandBuffer, vkSubpassContents);
-		commandBuffer.cmdBindPipeline(m_graphicsPipeline1);
-		commandBuffer.cmdBindDescriptorSet(m_pipelineLayout1, m_vkDescriptorSet);
-
-		vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
-		m_pointVertexDeviceBuffer1.draw(commandBuffer);
-
-		commandBuffer.cmdEndRenderPass();
-
-	}
-
-
-};
-
-Renderer theRenderer;
 
 
 int64_t	g_drawFrameCalls;
@@ -1293,33 +1348,15 @@ void drawFrame(Globals& globals)
 	}
 
 
-	//	Got everything we need to draw, start recording commands.
-	vkcpp::CommandBuffer commandBuffer = currentDrawingFrame.m_commandBuffer;
-	commandBuffer.reset();
-	commandBuffer.begin();
-
-	currentDrawingFrame.updateUniformBuffer(globals.g_swapchain_frameBuffers.getImageExtent());
-
 
 	//	TODO: this is kind of clunky
 	theRenderer.m_pointVertexDeviceBuffer0 = globals.g_pointVertexDeviceBuffer0;
 	theRenderer.m_pointVertexDeviceBuffer1 = globals.g_pointVertexDeviceBuffer1;
 
-	theRenderer.m_vkDescriptorSet = currentDrawingFrame.m_descriptorSet;
-	theRenderer.m_pipelineLayout0 = globals.g_pipelineLayout;
-	theRenderer.m_graphicsPipeline0 = globals.g_graphicsPipeline0;
-
-	theRenderer.m_pipelineLayout1 = globals.g_pipelineLayout;
-	theRenderer.m_graphicsPipeline1 = globals.g_graphicsPipeline1;
-
-
-	theRenderer.m_pSwapchain_frameBuffers = &globals.g_swapchain_frameBuffers;
-	theRenderer.m_swapchainImageIndex = swapchainImageIndex;
-
-	theRenderer.recordCommandBuffer(commandBuffer);
-
-	commandBuffer.end();
-
+	theRenderer.recordCommandBuffer(
+		currentDrawingFrame,
+		globals.g_swapchain_frameBuffers.getFrameBuffer(swapchainImageIndex),
+		globals.g_swapchain_frameBuffers.getImageExtent());
 
 	vkcpp::SubmitInfo2 submitInfo2;
 	//	Command can proceed but wait for the image to
@@ -1329,7 +1366,10 @@ void drawFrame(Globals& globals)
 		currentDrawingFrame.m_swapchainImageAvailableSemaphore,
 		vkcpp::PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT
 	);
-	submitInfo2.addCommandBuffer(commandBuffer);
+
+	//	TODO: a little weird.  The command buffer was passed in to record
+	//	via the current drawing frame and now we extract it again.
+	submitInfo2.addCommandBuffer(currentDrawingFrame.m_commandBuffer);
 	submitInfo2.addSignalSemaphore(currentDrawingFrame.m_renderFinishedSemaphore);
 
 

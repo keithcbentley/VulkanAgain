@@ -5,7 +5,6 @@
 
 class ShaderLibrary {
 
-
 public:
 
 	ShaderLibrary() {}

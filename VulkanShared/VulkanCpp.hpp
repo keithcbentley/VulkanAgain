@@ -3607,11 +3607,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			return m_swapchain.imageExtent();
 		}
 
-		RenderPass getRenderPass() const {
-			return m_renderPass;
-		}
-
-		Framebuffer getFrameBuffer(int index) {
+		const Framebuffer& getFrameBuffer(int index) {
 			return m_swapchainFrameBuffers.at(index);
 		}
 
