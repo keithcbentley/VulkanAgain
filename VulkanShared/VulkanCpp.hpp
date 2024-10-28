@@ -548,6 +548,11 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 	public:
 
+		//	Right now, PhysicalDevice is just a simple wrapper
+		//	around the Vulkan physical device, so the copy constructor/assignment
+		//	and move constructor/assignment are a bit of overkill.
+		//	We'll need them if we make this smarter later though.
+		//	Yeah, YAGNI, but this was already written.
 		PhysicalDevice() {}
 
 		~PhysicalDevice() {
@@ -576,7 +581,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 				return *this;
 			}
 			m_vkPhysicalDevice = other.m_vkPhysicalDevice;
-			other.m_vkPhysicalDevice;
+			other.m_vkPhysicalDevice = nullptr;
 			return *this;
 		}
 
@@ -711,8 +716,49 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 	public:
 
 		VulkanInstance() {}
-		VulkanInstance(const VulkanInstance&) = delete;
-		VulkanInstance& operator=(const VulkanInstance&) = delete;
+
+		//	IMPORTANT: we don't copy the other messenger.
+		//	The messenger is a raw Vulkan handle.  If we
+		//	made a copy of the handle into our new (copy)
+		//	object, then when the copy object was destroyed,
+		//	it would destroy the Vulkan object.  This is not
+		//	a problem since Vulkan remembers the messenger, and
+		//	we don't use it inside our code.  This approach
+		//	seems preferable to trying to figure out if this
+		//	object is an original or copy and then behaving
+		//	differently in the destructor.
+		VulkanInstance(const VulkanInstance& other)
+			: HandleWithOwner(other) {
+		}
+
+		VulkanInstance& operator=(const VulkanInstance& other) {
+			if (this == &other) {
+				return *this;
+			}
+			(*this).~VulkanInstance();
+			new(this)VulkanInstance(other);
+			return *this;
+		}
+
+
+		//	In the move constructor, we do move the messenger.
+		VulkanInstance(VulkanInstance&& other) noexcept
+			: HandleWithOwner(std::move(other)) {
+			m_messenger = std::move(other.m_messenger);
+			other.makeEmpty();
+			other.m_messenger = nullptr;
+		}
+
+		VulkanInstance& operator=(VulkanInstance&& other) noexcept {
+			if (this == &other) {
+				return *this;
+			}
+			(*this).~VulkanInstance();
+			new(this)VulkanInstance(std::move(other));
+			return *this;
+		}
+
+
 
 		VulkanInstance(VulkanInstanceCreateInfo& vulkanInstanceCreateInfo) {
 			VkInstance vkInstance;
@@ -736,22 +782,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			}
 		}
 
-
-		VulkanInstance(VulkanInstance&& other) noexcept
-			: HandleWithOwner(std::move(other)) {
-			m_messenger = std::move(other.m_messenger);
-			other.makeEmpty();
-			other.m_messenger = nullptr;
-		}
-
-		VulkanInstance& operator=(VulkanInstance&& other) noexcept {
-			if (this == &other) {
-				return *this;
-			}
-			(*this).~VulkanInstance();
-			new(this)VulkanInstance(std::move(other));
-			return *this;
-		}
 
 
 
