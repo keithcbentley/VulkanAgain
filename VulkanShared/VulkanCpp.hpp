@@ -15,8 +15,6 @@
 
 
 
-
-
 namespace vkcpp {
 
 	class Exception : public std::exception {
@@ -280,15 +278,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 		using Owner_t = OwnerArg_t;
 		using DestroyFunc_t = void (*)(HandleArg_t, OwnerArg_t);
 
-	private:
-
-		void destroy() {
-			if (m_pfnDestroy && m_handle) {
-				(*m_pfnDestroy)(m_handle, m_owner);
-			}
-			makeEmpty();
-		}
-
 
 	protected:
 
@@ -302,9 +291,14 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			m_pfnDestroy = nullptr;
 		}
 
+		HandleWithOwner() {};
 
-		HandleWithOwner() = default;
-		~HandleWithOwner() { destroy(); }
+		~HandleWithOwner() {
+			if (m_pfnDestroy && m_handle) {
+				(*m_pfnDestroy)(m_handle, m_owner);
+			}
+			makeEmpty();
+		}
 
 		HandleWithOwner(Handle_t handle, Owner_t owner)
 			: m_handle(handle)
@@ -339,6 +333,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			, m_pfnDestroy(other.m_pfnDestroy) {
 			other.makeEmpty();
 		}
+
 		HandleWithOwner& operator=(HandleWithOwner&& other) noexcept {
 			if (this == &other) {
 				return *this;
@@ -351,6 +346,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 	public:
 
 		operator bool() const { return !!m_handle; }
+
 		operator Handle_t() const {
 			if (!m_handle) {
 				throw NullHandleException();
@@ -2081,10 +2077,6 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 		}
 
 
-
-
-
-
 	};
 
 	class CommandBuffer : public HandleWithOwner<VkCommandBuffer, CommandPool> {
@@ -2538,6 +2530,14 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 		}
 
+		DescriptorSetLayoutCreateInfo(
+			std::vector<DescriptorSetLayoutBinding>& descriptorSetLayoutBindings)
+			: VkDescriptorSetLayoutCreateInfo{} {
+			sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			addDescriptorSetLayoutBindings(descriptorSetLayoutBindings);
+		}
+
+
 		DescriptorSetLayoutCreateInfo& addBinding(
 			int bindingIndex,
 			VkDescriptorType	vkDescriptorType,
@@ -2555,8 +2555,9 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			return *this;
 		}
 
+
 		void addDescriptorSetLayoutBindings(
-			std::vector<DescriptorSetLayoutBinding> descriptorSetLayoutBindings
+			std::vector<DescriptorSetLayoutBinding>& descriptorSetLayoutBindings
 		) {
 			for (DescriptorSetLayoutBinding& descriptorSetLayoutBinding : descriptorSetLayoutBindings) {
 				addBinding(
@@ -2567,6 +2568,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			}
 		}
 
+
 		VkDescriptorSetLayoutCreateInfo* assemble() {
 			pBindings = nullptr;
 			bindingCount = static_cast<uint32_t>(m_bindings.size());
@@ -2575,7 +2577,10 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 			}
 			return this;
 		}
+
+
 	};
+
 
 	class DescriptorSetLayout : public HandleWithOwner<VkDescriptorSetLayout> {
 
@@ -2598,7 +2603,10 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 		DescriptorSetLayout() {}
 
-		DescriptorSetLayout(DescriptorSetLayoutCreateInfo& descriptorSetLayoutCreateInfo, VkDevice vkDevice) {
+		DescriptorSetLayout(
+			DescriptorSetLayoutCreateInfo& descriptorSetLayoutCreateInfo,
+			VkDevice vkDevice
+		) {
 			VkDescriptorSetLayout vkDescriptorSetLayout;
 			VkResult vkResult = vkCreateDescriptorSetLayout(
 				vkDevice,
@@ -2609,6 +2617,14 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 				throw Exception(vkResult);
 			}
 			new(this)DescriptorSetLayout(vkDescriptorSetLayout, vkDevice, &destroy, descriptorSetLayoutCreateInfo);
+		}
+
+		static DescriptorSetLayout create(
+			std::vector<vkcpp::DescriptorSetLayoutBinding>& descriptorSetLayoutBindings,
+			Device device
+		) {
+			DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo(descriptorSetLayoutBindings);
+			return vkcpp::DescriptorSetLayout(descriptorSetLayoutCreateInfo, device);
 		}
 
 
@@ -2787,7 +2803,7 @@ static const ShaderStageFlags BARE_VK_VALUE(VK_##BARE_VK_VALUE##_BIT)
 
 
 		//	TODO: should the descriptor type be checked against
-//	the descriptor type in the descriptor set layout info?
+		//	the descriptor type in the descriptor set layout info?
 		void addWriteDescriptor(
 			uint32_t			bindingIndex,
 			VkDescriptorType	vkDescriptorType,

@@ -24,12 +24,13 @@
 
 #include "VulkanSynchronization2Only.h"
 
+
 class MagicValues {
 
 
 public:
 
-	static const int MAX_FRAMES_IN_FLIGHT = 3;
+	static const int MAX_DRAWING_FRAMES_IN_FLIGHT = 3;
 	static const int SWAP_CHAIN_IMAGE_COUNT = 5;
 
 	static const uint32_t	GRAPHICS_QUEUE_FAMILY_INDEX = 0;
@@ -47,6 +48,86 @@ public:
 
 };
 
+
+class VulkanGpuAssets {
+
+	vkcpp::VulkanInstance	m_vulkanInstance;
+	vkcpp::PhysicalDevice	m_physicalDevice;
+
+
+	vkcpp::VulkanInstance createVulkanInstance() {
+
+		vkcpp::VulkanInstanceCreateInfo vulkanInstanceCreateInfo{};
+		vulkanInstanceCreateInfo.addLayer("VK_LAYER_KHRONOS_validation");
+
+
+		vulkanInstanceCreateInfo.addExtension("VK_EXT_debug_utils");
+		vulkanInstanceCreateInfo.addExtension("VK_KHR_surface");
+		vulkanInstanceCreateInfo.addExtension("VK_KHR_win32_surface");
+
+		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = vkcpp::DebugUtilsMessenger::getCreateInfo();
+		vulkanInstanceCreateInfo.pNext = &debugCreateInfo;
+
+		return vkcpp::VulkanInstance(vulkanInstanceCreateInfo);
+	}
+
+	vkcpp::Device createDevice(vkcpp::PhysicalDevice physicalDevice) {
+		vkcpp::DeviceCreateInfo deviceCreateInfo;
+		deviceCreateInfo.addExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+		deviceCreateInfo.addDeviceQueue(MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX, 1);
+		deviceCreateInfo.addDeviceQueue(MagicValues::PRESENTATION_QUEUE_FAMILY_INDEX, 1);
+
+		VkPhysicalDeviceFeatures2 vkPhysicalDeviceFeatures2 = physicalDevice.getPhysicalDeviceFeatures2();
+		deviceCreateInfo.pNext = &vkPhysicalDeviceFeatures2;
+
+		return vkcpp::Device(deviceCreateInfo, physicalDevice);
+
+	}
+
+	void createQueues() {
+		m_graphicsQueue = m_device.getDeviceQueue(
+			MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
+			MagicValues::GRAPHICS_QUEUE_INDEX);
+
+		m_presentationQueue = m_device.getDeviceQueue(
+			MagicValues::PRESENTATION_QUEUE_FAMILY_INDEX,
+			MagicValues::PRESENTATION_QUEUE_INDEX);
+
+	}
+
+
+public:
+
+	vkcpp::Device			m_device;
+
+	vkcpp::Queue				m_graphicsQueue;
+	vkcpp::Queue				m_presentationQueue;
+
+	vkcpp::VulkanInstance	vulkanInstance() {
+		return m_vulkanInstance;
+	}
+
+	vkcpp::PhysicalDevice	physicalDevice() {
+		return m_physicalDevice;
+	}
+
+
+	VulkanGpuAssets() {
+		m_vulkanInstance = createVulkanInstance();
+		m_vulkanInstance.createDebugMessenger();
+
+		m_physicalDevice = m_vulkanInstance.getPhysicalDevice(0);
+
+		m_device = createDevice(m_physicalDevice);
+
+		createQueues();
+
+	}
+
+};
+
+VulkanGpuAssets	g_vulkanGpuAssets;
 
 
 
@@ -473,6 +554,42 @@ public:
 
 };
 
+class Globals {
+
+public:
+
+	Globals() {}
+	~Globals() {
+		return;
+	}
+
+	Globals(const Globals&) = delete;
+	Globals& operator=(const Globals&) = delete;
+
+	Globals(Globals&&) = delete;
+	Globals& operator=(Globals&&) = delete;
+
+	HINSTANCE				g_hInstance = NULL;
+	HWND					g_hWnd = NULL;
+
+	vkcpp::Surface		g_surfaceOriginal;
+	vkcpp::Swapchain_FrameBuffers	g_swapchain_frameBuffers;
+
+
+	vkcpp::DescriptorPool			g_descriptorPoolOriginal;
+	vkcpp::DescriptorSetLayout		g_descriptorSetLayoutOriginal;
+
+	PointVertexDeviceBuffer		g_pointVertexDeviceBuffer0;
+	PointVertexDeviceBuffer		g_pointVertexDeviceBuffer1;
+
+	vkcpp::CommandPool		g_commandPoolOriginal;
+
+	vkcpp::Sampler g_textureSampler;
+
+};
+
+Globals g_globals;
+
 
 
 const wchar_t* szTitle = TEXT("Vulkan Again");
@@ -492,68 +609,6 @@ struct ModelViewProjTransform {
 	alignas(16) glm::mat4 m_viewTransform;
 	alignas(16) glm::mat4 m_projTransform;
 };
-
-
-class UniformBufferMemory {
-
-public:
-
-	vkcpp::Buffer_DeviceMemory m_uniformBufferMemory;
-
-	void createUniformBuffer(vkcpp::Device device) {
-		m_uniformBufferMemory = std::move(
-			vkcpp::Buffer_DeviceMemory(
-				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-				sizeof(ModelViewProjTransform),
-				MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-				vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
-				device
-			));
-	}
-
-};
-
-class DescriptorSetWithData {
-
-
-public:
-
-	vkcpp::DescriptorSet m_descriptorSet;
-
-	DescriptorSetWithData(
-		vkcpp::DescriptorSetLayout descriptorSetLayout,
-		vkcpp::DescriptorPool		descriptorPool)
-		: m_descriptorSet(descriptorSetLayout, descriptorPool) {
-
-	}
-
-	void update() {
-		m_descriptorSet.updateDescriptors();
-
-	}
-
-	//void createDescriptorSet(
-	//	vkcpp::DescriptorPool		descriptorPool,
-	//	vkcpp::DescriptorSetLayout descriptorSetLayout,
-	//	vkcpp::ImageView textureImageView,
-	//	vkcpp::Sampler textureSampler
-	//) {
-	//	descriptorSet.addWriteDescriptor(
-	//		MagicValues::UBO_DESCRIPTOR_BINDING_INDEX,
-	//		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-	//		m_uniformBufferMemory.m_buffer,
-	//		sizeof(ModelViewProjTransform));
-	//	descriptorSet.addWriteDescriptor(
-	//		MagicValues::TEXTURE_DESCRIPTOR_BINDING_INDEX,
-	//		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-	//		textureImageView,
-	//		textureSampler);
-	//}
-
-
-};
-
-
 
 
 class Camera {
@@ -624,95 +679,44 @@ public:
 Camera g_theCamera;
 
 
-class DrawingFrame {
+class UniformBufferMemory {
 
-public:
+	static inline	int									s_uniformMemoryBuffersCount;
+	static inline	std::vector<UniformBufferMemory>	s_uniformMemoryBufferMemorys;
 
-	vkcpp::Fence	m_inFlightFence;
-	vkcpp::Semaphore m_swapchainImageAvailableSemaphore;
-	vkcpp::Semaphore m_renderFinishedSemaphore;
-	vkcpp::CommandBuffer	m_commandBuffer;;
-	vkcpp::Buffer_DeviceMemory	m_uniformBufferMemory;
-	vkcpp::DescriptorSet	m_descriptorSet;
-
-private:
-
-	void createCommandBuffer(vkcpp::CommandPool commandPool) {
-		m_commandBuffer = std::move(vkcpp::CommandBuffer(commandPool));
-	}
-
-	void createUniformBuffer() {
+	UniformBufferMemory(vkcpp::Device device) {
 		m_uniformBufferMemory = std::move(
 			vkcpp::Buffer_DeviceMemory(
 				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 				sizeof(ModelViewProjTransform),
 				MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
 				vkcpp::MEMORY_PROPERTY_HOST_VISIBLE | vkcpp::MEMORY_PROPERTY_HOST_COHERENT,
-				m_device
+				device
 			));
 	}
 
-	void createSyncObjects() {
-		m_swapchainImageAvailableSemaphore = std::move(vkcpp::Semaphore(m_device));
-		m_renderFinishedSemaphore = std::move(vkcpp::Semaphore(m_device));
-		m_inFlightFence = std::move(vkcpp::Fence(m_device, VKCPP_FENCE_CREATE_OPENED));
-	}
-
-	void createDescriptorSet(
-		vkcpp::DescriptorPool		descriptorPool,
-		vkcpp::DescriptorSetLayout descriptorSetLayout,
-		vkcpp::ImageView textureImageView,
-		vkcpp::Sampler textureSampler
-	) {
-		vkcpp::DescriptorSet descriptorSet(descriptorSetLayout, descriptorPool);
-		descriptorSet.addWriteDescriptor(
-			MagicValues::UBO_DESCRIPTOR_BINDING_INDEX,
-			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			m_uniformBufferMemory.m_buffer,
-			sizeof(ModelViewProjTransform));
-		descriptorSet.addWriteDescriptor(
-			MagicValues::TEXTURE_DESCRIPTOR_BINDING_INDEX,
-			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			textureImageView,
-			textureSampler);
-		descriptorSet.updateDescriptors();
-
-		m_descriptorSet = std::move(descriptorSet);
-	}
-
-	vkcpp::Device m_device;	//	Just remember the device to make things easier.
-
 public:
 
-	DrawingFrame() {};
+	vkcpp::Buffer_DeviceMemory m_uniformBufferMemory;
 
-	DrawingFrame(const DrawingFrame&) = delete;
-	DrawingFrame& operator=(const DrawingFrame&) = delete;
-	DrawingFrame(DrawingFrame&&) = delete;
-	DrawingFrame& operator=(DrawingFrame&&) = delete;
-
-
-	void create(
-		vkcpp::Device device,
-		vkcpp::CommandPool commandPool,
-		vkcpp::DescriptorPool descriptorPool,
-		vkcpp::DescriptorSetLayout descriptorSetLayout,
-		vkcpp::ImageView textureImageView,
-		vkcpp::Sampler textureSampler
-	) {
-		m_device = device;
-		createUniformBuffer();
-		createCommandBuffer(commandPool);
-		createSyncObjects();
-		createDescriptorSet(
-			descriptorPool,
-			descriptorSetLayout,
-			textureImageView,
-			textureSampler);
+	static void setUniformBufferMemoryCount(int count) {
+		s_uniformMemoryBuffersCount = count;
 	}
 
+	static void createUniformBufferMemorys(vkcpp::Device device) {
+		for (int i = 0; i < s_uniformMemoryBuffersCount; i++) {
+			s_uniformMemoryBufferMemorys.push_back(std::move(UniformBufferMemory(device)));
+		}
+	}
+
+	static UniformBufferMemory& get(int index) {
+		return s_uniformMemoryBufferMemorys.at(index);
+	}
+
+
 	//	TODO: better uniform buffer handling.
-	void updateUniformBuffer(
+	static void updateUniformBuffer(
+		int					index,
 		const VkExtent2D	swapchainImageExtent
 	) {
 		static auto startTime = std::chrono::high_resolution_clock::now();
@@ -720,6 +724,8 @@ public:
 		auto currentTime = std::chrono::high_resolution_clock::now();
 		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
+		//	TODO: the camera should be updated as part of the
+		//	global game loop and then its info pulled in.
 		g_theCamera.update(swapchainImageExtent);
 
 		//	TODO: turn into real "camera".
@@ -732,191 +738,155 @@ public:
 
 
 		//	TODO: Maybe use some kind of templated version of the mapped memory?
-		*((ModelViewProjTransform*)m_uniformBufferMemory.m_mappedMemory) = modelViewProjTransform;
+		vkcpp::Buffer_DeviceMemory& buffer_deviceMemory =
+			s_uniformMemoryBufferMemorys.at(index).m_uniformBufferMemory;
+		*((ModelViewProjTransform*)buffer_deviceMemory.m_mappedMemory) = modelViewProjTransform;
 	}
+
+};
+
+
+
+class DescriptorSetWithBinding {
+
+	static inline int								s_descriptorSetCount;
+	static inline std::vector<vkcpp::DescriptorSet>	s_descriptorSets;
+
+
+	vkcpp::DescriptorSet m_descriptorSet;
+
+
+public:
+
+	static void setDescriptorSetCount(int descriptorSetCount) {
+		s_descriptorSetCount = descriptorSetCount;
+	}
+
+	static void createDescriptorSets(
+		vkcpp::DescriptorSetLayout	descriptorSetLayout,
+		vkcpp::DescriptorPool		descriptorPool,
+		vkcpp::ImageView			textureImageView,
+		vkcpp::Sampler				textureSampler
+	) {
+		for (int i = 0; i < s_descriptorSetCount; i++) {
+			s_descriptorSets.emplace_back(descriptorSetLayout, descriptorPool);
+			vkcpp::DescriptorSet& descriptorSet = s_descriptorSets.back();
+
+			descriptorSet.addWriteDescriptor(
+				MagicValues::UBO_DESCRIPTOR_BINDING_INDEX,
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				UniformBufferMemory::get(i).m_uniformBufferMemory.m_buffer,
+				sizeof(ModelViewProjTransform));
+			descriptorSet.addWriteDescriptor(
+				MagicValues::TEXTURE_DESCRIPTOR_BINDING_INDEX,
+				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				textureImageView,
+				textureSampler);
+			descriptorSet.updateDescriptors();
+
+		}
+	}
+
+	static vkcpp::DescriptorSet& getDescriptorSet(int index) {
+		return s_descriptorSets.at(index);
+	}
+
+
+};
+
+
+
+
+
+class DrawingFrame {
+
+	static inline	int							s_frameCount;
+	static inline	std::vector<DrawingFrame>	s_drawingFrames;
+
+	static inline	int	s_nextFrameToDrawIndex;
+
+	vkcpp::Device m_device;	//	Just remember the device to make things easier.
+
+
+public:
+
+	//	TODO: should the command buffer be stored here?
+	//	Easier to create if not.
+
+	//	Frames remember their index for convenience.
+	//	The frame index is used as the index into the
+	//	other data arrays that hold the per frame data.
+	vkcpp::Fence			m_inFlightFence;
+	vkcpp::Semaphore		m_swapchainImageAvailableSemaphore;
+	vkcpp::Semaphore		m_renderFinishedSemaphore;
+	vkcpp::CommandBuffer	m_commandBuffer;
+	int						m_index = 0;
+
+private:
+
+
+	void createCommandBuffer(vkcpp::CommandPool commandPool) {
+		m_commandBuffer = std::move(vkcpp::CommandBuffer(commandPool));
+	}
+
+	void createSyncObjects() {
+		m_swapchainImageAvailableSemaphore = std::move(vkcpp::Semaphore(m_device));
+		m_renderFinishedSemaphore = std::move(vkcpp::Semaphore(m_device));
+		m_inFlightFence = std::move(vkcpp::Fence(m_device, VKCPP_FENCE_CREATE_OPENED));
+	}
+
+public:
+
+
+	static void setFrameCount(int frameCount) {
+		s_frameCount = frameCount;
+	}
+
+	static void createDrawingFrames(
+		vkcpp::Device& device,
+		vkcpp::CommandPool& commandPool
+	) {
+		for (int i = 0; i < s_frameCount; i++) {
+			s_drawingFrames.emplace_back(device, commandPool);
+		}
+	}
+
+	static DrawingFrame& getNextFrameToDraw() {
+		return s_drawingFrames.at(s_nextFrameToDrawIndex);
+	}
+
+	static void advanceNextFrameToDrawIndex() {
+		s_nextFrameToDrawIndex = (s_nextFrameToDrawIndex + 1) % s_frameCount;
+	}
+
+
+	DrawingFrame() {};
+
+	DrawingFrame(
+		vkcpp::Device device,
+		vkcpp::CommandPool commandPool
+	) {
+		m_device = device;
+		createCommandBuffer(commandPool);
+		createSyncObjects();
+	}
+
 
 
 	vkcpp::Device getDevice() const {
 		return m_device;
 	}
-};
-
-
-class AllDrawingFrames {
-
-private:
-	std::vector<DrawingFrame> m_drawingFrames;
-	int m_nextFrameToDrawIndex = 0;
-
-
-public:
-
-
-	AllDrawingFrames() {}
-	~AllDrawingFrames() = default;
-
-	AllDrawingFrames(const AllDrawingFrames&) = delete;
-	AllDrawingFrames& operator=(const AllDrawingFrames&) = delete;
-
-	AllDrawingFrames(int frameCount) : m_drawingFrames(frameCount) {}
-
-	void advanceNextFrameToDraw() {
-		m_nextFrameToDrawIndex = (m_nextFrameToDrawIndex + 1) % m_drawingFrames.size();;
-	}
-
-	DrawingFrame& getNextFrameToDraw() {
-		return m_drawingFrames.at(m_nextFrameToDrawIndex);
-	}
-
-	void createDrawingFrames(
-		vkcpp::Device device,
-		vkcpp::CommandPool commandPool,
-		vkcpp::DescriptorPool descriptorPool,
-		vkcpp::DescriptorSetLayout descriptorSetLayout,
-		vkcpp::ImageView textureImageView,
-		vkcpp::Sampler textureSampler
-	) {
-		for (DrawingFrame& drawingFrame : m_drawingFrames) {
-			drawingFrame.create(
-				device,
-				commandPool,
-				descriptorPool,
-				descriptorSetLayout,
-				textureImageView,
-				textureSampler
-			);
-		}
-	}
-
-};
-
-
-
-class VulkanGpuAssets {
-
-	vkcpp::VulkanInstance	m_vulkanInstance;
-	vkcpp::PhysicalDevice	m_physicalDevice;
-
-
-	vkcpp::VulkanInstance createVulkanInstance() {
-
-		vkcpp::VulkanInstanceCreateInfo vulkanInstanceCreateInfo{};
-		vulkanInstanceCreateInfo.addLayer("VK_LAYER_KHRONOS_validation");
-
-
-		vulkanInstanceCreateInfo.addExtension("VK_EXT_debug_utils");
-		vulkanInstanceCreateInfo.addExtension("VK_KHR_surface");
-		vulkanInstanceCreateInfo.addExtension("VK_KHR_win32_surface");
-
-		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = vkcpp::DebugUtilsMessenger::getCreateInfo();
-		vulkanInstanceCreateInfo.pNext = &debugCreateInfo;
-
-		return vkcpp::VulkanInstance(vulkanInstanceCreateInfo);
-	}
-
-	vkcpp::Device createDevice(vkcpp::PhysicalDevice physicalDevice) {
-		vkcpp::DeviceCreateInfo deviceCreateInfo;
-		deviceCreateInfo.addExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-
-		deviceCreateInfo.addDeviceQueue(MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX, 1);
-		deviceCreateInfo.addDeviceQueue(MagicValues::PRESENTATION_QUEUE_FAMILY_INDEX, 1);
-
-		VkPhysicalDeviceFeatures2 vkPhysicalDeviceFeatures2 = physicalDevice.getPhysicalDeviceFeatures2();
-		deviceCreateInfo.pNext = &vkPhysicalDeviceFeatures2;
-
-		return vkcpp::Device(deviceCreateInfo, physicalDevice);
-
-	}
-
-	void createQueues() {
-		m_graphicsQueue = m_device.getDeviceQueue(
-			MagicValues::GRAPHICS_QUEUE_FAMILY_INDEX,
-			MagicValues::GRAPHICS_QUEUE_INDEX);
-
-		m_presentationQueue = m_device.getDeviceQueue(
-			MagicValues::PRESENTATION_QUEUE_FAMILY_INDEX,
-			MagicValues::PRESENTATION_QUEUE_INDEX);
-
-	}
-
-
-public:
-
-
-	vkcpp::Device			m_device;
-
-	vkcpp::Queue				m_graphicsQueue;
-	vkcpp::Queue				m_presentationQueue;
-
-	vkcpp::VulkanInstance	vulkanInstance() {
-		return m_vulkanInstance;
-	}
-
-	vkcpp::PhysicalDevice	physicalDevice() {
-		return m_physicalDevice;
-	}
-
-
-	VulkanGpuAssets() {
-		m_vulkanInstance = createVulkanInstance();
-		m_vulkanInstance.createDebugMessenger();
-
-		m_physicalDevice = m_vulkanInstance.getPhysicalDevice(0);
-
-		m_device = createDevice(m_physicalDevice);
-
-		createQueues();
-
-	}
-
 
 
 
 };
 
-VulkanGpuAssets	g_vulkanGpuAssets;
+
+
 ShaderLibrary	g_shaderLibrary;	//	Hack to control when shader library is cleared out.
 ImageLibrary	g_imageLibrary;		//	Hack to control when image library is cleared out.
 
 
-
-class Globals {
-
-public:
-
-	Globals() {}
-	~Globals() {
-		return;
-	}
-
-	Globals(const Globals&) = delete;
-	Globals& operator=(const Globals&) = delete;
-
-	Globals(Globals&&) = delete;
-	Globals& operator=(Globals&&) = delete;
-
-	HINSTANCE				g_hInstance = NULL;
-	HWND					g_hWnd = NULL;
-
-	vkcpp::Surface		g_surfaceOriginal;
-	vkcpp::Swapchain_FrameBuffers	g_swapchain_frameBuffers;
-
-
-	vkcpp::DescriptorPool			g_descriptorPoolOriginal;
-	vkcpp::DescriptorSetLayout		g_descriptorSetLayoutOriginal;
-
-	PointVertexDeviceBuffer		g_pointVertexDeviceBuffer0;
-	PointVertexDeviceBuffer		g_pointVertexDeviceBuffer1;
-
-	vkcpp::CommandPool		g_commandPoolOriginal;
-
-	vkcpp::Sampler g_textureSampler;
-
-};
-
-Globals g_globals;
-
-AllDrawingFrames g_allDrawingFrames(MagicValues::MAX_FRAMES_IN_FLIGHT);
 
 
 std::vector<vkcpp::DescriptorSetLayoutBinding>	g_descriptorSetLayoutBindings{
@@ -924,14 +894,6 @@ std::vector<vkcpp::DescriptorSetLayoutBinding>	g_descriptorSetLayoutBindings{
 	{ MagicValues::TEXTURE_DESCRIPTOR_BINDING_INDEX, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	vkcpp::SHADER_STAGE_FRAGMENT}
 };
 
-vkcpp::DescriptorSetLayout createDrawingFrameDescriptorSetLayout(VkDevice vkDevice) {
-
-	//	TODO: just make a static function
-	vkcpp::DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo{};
-	descriptorSetLayoutCreateInfo.addDescriptorSetLayoutBindings(g_descriptorSetLayoutBindings);
-
-	return vkcpp::DescriptorSetLayout(descriptorSetLayoutCreateInfo, vkDevice);
-}
 
 
 vkcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
@@ -939,10 +901,10 @@ vkcpp::DescriptorPool createDescriptorPool(VkDevice vkDevice) {
 	vkcpp::DescriptorPoolCreateInfo poolCreateInfo;
 	poolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
-	poolCreateInfo.addDescriptorCount(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MagicValues::MAX_FRAMES_IN_FLIGHT);
-	poolCreateInfo.addDescriptorCount(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MagicValues::MAX_FRAMES_IN_FLIGHT);
+	poolCreateInfo.addDescriptorCount(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MagicValues::MAX_DRAWING_FRAMES_IN_FLIGHT);
+	poolCreateInfo.addDescriptorCount(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MagicValues::MAX_DRAWING_FRAMES_IN_FLIGHT);
 
-	poolCreateInfo.maxSets = static_cast<uint32_t>(MagicValues::MAX_FRAMES_IN_FLIGHT);
+	poolCreateInfo.maxSets = static_cast<uint32_t>(MagicValues::MAX_DRAWING_FRAMES_IN_FLIGHT);
 
 	return vkcpp::DescriptorPool(poolCreateInfo, vkDevice);
 }
@@ -1129,7 +1091,9 @@ public:
 		vkRenderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 		vkRenderPassBeginInfo.pClearValues = clearValues.data();
 
-		drawingFrame.updateUniformBuffer(imageExtent);
+		const int drawingFrameIndex = drawingFrame.m_index;
+
+		UniformBufferMemory::updateUniformBuffer(drawingFrameIndex, imageExtent);
 
 		vkcpp::CommandBuffer commandBuffer = drawingFrame.m_commandBuffer;
 		commandBuffer.reset();
@@ -1141,7 +1105,8 @@ public:
 		commandBuffer.cmdSetScissor(imageExtent);
 
 		commandBuffer.cmdBindPipeline(m_graphicsPipeline0);
-		commandBuffer.cmdBindDescriptorSet(m_pipelineLayout0, drawingFrame.m_descriptorSet);
+		commandBuffer.cmdBindDescriptorSet(m_pipelineLayout0,
+			DescriptorSetWithBinding::getDescriptorSet(drawingFrameIndex));
 
 		vkCmdSetDepthTestEnable(commandBuffer, VK_TRUE);
 		m_pointVertexDeviceBuffer0.draw(commandBuffer);
@@ -1149,7 +1114,9 @@ public:
 		VkSubpassContents vkSubpassContents{};
 		vkCmdNextSubpass(commandBuffer, vkSubpassContents);
 		commandBuffer.cmdBindPipeline(m_graphicsPipeline1);
-		commandBuffer.cmdBindDescriptorSet(m_pipelineLayout1, drawingFrame.m_descriptorSet);
+		commandBuffer.cmdBindDescriptorSet(m_pipelineLayout1,
+			DescriptorSetWithBinding::getDescriptorSet(drawingFrameIndex));
+
 
 		vkCmdSetDepthTestEnable(commandBuffer, VK_FALSE);
 		m_pointVertexDeviceBuffer1.draw(commandBuffer);
@@ -1168,6 +1135,9 @@ Renderer theRenderer;
 
 void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 
+	DrawingFrame::setFrameCount(MagicValues::MAX_DRAWING_FRAMES_IN_FLIGHT);
+	UniformBufferMemory::setUniformBufferMemoryCount(MagicValues::MAX_DRAWING_FRAMES_IN_FLIGHT);
+	DescriptorSetWithBinding::setDescriptorSetCount(MagicValues::MAX_DRAWING_FRAMES_IN_FLIGHT);
 
 	VkWin32SurfaceCreateInfoKHR vkWin32SurfaceCreateInfo{};
 	vkWin32SurfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -1204,6 +1174,8 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::Swapchain_FrameBuffers swapchain_frameBuffers(swapchainCreateInfo, surfaceOriginal);
 	swapchain_frameBuffers.setRenderPass(renderPass);
 
+	UniformBufferMemory::createUniformBufferMemorys(g_vulkanGpuAssets.m_device);
+
 	PointVertexDeviceBuffer	pointVertexDeviceBuffer0(g_pointVertexBuffer0, g_vulkanGpuAssets.m_device);
 	PointVertexDeviceBuffer	pointVertexDeviceBuffer1(g_pointVertexBuffer1, g_vulkanGpuAssets.m_device);
 
@@ -1235,7 +1207,10 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	vkcpp::SamplerCreateInfo textureSamplerCreateInfo;
 	vkcpp::Sampler textureSampler(textureSamplerCreateInfo, g_vulkanGpuAssets.m_device);
 
-	vkcpp::DescriptorSetLayout descriptorSetLayoutOriginal = createDrawingFrameDescriptorSetLayout(g_vulkanGpuAssets.m_device);
+	vkcpp::DescriptorSetLayout descriptorSetLayoutOriginal =
+		vkcpp::DescriptorSetLayout::create(
+			g_descriptorSetLayoutBindings,
+			g_vulkanGpuAssets.m_device);
 	vkcpp::DescriptorPool descriptorPoolOriginal = createDescriptorPool(g_vulkanGpuAssets.m_device);
 
 	vkcpp::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
@@ -1265,13 +1240,16 @@ void VulkanStuff(HINSTANCE hInstance, HWND hWnd, Globals& globals) {
 	graphicsPipelineCreateInfo.setRenderPass(renderPass, 1);
 	vkcpp::GraphicsPipeline graphicsPipeline1(graphicsPipelineCreateInfo, g_vulkanGpuAssets.m_device);
 
-	g_allDrawingFrames.createDrawingFrames(
-		g_vulkanGpuAssets.m_device,
-		commandPoolOriginal,
-		descriptorPoolOriginal,
+	DescriptorSetWithBinding::createDescriptorSets(
 		descriptorSetLayoutOriginal,
+		descriptorPoolOriginal,
 		ImageLibrary::imageView("statueImage"),
 		textureSampler);
+
+	DrawingFrame::createDrawingFrames(
+		g_vulkanGpuAssets.m_device,
+		commandPoolOriginal
+	);
 
 
 
@@ -1337,7 +1315,7 @@ void drawFrame(Globals& globals)
 	}
 
 	//	Is the drawing frame available to draw?
-	DrawingFrame& currentDrawingFrame = g_allDrawingFrames.getNextFrameToDraw();
+	DrawingFrame& currentDrawingFrame = DrawingFrame::getNextFrameToDraw();
 	//	Wait for this drawing frame to be free
 	//	TODO: does this need a warning timer?
 	currentDrawingFrame.m_inFlightFence.wait();
@@ -1355,15 +1333,13 @@ void drawFrame(Globals& globals)
 	VkResult vkResult = vkAcquireNextImageKHR(
 		device,
 		globals.g_swapchain_frameBuffers.vkSwapchain(),
-		0,
+		0,	//	0 timeout => don't wait
 		currentDrawingFrame.m_swapchainImageAvailableSemaphore,
 		VK_NULL_HANDLE,
 		&swapchainImageIndex);
 	if (vkResult == VK_NOT_READY) {
 		return;
 	}
-
-
 
 	//	TODO: this is kind of clunky
 	theRenderer.m_pointVertexDeviceBuffer0 = globals.g_pointVertexDeviceBuffer0;
@@ -1383,8 +1359,6 @@ void drawFrame(Globals& globals)
 		vkcpp::PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT
 	);
 
-	//	TODO: a little weird.  The command buffer was passed in to record
-	//	via the current drawing frame and now we extract it again.
 	submitInfo2.addCommandBuffer(currentDrawingFrame.m_commandBuffer);
 	submitInfo2.addSignalSemaphore(currentDrawingFrame.m_renderFinishedSemaphore);
 
@@ -1397,7 +1371,7 @@ void drawFrame(Globals& globals)
 	g_vulkanGpuAssets.m_graphicsQueue.submit2(submitInfo2, currentDrawingFrame.m_inFlightFence);
 
 	//	TODO: Is this where we are supposed to add an image memory barrier
-	//	to avoid the present after write error?
+	//	to avoid the present after write hazard?
 
 
 	vkcpp::PresentInfo presentInfo;
@@ -1413,7 +1387,7 @@ void drawFrame(Globals& globals)
 		globals.g_swapchain_frameBuffers.stale();
 	}
 
-	g_allDrawingFrames.advanceNextFrameToDraw();
+	DrawingFrame::advanceNextFrameToDrawIndex();
 
 
 }
